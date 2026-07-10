@@ -340,7 +340,11 @@ class Dashboard extends Component
             ->selectRaw(
                 'items.name as item_name, shops.name as shop_name, stocks.qty as qty, '.
                 'item_order_rules.min as min, '.
-                'CASE WHEN item_order_rules.min > 0 THEN stocks.qty / item_order_rules.min ELSE 0 END as ratio'
+                // "* 1.0" forces floating-point division on both SQLite and
+                // MySQL/MariaDB — without it, SQLite truncates to integer
+                // division when both operands have integer affinity (e.g.
+                // 3 / 10 silently becoming 0 instead of 0.3).
+                'CASE WHEN item_order_rules.min > 0 THEN (stocks.qty * 1.0) / item_order_rules.min ELSE 0 END as ratio'
             )
             ->orderBy('ratio')
             ->orderByRaw('(item_order_rules.min - stocks.qty) DESC')

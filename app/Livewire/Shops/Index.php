@@ -19,7 +19,7 @@ class Index extends Component
                 ->withCount('stocks as item_count')
                 ->withSum('stocks as qty_total', 'qty')
                 ->orderBy('name')
-                ->paginate(10),
+                ->paginate(20),
         ]);
     }
 }

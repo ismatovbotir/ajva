@@ -306,10 +306,10 @@
             </div>
         </x-ui.card>
 
-        {{-- Chart 3: Stock by group + shop — stacked bar --}}
+        {{-- Chart 3: Stock by group + shop — stacked bar, defaults to table (2D breakdown reads better tabular) --}}
         <x-ui.card>
             <div x-data="{
-                view: 'chart',
+                view: 'table',
                 tip: { show: false, x: 0, y: 0, name: '', value: '', el: null },
                 showTip(e) {
                     const el = e.currentTarget;
@@ -421,6 +421,128 @@
                                             <td class="px-4 py-3 text-sm text-slate-500">{{ $cell['label'] }}</td>
                                         @endforeach
                                         <td class="px-4 py-3 text-sm font-semibold text-slate-700">{{ $row['total_label'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </x-ui.card>
+
+        {{-- View 4: Reorder risk — ranked exceptions + rule-coverage stat --}}
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <x-ui.card class="lg:col-span-1">
+                <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Reorder-rule coverage') }}</h2>
+                <p class="mt-1 text-sm text-[#52514e]">{{ __('Share of (item, shop) stock records that have a configured min/max rule.') }}</p>
+                <p class="mt-6 text-4xl font-semibold text-[#0b0b0b]">{{ number_format($coverage['percent'], 1) }}%</p>
+                <p class="mt-1 text-sm text-[#52514e]">
+                    {{ __(':covered of :total stock records have a rule.', ['covered' => $coverage['covered'], 'total' => $coverage['total']]) }}
+                </p>
+            </x-ui.card>
+
+            <x-ui.card class="lg:col-span-2">
+                <div class="mb-4">
+                    <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Reorder risk') }}</h2>
+                    <p class="text-sm text-[#52514e]">{{ __('Items at or below their minimum threshold, most urgent first.') }}</p>
+                </div>
+
+                @if(empty($exceptions['rows']))
+                    <x-ui.empty-state :title="__('No reorder risks right now')" :description="__('No (item, shop) pair with a configured rule is currently at or below its minimum.')" />
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-sand-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shop') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Qty') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Min') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Severity') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach($exceptions['rows'] as $row)
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['shop_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['qty_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['min_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm">
+                                            <span class="inline-flex items-center gap-1.5 font-medium" style="color: {{ $row['severity_color'] }};">
+                                                <span class="h-2 w-2 shrink-0 rounded-full" style="background-color: {{ $row['severity_color'] }};"></span>
+                                                {{ $row['severity_label'] }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if($exceptions['hidden'] > 0)
+                        <p class="mt-3 text-xs text-[#52514e]">{{ __(':count more not shown', ['count' => $exceptions['hidden']]) }}</p>
+                    @endif
+                @endif
+            </x-ui.card>
+        </div>
+
+        {{-- View 5: Price integrity / margin — best/worst margin % ranked by item --}}
+        <x-ui.card>
+            <div x-data="{ tab: 'best' }">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Margin by item') }}</h2>
+                        <p class="text-sm text-[#52514e]">{{ __('Cost vs. sell price margin, based on the latest 1C sync.') }}</p>
+                    </div>
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                        <button type="button" @click="tab = 'best'" :class="tab === 'best' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Best margins') }}</button>
+                        <button type="button" @click="tab = 'worst'" :class="tab === 'worst' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Worst margins') }}</button>
+                    </div>
+                </div>
+
+                <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#52514e]">
+                    <span>{{ __('Items missing a cost price') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_cost'] }}</strong></span>
+                    <span>{{ __('Items missing a sell price') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_sell'] }}</strong></span>
+                    <span>{{ __('Items missing both prices') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_both'] }}</strong></span>
+                </div>
+
+                @if($margins['total_with_margin'] === 0)
+                    <x-ui.empty-state :title="__('No items with both cost and sell prices yet')" :description="__('Margin can only be computed once an item has both a cost and a sell price synced from 1C.')" />
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-sand-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Group') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Cost price') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Sell price') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Margin') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Margin %') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100" x-show="tab === 'best'">
+                                @foreach($margins['best'] as $row)
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['group_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['cost_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['sell_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['margin_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm font-semibold text-slate-700">{{ $row['margin_pct_label'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tbody class="divide-y divide-slate-100" x-show="tab === 'worst'" x-cloak>
+                                @foreach($margins['worst'] as $row)
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['group_name'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['cost_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['sell_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm text-slate-500">{{ $row['margin_label'] }}</td>
+                                        <td class="px-4 py-3 text-sm font-semibold text-slate-700">{{ $row['margin_pct_label'] }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
