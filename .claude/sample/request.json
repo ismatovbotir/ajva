@@ -1,0 +1,75 @@
+[
+    {
+        "id":123,
+        "group":{
+            "id":5,
+            "name":"Magizlar"
+        },
+        "mark":"123",
+        "name":"Ajwa keshu yongoq",
+        "barcode":[
+            "1231231231","123123123"
+        ],
+        "qty":[
+            {
+                "shop":{
+                    "id":1,
+                    "name":"Magazin 1"
+                },
+                "value":125
+                
+            },
+             {
+                "shop":{
+                    "id":2,
+                    "name":"Magazin 2"
+                },
+                "value":300
+                
+            }
+
+        ],
+        "price":[
+            {
+                "price":{
+                    "id":1,
+                    "name":"Olish narxi"
+                },
+                "value":25000
+            },
+            {
+                "price":{
+                    "id":1,
+                    "name":"Sotish narxi"
+                },
+                "value":35000
+            }
+
+        ],
+        "order":[
+            {
+                "shop":{
+                    "id":1,
+                    "name":"Magazin 1"
+                },
+                "min":123,
+                "max":1000
+                
+            },
+             {
+                "shop":{
+                    "id":2,
+                    "name":"Magazin 2"
+                },
+                "min":300,
+                "max":1500
+                
+            }
+
+        ],
+        "class_code":"012345678978548748",
+        "package_code":1234567
+
+
+    }
+]
