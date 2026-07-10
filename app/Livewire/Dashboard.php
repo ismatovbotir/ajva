@@ -27,6 +27,17 @@ class Dashboard extends Component
     /** Muted neutral used only for "Other" fold-in segments, never a real series color. */
     private const COLOR_OTHER = '#898781';
 
+    /**
+     * Status palette — reserved for state/severity indicators, always
+     * distinct from the categorical series palette above. Only "critical"
+     * and "warning" are used today (reorder-risk severity); "good"/"serious"
+     * are reserved for future use but not referenced.
+     */
+    private const STATUS_COLORS = [
+        'critical' => '#d03b3b',
+        'warning' => '#fab219',
+    ];
+
     public function render()
     {
         $byShop = $this->stockByShop();
@@ -55,8 +66,12 @@ class Dashboard extends Component
             'donut' => $this->buildDonut($byShop),
             'groupRows' => $groupRows,
             'groupMax' => $groupMax,
+            'donutGroup' => $this->buildDonut($byGroup),
             'groupShop' => $this->stockByGroupAndShop($byShop, $byGroup),
             'barColor' => self::CATEGORY_COLORS[0],
+            'exceptions' => $this->reorderExceptions(),
+            'coverage' => $this->ruleCoverage(),
+            'margins' => $this->itemMargins(),
         ]);
     }
 
@@ -209,13 +224,17 @@ class Dashboard extends Component
     }
 
     /**
-     * Builds a donut ("share of total") view of stock-by-shop, capped at 6
-     * segments: the top 5 shops by qty plus everything else folded into
-     * "Other" — a full pie is illegible past ~6 segments.
+     * Builds a donut ("share of total") view for any {id, name, total} row
+     * collection (stock-by-shop or stock-by-group), capped at 6 segments:
+     * the top 5 rows by total plus everything else folded into "Other" — a
+     * full pie is illegible past ~6 segments, regardless of how many
+     * distinct categories exist in the underlying data.
+     *
+     * @param  Collection<int, array{id: int|null, name: string, total: float}>  $rows
      */
-    private function buildDonut(Collection $byShop): array
+    private function buildDonut(Collection $rows): array
     {
-        $total = (float) $byShop->sum('total');
+        $total = (float) $rows->sum('total');
 
         if ($total <= 0) {
             return ['segments' => [], 'total' => 0.0, 'radius' => 60, 'circumference' => 0.0];
@@ -224,20 +243,20 @@ class Dashboard extends Component
         $radius = 60;
         $circumference = 2 * M_PI * $radius;
 
-        $top5 = $byShop->take(5)->values();
-        $otherTotal = (float) $byShop->slice(5)->sum('total');
+        $top5 = $rows->take(5)->values();
+        $otherTotal = (float) $rows->slice(5)->sum('total');
 
         $cumulative = 0.0;
         $segments = [];
 
-        foreach ($top5 as $i => $shop) {
-            $percent = $shop['total'] / $total * 100;
+        foreach ($top5 as $i => $row) {
+            $percent = $row['total'] / $total * 100;
             $len = $percent / 100 * $circumference;
 
             $segments[] = [
-                'name' => $shop['name'],
-                'value' => $shop['total'],
-                'label' => $this->formatQty($shop['total']),
+                'name' => $row['name'],
+                'value' => $row['total'],
+                'label' => $this->formatQty($row['total']),
                 'percent' => $percent,
                 'color' => self::CATEGORY_COLORS[$i],
                 'dasharray' => sprintf('%.3F %.3F', $len, $circumference - $len),
@@ -282,5 +301,190 @@ class Dashboard extends Component
         }
 
         return number_format($value, 2, '.', '');
+    }
+
+    /** Formats a price/margin value to 2 decimals, no thousands separator. */
+    private function formatMoney(float $value): string
+    {
+        return number_format($value, 2, '.', '');
+    }
+
+    /**
+     * Ranked list of every (item, shop) combination currently at or below
+     * its configured minimum threshold (`stocks.qty <= item_order_rules.min`),
+     * most urgent first. Urgency is `qty / min` — the lower the ratio, the
+     * closer to (or further past) a stockout. When `min` is 0 the ratio is
+     * forced to 0 (undefined division aside, a rule with a 0 minimum being
+     * triggered at all means `qty` is also 0 — an outright stockout, the
+     * most urgent case there is). Capped at 20 rows; anything beyond that is
+     * summarized as a "N more" count rather than silently dropped.
+     *
+     * @return array{rows: array, total: int, hidden: int}
+     */
+    private function reorderExceptions(): array
+    {
+        $cap = 20;
+
+        $base = DB::table('stocks')
+            ->join('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
+            })
+            ->whereColumn('stocks.qty', '<=', 'item_order_rules.min');
+
+        $total = (clone $base)->count();
+
+        $rows = $base
+            ->join('items', 'items.id', '=', 'stocks.item_id')
+            ->join('shops', 'shops.id', '=', 'stocks.shop_id')
+            ->selectRaw(
+                'items.name as item_name, shops.name as shop_name, stocks.qty as qty, '.
+                'item_order_rules.min as min, '.
+                'CASE WHEN item_order_rules.min > 0 THEN stocks.qty / item_order_rules.min ELSE 0 END as ratio'
+            )
+            ->orderBy('ratio')
+            ->orderByRaw('(item_order_rules.min - stocks.qty) DESC')
+            ->limit($cap)
+            ->get()
+            ->map(function ($row) {
+                $qty = (float) $row->qty;
+                $min = (float) $row->min;
+                $ratio = (float) $row->ratio;
+                $isCritical = $qty <= 0 || $ratio <= 0.5;
+                $severity = $isCritical ? 'critical' : 'warning';
+
+                return [
+                    'item_name' => (string) $row->item_name,
+                    'shop_name' => (string) $row->shop_name,
+                    'qty_label' => $this->formatQty($qty),
+                    'min_label' => $this->formatQty($min),
+                    'severity' => $severity,
+                    'severity_label' => $isCritical ? __('Critical') : __('Warning'),
+                    'severity_color' => self::STATUS_COLORS[$severity],
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'rows' => $rows,
+            'total' => $total,
+            'hidden' => max($total - count($rows), 0),
+        ];
+    }
+
+    /**
+     * What percentage of (item, shop) pairs that have a `stocks` row also
+     * have a corresponding `item_order_rules` row — a data-completeness
+     * signal, since an empty reorder-risk list can otherwise be mistaken for
+     * "everything's fine" when it may really mean "no rules configured at
+     * all". `stocks` is unique on (item_id, shop_id), so its row count is
+     * already the distinct-pair count — no need to pull rows into PHP.
+     *
+     * @return array{total: int, covered: int, percent: float}
+     */
+    private function ruleCoverage(): array
+    {
+        $total = DB::table('stocks')->count();
+
+        $covered = DB::table('stocks')
+            ->join('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
+            })
+            ->count();
+
+        return [
+            'total' => $total,
+            'covered' => $covered,
+            'percent' => $total > 0 ? round($covered / $total * 100, 1) : 0.0,
+        ];
+    }
+
+    /**
+     * Per-item cost vs. sell margin, based on `item_prices` joined to
+     * `prices.is_sell`. An item's cost value is the lowest `is_sell = false`
+     * price on file, its sell value the highest `is_sell = true` price
+     * (there's no uniqueness constraint tying an item to a single price of
+     * each type, so ties/multiples are resolved deterministically rather
+     * than picking an arbitrary row). Margin % is only computed when both a
+     * (non-zero) cost and a sell value exist; items missing one or both are
+     * tallied separately as a data-completeness stat.
+     *
+     * @return array{best: array, worst: array, total_with_margin: int, missing_cost: int, missing_sell: int, missing_both: int}
+     */
+    private function itemMargins(): array
+    {
+        $rows = DB::table('items')
+            ->leftJoin('item_prices', 'item_prices.item_id', '=', 'items.id')
+            ->leftJoin('prices', 'prices.id', '=', 'item_prices.price_id')
+            ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
+            ->selectRaw(
+                'items.id as item_id, items.name as item_name, groups.name as group_name, '.
+                'MIN(CASE WHEN prices.is_sell = 0 THEN item_prices.value END) as cost_value, '.
+                'MAX(CASE WHEN prices.is_sell = 1 THEN item_prices.value END) as sell_value'
+            )
+            ->groupBy('items.id', 'items.name', 'groups.name')
+            ->get();
+
+        $missingCost = 0;
+        $missingSell = 0;
+        $missingBoth = 0;
+        $withMargin = [];
+
+        foreach ($rows as $row) {
+            $hasCost = $row->cost_value !== null;
+            $hasSell = $row->sell_value !== null;
+
+            if (! $hasCost && ! $hasSell) {
+                $missingBoth++;
+            } elseif (! $hasCost) {
+                $missingCost++;
+            } elseif (! $hasSell) {
+                $missingSell++;
+            }
+
+            if (! $hasCost || ! $hasSell) {
+                continue;
+            }
+
+            $cost = (float) $row->cost_value;
+            $sell = (float) $row->sell_value;
+
+            if ($cost == 0.0) {
+                // Zero-cost row: margin % is mathematically undefined, so
+                // it's excluded from the ranked list (it's not "missing"
+                // data though — both prices genuinely exist).
+                continue;
+            }
+
+            $margin = $sell - $cost;
+            $marginPct = round($margin / $cost * 100, 2);
+
+            $withMargin[] = [
+                'item_name' => (string) $row->item_name,
+                'group_name' => $row->group_name !== null ? (string) $row->group_name : __('No group'),
+                'cost_label' => $this->formatMoney($cost),
+                'sell_label' => $this->formatMoney($sell),
+                'margin_label' => $this->formatMoney(round($margin, 2)),
+                'margin_pct' => $marginPct,
+                'margin_pct_label' => $this->formatMoney($marginPct).'%',
+            ];
+        }
+
+        usort($withMargin, fn (array $a, array $b) => $a['margin_pct'] <=> $b['margin_pct']);
+
+        $cap = 10;
+        $worst = array_slice($withMargin, 0, $cap);
+        $best = array_slice(array_reverse($withMargin), 0, $cap);
+
+        return [
+            'best' => $best,
+            'worst' => $worst,
+            'total_with_margin' => count($withMargin),
+            'missing_cost' => $missingCost,
+            'missing_sell' => $missingSell,
+            'missing_both' => $missingBoth,
+        ];
     }
 }

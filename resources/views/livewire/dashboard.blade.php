@@ -2,10 +2,10 @@
     <x-ui.page-header :title="__('Dashboard')" :subtitle="__('Overview of shops, stock and receipts will live here.')" />
 
     <div class="space-y-6">
-        {{-- Chart 1: Stock by shop — bar (primary) + donut (secondary) --}}
+        {{-- Chart 1: Stock by shop — bar / donut / table selector --}}
         <x-ui.card>
             <div x-data="{
-                view: 'chart',
+                view: 'bar',
                 tip: { show: false, x: 0, y: 0, name: '', value: '', el: null },
                 showTip(e) {
                     const el = e.currentTarget;
@@ -18,26 +18,23 @@
                 },
                 hideTip() { this.tip.show = false; this.tip.el = null; },
             }">
-                <div class="mb-4 flex items-start justify-between gap-3">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock by shop') }}</h2>
                         <p class="text-sm text-[#52514e]">{{ __('Total on-hand quantity per shop.') }}</p>
                     </div>
-                    <button
-                        type="button"
-                        @click="view = view === 'chart' ? 'table' : 'chart'"
-                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-sand-50"
-                    >
-                        <x-icon name="clipboard" class="h-4 w-4" />
-                        <span x-text="view === 'chart' ? @js(__('Show table')) : @js(__('Show chart'))"></span>
-                    </button>
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                        <button type="button" @click="view = 'bar'" :class="view === 'bar' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Bar') }}</button>
+                        <button type="button" @click="view = 'donut'" :class="view === 'donut' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Donut') }}</button>
+                        <button type="button" @click="view = 'table'" :class="view === 'table' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Table') }}</button>
+                    </div>
                 </div>
 
                 @if(empty($shopRows))
                     <x-ui.empty-state :title="__('No stock records yet')" :description="__('Stock records are created automatically from 1C sync.')" />
                 @else
-                    {{-- Chart view --}}
-                    <div x-show="view === 'chart'">
+                    {{-- Bar view --}}
+                    <div x-show="view === 'bar'">
                         <div data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                             <div class="space-y-3">
                                 @foreach($shopRows as $row)
@@ -85,52 +82,52 @@
                                 <p x-text="tip.value"></p>
                             </div>
                         </div>
+                    </div>
 
+                    {{-- Donut view --}}
+                    <div x-show="view === 'donut'" x-cloak>
                         @if(!empty($donut['segments']))
-                            <div class="mt-6 border-t border-[#e1e0d9] pt-6">
-                                <h3 class="mb-3 text-sm font-semibold text-[#0b0b0b]">{{ __('Share of total') }}</h3>
-                                <div data-chart-surface class="relative flex flex-col items-center gap-6 sm:flex-row sm:justify-center">
-                                    <svg viewBox="0 0 160 160" class="h-40 w-40 shrink-0">
-                                        <g transform="rotate(-90 80 80)">
-                                            @foreach($donut['segments'] as $segment)
-                                                <circle
-                                                    tabindex="0"
-                                                    data-name="{{ $segment['name'] }}"
-                                                    data-value="{{ $segment['label'] }}"
-                                                    @pointermove="showTip($event)"
-                                                    @pointerleave="hideTip()"
-                                                    @focus="showTip($event)"
-                                                    @blur="hideTip()"
-                                                    :class="tip.el === $el ? 'opacity-80' : ''"
-                                                    class="cursor-pointer transition focus:outline-none"
-                                                    cx="80" cy="80" r="{{ $donut['radius'] }}"
-                                                    fill="none"
-                                                    stroke="{{ $segment['color'] }}"
-                                                    stroke-width="24"
-                                                    stroke-dasharray="{{ $segment['dasharray'] }}"
-                                                    stroke-dashoffset="{{ $segment['dashoffset'] }}"
-                                                ></circle>
-                                            @endforeach
-                                        </g>
-                                    </svg>
-
-                                    <ul class="w-full space-y-1.5 sm:w-auto">
+                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4 sm:flex-row sm:justify-center">
+                                <svg viewBox="0 0 160 160" class="h-40 w-40 shrink-0">
+                                    <g transform="rotate(-90 80 80)">
                                         @foreach($donut['segments'] as $segment)
-                                            <li class="flex items-center gap-2 text-sm">
-                                                <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $segment['color'] }}"></span>
-                                                <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $segment['name'] }}</span>
-                                                <span class="shrink-0 font-medium text-[#52514e]">{{ $segment['label'] }}</span>
-                                            </li>
+                                            <circle
+                                                tabindex="0"
+                                                data-name="{{ $segment['name'] }}"
+                                                data-value="{{ $segment['label'] }}"
+                                                @pointermove="showTip($event)"
+                                                @pointerleave="hideTip()"
+                                                @focus="showTip($event)"
+                                                @blur="hideTip()"
+                                                :class="tip.el === $el ? 'opacity-80' : ''"
+                                                class="cursor-pointer transition focus:outline-none"
+                                                cx="80" cy="80" r="{{ $donut['radius'] }}"
+                                                fill="none"
+                                                stroke="{{ $segment['color'] }}"
+                                                stroke-width="24"
+                                                stroke-dasharray="{{ $segment['dasharray'] }}"
+                                                stroke-dashoffset="{{ $segment['dashoffset'] }}"
+                                            ></circle>
                                         @endforeach
-                                    </ul>
+                                    </g>
+                                </svg>
 
-                                    <div x-show="tip.show" x-cloak
-                                        class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
-                                        :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
-                                    >
-                                        <p x-text="tip.name" class="font-medium"></p>
-                                        <p x-text="tip.value"></p>
-                                    </div>
+                                <ul class="w-full space-y-1.5 sm:w-auto">
+                                    @foreach($donut['segments'] as $segment)
+                                        <li class="flex items-center gap-2 text-sm">
+                                            <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $segment['color'] }}"></span>
+                                            <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $segment['name'] }}</span>
+                                            <span class="shrink-0 font-medium text-[#52514e]">{{ $segment['label'] }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+
+                                <div x-show="tip.show" x-cloak
+                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                    :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
+                                >
+                                    <p x-text="tip.name" class="font-medium"></p>
+                                    <p x-text="tip.value"></p>
                                 </div>
                             </div>
                         @endif
@@ -159,10 +156,10 @@
             </div>
         </x-ui.card>
 
-        {{-- Chart 2: Stock by group — bar only --}}
+        {{-- Chart 2: Stock by group — bar / donut / table selector --}}
         <x-ui.card>
             <div x-data="{
-                view: 'chart',
+                view: 'bar',
                 tip: { show: false, x: 0, y: 0, name: '', value: '', el: null },
                 showTip(e) {
                     const el = e.currentTarget;
@@ -175,25 +172,22 @@
                 },
                 hideTip() { this.tip.show = false; this.tip.el = null; },
             }">
-                <div class="mb-4 flex items-start justify-between gap-3">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock by group') }}</h2>
                         <p class="text-sm text-[#52514e]">{{ __('Total on-hand quantity per product group.') }}</p>
                     </div>
-                    <button
-                        type="button"
-                        @click="view = view === 'chart' ? 'table' : 'chart'"
-                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-sand-50"
-                    >
-                        <x-icon name="clipboard" class="h-4 w-4" />
-                        <span x-text="view === 'chart' ? @js(__('Show table')) : @js(__('Show chart'))"></span>
-                    </button>
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                        <button type="button" @click="view = 'bar'" :class="view === 'bar' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Bar') }}</button>
+                        <button type="button" @click="view = 'donut'" :class="view === 'donut' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Donut') }}</button>
+                        <button type="button" @click="view = 'table'" :class="view === 'table' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Table') }}</button>
+                    </div>
                 </div>
 
                 @if(empty($groupRows))
                     <x-ui.empty-state :title="__('No stock records yet')" :description="__('Stock records are created automatically from 1C sync.')" />
                 @else
-                    <div x-show="view === 'chart'" data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                    <div x-show="view === 'bar'" data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                         <div class="space-y-3">
                             @foreach($groupRows as $row)
                                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
@@ -239,6 +233,55 @@
                             <p x-text="tip.name" class="font-medium"></p>
                             <p x-text="tip.value"></p>
                         </div>
+                    </div>
+
+                    {{-- Donut view --}}
+                    <div x-show="view === 'donut'" x-cloak>
+                        @if(!empty($donutGroup['segments']))
+                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4 sm:flex-row sm:justify-center">
+                                <svg viewBox="0 0 160 160" class="h-40 w-40 shrink-0">
+                                    <g transform="rotate(-90 80 80)">
+                                        @foreach($donutGroup['segments'] as $segment)
+                                            <circle
+                                                tabindex="0"
+                                                data-name="{{ $segment['name'] }}"
+                                                data-value="{{ $segment['label'] }}"
+                                                @pointermove="showTip($event)"
+                                                @pointerleave="hideTip()"
+                                                @focus="showTip($event)"
+                                                @blur="hideTip()"
+                                                :class="tip.el === $el ? 'opacity-80' : ''"
+                                                class="cursor-pointer transition focus:outline-none"
+                                                cx="80" cy="80" r="{{ $donutGroup['radius'] }}"
+                                                fill="none"
+                                                stroke="{{ $segment['color'] }}"
+                                                stroke-width="24"
+                                                stroke-dasharray="{{ $segment['dasharray'] }}"
+                                                stroke-dashoffset="{{ $segment['dashoffset'] }}"
+                                            ></circle>
+                                        @endforeach
+                                    </g>
+                                </svg>
+
+                                <ul class="w-full space-y-1.5 sm:w-auto">
+                                    @foreach($donutGroup['segments'] as $segment)
+                                        <li class="flex items-center gap-2 text-sm">
+                                            <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $segment['color'] }}"></span>
+                                            <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $segment['name'] }}</span>
+                                            <span class="shrink-0 font-medium text-[#52514e]">{{ $segment['label'] }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+
+                                <div x-show="tip.show" x-cloak
+                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                    :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
+                                >
+                                    <p x-text="tip.name" class="font-medium"></p>
+                                    <p x-text="tip.value"></p>
+                                </div>
+                            </div>
+                        @endif
                     </div>
 
                     <div x-show="view === 'table'" x-cloak class="overflow-x-auto">

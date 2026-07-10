@@ -205,11 +205,13 @@ class ReceiptIngestionTest extends TestCase
         $pos = Pos::factory()->create();
         $token = $pos->issueApiToken();
 
-        $response = $this
-            ->withHeader('Authorization', 'Bearer '.$token)
-            ->call('POST', '/api/receipts', [], [], [], [
-                'CONTENT_TYPE' => 'application/json',
-            ], json_encode(['number' => 'A-1']));
+        // Note: withHeader() only affects Laravel's postJson()/getJson()
+        // helpers, not the raw call() below — the Authorization header has
+        // to be passed directly in the $server array here.
+        $response = $this->call('POST', '/api/receipts', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+        ], json_encode(['number' => 'A-1']));
 
         $response->assertStatus(422);
         $response->assertHeader('Content-Type', 'application/json');
