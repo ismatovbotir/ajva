@@ -18,6 +18,7 @@ return new class extends Migration
             $table->decimal('min', 10, 3)->default(0);
             $table->decimal('max', 10, 3)->default(0);
             // $table->timestamps();
+            $table->unique(['item_id', 'shop_id']);
         });
     }
 

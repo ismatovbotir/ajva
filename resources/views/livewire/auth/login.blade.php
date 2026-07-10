@@ -1,6 +1,6 @@
 <div class="w-full max-w-sm">
     <div class="mb-8 text-center">
-        <span class="text-2xl font-semibold text-indigo-600">{{ config('app.name') }}</span>
+        <span class="text-2xl font-semibold text-brand-700">{{ config('app.name') }}</span>
     </div>
 
     <x-ui.card>
@@ -25,7 +25,7 @@
             />
 
             <label class="flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" wire:model="remember" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                <input type="checkbox" wire:model="remember" class="rounded border-slate-300 text-brand-700 focus:ring-brand-600">
                 {{ __('Remember me') }}
             </label>
 

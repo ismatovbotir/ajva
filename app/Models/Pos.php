@@ -11,6 +11,8 @@ class Pos extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'name',
         'shop_id',

@@ -10,6 +10,8 @@ class ItemPrice extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'item_id',
         'price_id',

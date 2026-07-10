@@ -8,7 +8,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body class="flex min-h-screen items-center justify-center bg-slate-50 px-4 antialiased">
+<body class="flex min-h-screen items-center justify-center bg-sand-50 px-4 antialiased">
     {{ $slot }}
     @livewireScripts
 </body>

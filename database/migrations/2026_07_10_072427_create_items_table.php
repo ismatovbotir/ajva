@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('category_id')->nullable()->constrained();
             $table->string('name', 100);
             $table->string('mark', 20)->nullable();
-            $table->string('class_code', 17)->nullable();
+            $table->string('class_code', 25)->nullable();
             $table->string('package_code', 7)->nullable();
             $table->timestamps();
         });

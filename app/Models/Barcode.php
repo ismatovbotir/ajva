@@ -10,6 +10,8 @@ class Barcode extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'item_id',
         'gtin',

@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+@theme {
+    /* Brand green — muted forest/pine green used for the sidebar, mobile nav
+       chrome, and primary accent (buttons, links, focus rings). Chosen for
+       an enterprise feel (desaturated, not a bright "kelly" green) while
+       still reading clearly as green rather than near-black. */
+    --color-brand-50: #edf5f0;
+    --color-brand-100: #dcebe0;
+    --color-brand-200: #b9d7c2;
+    --color-brand-300: #8fbe9e;
+    --color-brand-400: #679d79;
+    --color-brand-500: #487f5c;
+    --color-brand-600: #35664a;
+    --color-brand-700: #2a5039;
+    --color-brand-800: #1f3d2c;
+    --color-brand-900: #16301f;
+
+    /* Sand — warm, muted tan/gold used for the main content canvas. Kept
+       very light/low-saturation at the 50–100 end (where body text and
+       cards live) so long reading sessions over dense tables stay
+       comfortable; deeper steps are available for borders/accents. */
+    --color-sand-50: #faf3e3;
+    --color-sand-100: #f3e7cb;
+    --color-sand-200: #e7d4a3;
+    --color-sand-300: #d8bc79;
+    --color-sand-400: #c6a356;
+    --color-sand-500: #ad8740;
+    --color-sand-600: #8d6c32;
+    --color-sand-700: #705428;
+    --color-sand-800: #57411f;
+    --color-sand-900: #423218;
+}
+
 [x-cloak] {
     display: none !important;
 }
