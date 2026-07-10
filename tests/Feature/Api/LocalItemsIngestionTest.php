@@ -5,7 +5,6 @@ namespace Tests\Feature\Api;
 use App\Models\Barcode;
 use App\Models\ItemPrice;
 use App\Models\Price;
-use App\Models\Shop;
 use App\Models\Stock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,16 +50,17 @@ class LocalItemsIngestionTest extends TestCase
 
     public function test_full_sample_payload_is_ingested_correctly(): void
     {
-        Shop::insert([
-            ['id' => 1, 'name' => 'Magazin 1'],
-            ['id' => 2, 'name' => 'Magazin 2'],
-        ]);
-
+        // Shops are no longer pre-seeded here on purpose: the sample payload
+        // only references shops 1 and 2 through qty[]/order[], and the batch
+        // must auto-create them (with the right name) from that alone.
         $response = $this
             ->withServerVariables(['REMOTE_ADDR' => '10.0.0.5'])
             ->postJson('/api/items', $this->samplePayload());
 
         $response->assertStatus(202);
+
+        $this->assertDatabaseHas('shops', ['id' => 1, 'name' => 'Magazin 1']);
+        $this->assertDatabaseHas('shops', ['id' => 2, 'name' => 'Magazin 2']);
 
         $this->assertDatabaseHas('groups', ['id' => 5, 'name' => 'Magizlar']);
 
@@ -133,16 +133,18 @@ class LocalItemsIngestionTest extends TestCase
         $response->assertJsonValidationErrors(['items.0.id', 'items.0.name']);
     }
 
-    public function test_unknown_shop_id_is_skipped_without_failing_the_batch(): void
+    public function test_shop_referenced_only_in_qty_and_order_is_created_automatically(): void
     {
-        Shop::insert(['id' => 1, 'name' => 'Magazin 1']);
+        $this->assertDatabaseMissing('shops', ['id' => 999]);
 
         $payload = [[
             'id' => 456,
             'name' => 'Test item',
             'qty' => [
-                ['shop' => ['id' => 1, 'name' => 'Magazin 1'], 'value' => 10],
-                ['shop' => ['id' => 999, 'name' => 'Unknown shop'], 'value' => 20],
+                ['shop' => ['id' => 999, 'name' => 'New shop'], 'value' => 20],
+            ],
+            'order' => [
+                ['shop' => ['id' => 999, 'name' => 'New shop'], 'min' => 5, 'max' => 50],
             ],
         ]];
 
@@ -153,8 +155,11 @@ class LocalItemsIngestionTest extends TestCase
         $response->assertStatus(202);
 
         $this->assertDatabaseHas('items', ['id' => 456, 'name' => 'Test item']);
-        $this->assertDatabaseHas('stocks', ['item_id' => 456, 'shop_id' => 1, 'qty' => '10.000']);
-        $this->assertDatabaseMissing('stocks', ['item_id' => 456, 'shop_id' => 999]);
+        $this->assertDatabaseHas('shops', ['id' => 999, 'name' => 'New shop']);
+        $this->assertDatabaseHas('stocks', ['item_id' => 456, 'shop_id' => 999, 'qty' => '20.000']);
+        $this->assertDatabaseHas('item_order_rules', [
+            'item_id' => 456, 'shop_id' => 999, 'min' => '5.000', 'max' => '50.000',
+        ]);
         $this->assertSame(1, Stock::where('item_id', 456)->count());
     }
 

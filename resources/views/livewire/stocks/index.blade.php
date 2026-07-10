@@ -1,27 +1,15 @@
 <div>
-    <x-ui.page-header :title="__('Stocks')" :subtitle="__('Manage current on-hand quantities per shop.')">
-        <x-slot:actions>
-            <x-ui.button wire:click="create">{{ __('New stock') }}</x-ui.button>
-        </x-slot:actions>
-    </x-ui.page-header>
+    <x-ui.page-header :title="__('Stocks')" :subtitle="__('Current on-hand quantities per shop, synced from 1C.')" />
 
     @if($stocks->isEmpty())
-        <x-ui.empty-state :title="__('No stock records yet')" :description="__('Create your first stock record to get started.')" />
+        <x-ui.empty-state :title="__('No stock records yet')" :description="__('Stock records are created automatically from 1C sync.')" />
     @else
         {{-- Mobile card list --}}
         <div class="space-y-3 md:hidden">
             @foreach($stocks as $stock)
                 <x-ui.card>
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="font-medium text-slate-900">{{ $stock->item->name }}</p>
-                            <p class="text-sm text-slate-500">{{ $stock->shop->name }} &middot; {{ __('Qty') }}: {{ $stock->qty }}</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <x-ui.button variant="secondary" wire:click="edit({{ $stock->id }})">{{ __('Edit') }}</x-ui.button>
-                            <x-ui.button variant="danger" wire:click="delete({{ $stock->id }})" wire:confirm="{{ __('Are you sure you want to delete this?') }}">{{ __('Delete') }}</x-ui.button>
-                        </div>
-                    </div>
+                    <p class="font-medium text-slate-900">{{ $stock->item->name }}</p>
+                    <p class="text-sm text-slate-500">{{ $stock->shop->name }} &middot; {{ __('Qty') }}: {{ $stock->qty }}</p>
                 </x-ui.card>
             @endforeach
         </div>
@@ -34,7 +22,6 @@
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shop') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Qty') }}</th>
-                        <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -43,10 +30,6 @@
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $stock->item->name }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $stock->shop->name }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $stock->qty }}</td>
-                            <td class="px-4 py-3 text-right text-sm">
-                                <x-ui.button variant="secondary" wire:click="edit({{ $stock->id }})">{{ __('Edit') }}</x-ui.button>
-                                <x-ui.button variant="danger" wire:click="delete({{ $stock->id }})" wire:confirm="{{ __('Are you sure you want to delete this?') }}">{{ __('Delete') }}</x-ui.button>
-                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -55,29 +38,4 @@
 
         <div class="mt-4">{{ $stocks->links() }}</div>
     @endif
-
-    <x-ui.modal :show="$showModal" :title="$stockId ? __('Edit stock') : __('New stock')">
-        <form wire:submit="save" class="space-y-4">
-            <x-ui.select name="item_id" :label="__('Item')" wire:model="item_id">
-                <option value="">{{ __('Select an item') }}</option>
-                @foreach($items as $item)
-                    <option value="{{ $item->id }}">{{ $item->name }}</option>
-                @endforeach
-            </x-ui.select>
-
-            <x-ui.select name="shop_id" :label="__('Shop')" wire:model="shop_id">
-                <option value="">{{ __('Select a shop') }}</option>
-                @foreach($shops as $shop)
-                    <option value="{{ $shop->id }}">{{ $shop->name }}</option>
-                @endforeach
-            </x-ui.select>
-
-            <x-ui.input name="qty" type="number" step="0.001" min="0" :label="__('Qty')" wire:model="qty" />
-
-            <div class="flex justify-end gap-2">
-                <x-ui.button type="button" variant="secondary" wire:click="closeModal">{{ __('Cancel') }}</x-ui.button>
-                <x-ui.button type="submit">{{ __('Save') }}</x-ui.button>
-            </div>
-        </form>
-    </x-ui.modal>
 </div>

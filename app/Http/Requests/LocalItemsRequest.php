@@ -82,6 +82,7 @@ class LocalItemsRequest extends FormRequest
 
             'items.*.order' => ['nullable', 'array'],
             'items.*.order.*.shop.id' => ['required', 'integer'],
+            'items.*.order.*.shop.name' => ['nullable', 'string'],
             'items.*.order.*.min' => ['required', 'numeric'],
             'items.*.order.*.max' => ['required', 'numeric'],
 

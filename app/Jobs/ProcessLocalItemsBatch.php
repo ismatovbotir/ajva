@@ -15,7 +15,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 class ProcessLocalItemsBatch implements ShouldQueue
 {
@@ -33,13 +32,12 @@ class ProcessLocalItemsBatch implements ShouldQueue
         $this->upsertGroups($now);
         $this->upsertItems($now);
         $this->syncBarcodes();
-
-        $knownShopIds = $this->knownShopIds();
+        $this->upsertShops();
 
         $this->upsertPrices();
         $this->upsertItemPrices();
-        $this->upsertStocks($knownShopIds);
-        $this->upsertItemOrderRules($knownShopIds);
+        $this->upsertStocks();
+        $this->upsertItemOrderRules();
     }
 
     protected function upsertGroups($now): void
@@ -112,33 +110,31 @@ class ProcessLocalItemsBatch implements ShouldQueue
         }
     }
 
-    /**
-     * @return array<int, bool> a set of known shop ids, keyed by id, for O(1) lookups
-     */
-    protected function knownShopIds(): array
+    protected function upsertShops(): void
     {
-        $referencedShopIds = [];
+        $shops = [];
 
         foreach ($this->items as $item) {
             foreach (($item['qty'] ?? []) as $qty) {
-                $referencedShopIds[] = $qty['shop']['id'];
+                $shopId = $qty['shop']['id'];
+                $shops[$shopId] = [
+                    'id' => $shopId,
+                    'name' => $qty['shop']['name'] ?? '',
+                ];
             }
 
             foreach (($item['order'] ?? []) as $order) {
-                $referencedShopIds[] = $order['shop']['id'];
+                $shopId = $order['shop']['id'];
+                $shops[$shopId] = [
+                    'id' => $shopId,
+                    'name' => $order['shop']['name'] ?? '',
+                ];
             }
         }
 
-        if ($referencedShopIds === []) {
-            return [];
+        if ($shops !== []) {
+            Shop::upsert(array_values($shops), ['id'], ['name']);
         }
-
-        return Shop::query()
-            ->whereIn('id', array_unique($referencedShopIds))
-            ->pluck('id')
-            ->flip()
-            ->map(fn () => true)
-            ->all();
     }
 
     protected function upsertPrices(): void
@@ -180,22 +176,13 @@ class ProcessLocalItemsBatch implements ShouldQueue
         }
     }
 
-    /**
-     * @param  array<int, bool>  $knownShopIds
-     */
-    protected function upsertStocks(array $knownShopIds): void
+    protected function upsertStocks(): void
     {
         $rows = [];
 
         foreach ($this->items as $item) {
             foreach (($item['qty'] ?? []) as $qty) {
                 $shopId = $qty['shop']['id'];
-
-                if (! isset($knownShopIds[$shopId])) {
-                    Log::warning("ProcessLocalItemsBatch: unknown shop id [{$shopId}] in qty for item [{$item['id']}], skipping.");
-
-                    continue;
-                }
 
                 $key = $item['id'].'-'.$shopId;
                 $rows[$key] = [
@@ -211,22 +198,13 @@ class ProcessLocalItemsBatch implements ShouldQueue
         }
     }
 
-    /**
-     * @param  array<int, bool>  $knownShopIds
-     */
-    protected function upsertItemOrderRules(array $knownShopIds): void
+    protected function upsertItemOrderRules(): void
     {
         $rows = [];
 
         foreach ($this->items as $item) {
             foreach (($item['order'] ?? []) as $order) {
                 $shopId = $order['shop']['id'];
-
-                if (! isset($knownShopIds[$shopId])) {
-                    Log::warning("ProcessLocalItemsBatch: unknown shop id [{$shopId}] in order for item [{$item['id']}], skipping.");
-
-                    continue;
-                }
 
                 $key = $item['id'].'-'.$shopId;
                 $rows[$key] = [
