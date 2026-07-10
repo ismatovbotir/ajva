@@ -27,4 +27,13 @@ class Handler extends ExceptionHandler
             //
         });
     }
+
+    /**
+     * api/* is a machine-consumed prefix (1C ingestion, etc.) — always
+     * render errors as JSON there, regardless of the caller's Accept header.
+     */
+    protected function shouldReturnJson($request, Throwable $e)
+    {
+        return $request->is('api/*') || parent::shouldReturnJson($request, $e);
+    }
 }

@@ -115,6 +115,24 @@ class LocalItemsIngestionTest extends TestCase
         $response->assertJsonValidationErrors(['items.0.id', 'items.0.name']);
     }
 
+    public function test_validation_failure_returns_json_even_without_an_accept_header(): void
+    {
+        // Regression test: postJson() auto-sends "Accept: application/json",
+        // which masked a real bug where a plain client (no Accept header,
+        // as 1C's caller may well be) got redirected to the app root on
+        // validation failure instead of receiving a JSON error. Use a raw
+        // post() with a manually-encoded JSON body and no Accept header.
+        $response = $this
+            ->withServerVariables(['REMOTE_ADDR' => '10.0.0.5'])
+            ->call('POST', '/api/items', [], [], [], [
+                'CONTENT_TYPE' => 'application/json',
+            ], json_encode([['mark' => '999']]));
+
+        $response->assertStatus(422);
+        $response->assertHeader('Content-Type', 'application/json');
+        $response->assertJsonValidationErrors(['items.0.id', 'items.0.name']);
+    }
+
     public function test_unknown_shop_id_is_skipped_without_failing_the_batch(): void
     {
         Shop::insert(['id' => 1, 'name' => 'Magazin 1']);

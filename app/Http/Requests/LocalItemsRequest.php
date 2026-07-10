@@ -15,6 +15,17 @@ class LocalItemsRequest extends FormRequest
     }
 
     /**
+     * This is a machine-to-machine endpoint (1C), which may not send an
+     * "Accept: application/json" header. Force JSON validation-error
+     * responses regardless, instead of Laravel's default redirect-back
+     * behavior (which falls back to the app root with no Referer).
+     */
+    public function expectsJson(): bool
+    {
+        return true;
+    }
+
+    /**
      * The request body is a bare JSON array of items, not wrapped in an
      * object. Wrap it under a synthetic "items" key so the rest of the
      * validation rules can use normal "items.*.foo" dot notation.
