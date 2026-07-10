@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\LocalItemsController;
+use App\Http\Controllers\Api\ReceiptController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -20,3 +21,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::middleware('local.only')->post('/items', [LocalItemsController::class, 'store']);
+
+Route::middleware('pos.token')->post('/receipts', [ReceiptController::class, 'store']);

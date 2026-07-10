@@ -24,27 +24,50 @@
     @livewireStyles
 </head>
 <body class="bg-sand-50 text-slate-900 antialiased">
-    <div x-data="{ mobileMenuOpen: false }" class="min-h-screen md:flex">
+    <div
+        x-data="{
+            mobileMenuOpen: false,
+            sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+        }"
+        x-init="$watch('sidebarCollapsed', value => localStorage.setItem('sidebarCollapsed', value))"
+        class="min-h-screen md:flex"
+    >
         {{-- Desktop sidebar --}}
-        <aside class="hidden md:flex md:w-64 md:flex-shrink-0 md:flex-col md:bg-brand-700">
-            <div class="flex h-16 items-center border-b border-brand-600 px-6">
-                <span class="text-lg font-semibold text-white">{{ config('app.name') }}</span>
+        <aside
+            :class="sidebarCollapsed ? 'md:w-20' : 'md:w-64'"
+            class="hidden md:flex md:flex-shrink-0 md:flex-col md:bg-brand-700 md:transition-all md:duration-200"
+        >
+            <div class="flex h-16 items-center justify-between border-b border-brand-600 px-4">
+                <span x-show="!sidebarCollapsed" x-cloak class="truncate text-lg font-semibold text-white">{{ config('app.name') }}</span>
+                <button
+                    type="button"
+                    @click="sidebarCollapsed = !sidebarCollapsed"
+                    class="ml-auto rounded-lg p-2 text-brand-100 hover:bg-brand-600 hover:text-white"
+                    :title="sidebarCollapsed ? '{{ __('Expand sidebar') }}' : '{{ __('Collapse sidebar') }}'"
+                >
+                    <x-icon name="chevron-left" class="h-5 w-5 transition-transform duration-200" x-bind:class="sidebarCollapsed && 'rotate-180'" />
+                    <span class="sr-only">{{ __('Toggle sidebar') }}</span>
+                </button>
             </div>
-            <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+            <nav class="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
                 @foreach ($navItems as $item)
                     @php $active = Route::has($item['route']) && request()->routeIs($item['route']); @endphp
                     @if (Route::has($item['route']))
                         <a
                             href="{{ route($item['route']) }}"
+                            :title="sidebarCollapsed ? '{{ __($item['label']) }}' : null"
                             class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium {{ $active ? 'bg-brand-600 text-white' : 'text-brand-100 hover:bg-brand-600 hover:text-white' }}"
                         >
-                            <x-icon :name="$item['icon']" class="h-5 w-5" />
-                            {{ __($item['label']) }}
+                            <x-icon :name="$item['icon']" class="h-5 w-5 flex-shrink-0" />
+                            <span x-show="!sidebarCollapsed" x-cloak class="truncate">{{ __($item['label']) }}</span>
                         </a>
                     @else
-                        <span class="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-400">
-                            <x-icon :name="$item['icon']" class="h-5 w-5" />
-                            {{ __($item['label']) }}
+                        <span
+                            :title="sidebarCollapsed ? '{{ __($item['label']) }}' : null"
+                            class="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-400"
+                        >
+                            <x-icon :name="$item['icon']" class="h-5 w-5 flex-shrink-0" />
+                            <span x-show="!sidebarCollapsed" x-cloak class="truncate">{{ __($item['label']) }}</span>
                         </span>
                     @endif
                 @endforeach
@@ -52,9 +75,13 @@
             <div class="border-t border-brand-600 p-3">
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
-                    <button type="submit" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-100 hover:bg-brand-600 hover:text-white">
-                        <x-icon name="logout" class="h-5 w-5" />
-                        {{ __('Log out') }}
+                    <button
+                        type="submit"
+                        :title="sidebarCollapsed ? '{{ __('Log out') }}' : null"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-100 hover:bg-brand-600 hover:text-white"
+                    >
+                        <x-icon name="logout" class="h-5 w-5 flex-shrink-0" />
+                        <span x-show="!sidebarCollapsed" x-cloak class="truncate">{{ __('Log out') }}</span>
                     </button>
                 </form>
             </div>
