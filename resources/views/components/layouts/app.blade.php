@@ -8,7 +8,6 @@
         ['label' => 'Categories', 'route' => 'categories.index', 'icon' => 'category'],
         ['label' => 'Prices', 'route' => 'prices.index', 'icon' => 'currency'],
         ['label' => 'Items', 'route' => 'items.index', 'icon' => 'box'],
-        ['label' => 'Stocks', 'route' => 'stocks.index', 'icon' => 'archive'],
         ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
     ];
 

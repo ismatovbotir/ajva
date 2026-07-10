@@ -15,7 +15,11 @@ class Index extends Component
     public function render()
     {
         return view('livewire.shops.index', [
-            'shops' => Shop::query()->orderBy('name')->paginate(10),
+            'shops' => Shop::query()
+                ->withCount('stocks as item_count')
+                ->withSum('stocks as qty_total', 'qty')
+                ->orderBy('name')
+                ->paginate(10),
         ]);
     }
 }
