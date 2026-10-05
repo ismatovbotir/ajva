@@ -19,20 +19,47 @@ class ReceiptIngestionTest extends TestCase
     protected function payload(array $overrides = []): array
     {
         return array_merge([
+            'shop' => 5,
+            'pos' => 1,
+            'barcode' => '12345',
+            'card' => '1234567890',
+            'openDate' => '12.08.26',
+            'openTime' => '17:52:46',
+            'closeDate' => '',
             'number' => 'A-1024',
-            'client' => 'Ism Familiya',
-            'cashier' => 'Kassir nomi',
-            'total' => 130000,
-            'discount' => 5000,
-            'active' => true,
-            'sell' => true,
-            'items' => [
-                ['item_id' => null, 'qty' => 2, 'price' => 65000, 'discount' => 0, 'total' => 130000],
+            'user' => [
+                'id' => 1,
+                'name' => 'Kassir nomi',
+                'text' => 'Kassir nomi',
             ],
             'payments' => [
-                ['payment' => 'cash', 'value' => 100000],
-                ['payment' => 'card', 'value' => 30000],
+                ['name' => 'cash', 'value' => 100000],
+                ['name' => 'card', 'value' => 30000],
             ],
+            'positions' => [
+                [
+                    'item' => ['id' => null, 'art' => 'A123', 'name' => 'Test item', 'class_code' => 'ИКПУ 12345', 'package_code' => 'Certifi'],
+                    'labels' => [],
+                    'barcode' => '46057921',
+                    'qty' => 2,
+                    'storno' => 0,
+                    'sum' => 130000,
+                    'sumR' => 0,
+                    'sumWD' => 130000,
+                    'sumWT' => 34.23,
+                    'totalSum' => 130000,
+                ],
+            ],
+            'qtyBuys' => 2,
+            'qtyPositions' => 1,
+            'session' => 1,
+            'type' => 1,
+            'status' => 'success',
+            'sum' => 135000,
+            'sumWithDiscs' => 130000,
+            'total' => 130000,
+            'aos' => [],
+            'fiscal' => '',
         ], $overrides);
     }
 
@@ -55,7 +82,7 @@ class ReceiptIngestionTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_valid_token_ingests_a_receipt_with_items_and_payments(): void
+    public function test_valid_token_ingests_a_receipt_with_positions_and_payments(): void
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
@@ -63,8 +90,19 @@ class ReceiptIngestionTest extends TestCase
         $item = Item::factory()->create();
 
         $payload = $this->payload([
-            'items' => [
-                ['item_id' => $item->id, 'qty' => 2, 'price' => 65000, 'discount' => 0, 'total' => 130000],
+            'positions' => [
+                [
+                    'item' => ['id' => $item->id, 'art' => 'A123', 'name' => 'Test item', 'class_code' => 'ИКПУ 12345', 'package_code' => 'Certifi'],
+                    'labels' => [],
+                    'barcode' => '46057921',
+                    'qty' => 2,
+                    'storno' => 0,
+                    'sum' => 135000,
+                    'sumR' => 0,
+                    'sumWD' => 130000,
+                    'sumWT' => 34.23,
+                    'totalSum' => 130000,
+                ],
             ],
         ]);
 
@@ -78,15 +116,25 @@ class ReceiptIngestionTest extends TestCase
             'pos_id' => $pos->id,
             'shop_id' => $shop->id,
             'number' => 'A-1024',
-            'client' => 'Ism Familiya',
             'cashier' => 'Kassir nomi',
             'total' => '130000.00',
             'discount' => '5000.00',
+            'gross_total' => '135000.00',
+            'barcode' => '12345',
+            'card' => '1234567890',
+            'status' => 'success',
             'active' => 1,
             'sell' => 1,
+            'pos_user_id' => 1,
+            'pos_user_name' => 'Kassir nomi',
         ]);
 
         $receipt = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->firstOrFail();
+
+        // openDate "12.08.26" + openTime "17:52:46"; closeDate is empty in
+        // this payload so updated_at falls back to the same instant.
+        $this->assertSame('2026-08-12 17:52:46', $receipt->created_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-12 17:52:46', $receipt->updated_at->format('Y-m-d H:i:s'));
 
         $this->assertSame(1, ReceiptItem::where('receipt_id', $receipt->id)->count());
         $this->assertDatabaseHas('receipt_items', [
@@ -95,6 +143,11 @@ class ReceiptIngestionTest extends TestCase
             'qty' => '2.000',
             'price' => '65000.00',
             'total' => '130000.00',
+            'discount' => '5000.00',
+            'art' => 'A123',
+            'name' => 'Test item',
+            'line_barcode' => '46057921',
+            'storno' => 0,
             'receipt_active' => 1,
             'receipt_sell' => 1,
         ]);
@@ -112,6 +165,89 @@ class ReceiptIngestionTest extends TestCase
         ]);
     }
 
+    public function test_close_date_present_is_used_for_updated_at(): void
+    {
+        $shop = Shop::factory()->create();
+        $pos = Pos::factory()->for($shop)->create();
+        $token = $pos->issueApiToken();
+        $item = Item::factory()->create();
+
+        $payload = $this->payload([
+            'closeDate' => '12.08.26',
+            'positions' => [
+                [
+                    'item' => ['id' => $item->id],
+                    'labels' => [],
+                    'barcode' => '46057921',
+                    'qty' => 2,
+                    'storno' => 0,
+                    'sum' => 130000,
+                    'sumWD' => 130000,
+                    'totalSum' => 130000,
+                ],
+            ],
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $payload)->assertStatus(202);
+
+        $receipt = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->firstOrFail();
+
+        // No closeTime field exists in the payload, so openTime's
+        // time-of-day is used as a stand-in alongside closeDate's date.
+        $this->assertSame('2026-08-12 17:52:46', $receipt->updated_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_a_storno_line_is_marked_inactive_without_affecting_other_lines(): void
+    {
+        $shop = Shop::factory()->create();
+        $pos = Pos::factory()->for($shop)->create();
+        $token = $pos->issueApiToken();
+        $itemOne = Item::factory()->create();
+        $itemTwo = Item::factory()->create();
+
+        $payload = $this->payload([
+            'positions' => [
+                [
+                    'item' => ['id' => $itemOne->id],
+                    'labels' => [],
+                    'barcode' => '1',
+                    'qty' => 1,
+                    'storno' => 1,
+                    'sum' => 1000,
+                    'sumWD' => 1000,
+                    'totalSum' => 1000,
+                ],
+                [
+                    'item' => ['id' => $itemTwo->id],
+                    'labels' => [],
+                    'barcode' => '2',
+                    'qty' => 1,
+                    'storno' => 0,
+                    'sum' => 2000,
+                    'sumWD' => 2000,
+                    'totalSum' => 2000,
+                ],
+            ],
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $payload)->assertStatus(202);
+
+        $receipt = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->firstOrFail();
+
+        $this->assertDatabaseHas('receipt_items', [
+            'receipt_id' => $receipt->id,
+            'item_id' => $itemOne->id,
+            'storno' => 1,
+            'active' => 0,
+        ]);
+        $this->assertDatabaseHas('receipt_items', [
+            'receipt_id' => $receipt->id,
+            'item_id' => $itemTwo->id,
+            'storno' => 0,
+            'active' => 1,
+        ]);
+    }
+
     public function test_resubmitting_the_same_pos_and_number_updates_instead_of_duplicating(): void
     {
         $shop = Shop::factory()->create();
@@ -122,8 +258,18 @@ class ReceiptIngestionTest extends TestCase
 
         $firstPayload = $this->payload([
             'total' => 130000,
-            'items' => [
-                ['item_id' => $itemOne->id, 'qty' => 2, 'price' => 65000, 'discount' => 0, 'total' => 130000],
+            'sum' => 130000,
+            'positions' => [
+                [
+                    'item' => ['id' => $itemOne->id],
+                    'labels' => [],
+                    'barcode' => '1',
+                    'qty' => 2,
+                    'storno' => 0,
+                    'sum' => 130000,
+                    'sumWD' => 130000,
+                    'totalSum' => 130000,
+                ],
             ],
         ]);
 
@@ -137,8 +283,18 @@ class ReceiptIngestionTest extends TestCase
         // update the same receipt and fully replace its items, not append.
         $secondPayload = $this->payload([
             'total' => 90000,
-            'items' => [
-                ['item_id' => $itemTwo->id, 'qty' => 3, 'price' => 30000, 'discount' => 0, 'total' => 90000],
+            'sum' => 90000,
+            'positions' => [
+                [
+                    'item' => ['id' => $itemTwo->id],
+                    'labels' => [],
+                    'barcode' => '2',
+                    'qty' => 3,
+                    'storno' => 0,
+                    'sum' => 90000,
+                    'sumWD' => 90000,
+                    'totalSum' => 90000,
+                ],
             ],
         ]);
 
@@ -171,8 +327,17 @@ class ReceiptIngestionTest extends TestCase
         $item = Item::factory()->create();
 
         $payload = $this->payload([
-            'items' => [
-                ['item_id' => $item->id, 'qty' => 1, 'price' => 1000, 'discount' => 0, 'total' => 1000],
+            'positions' => [
+                [
+                    'item' => ['id' => $item->id],
+                    'labels' => [],
+                    'barcode' => '1',
+                    'qty' => 1,
+                    'storno' => 0,
+                    'sum' => 1000,
+                    'sumWD' => 1000,
+                    'totalSum' => 1000,
+                ],
             ],
         ]);
 
@@ -192,7 +357,7 @@ class ReceiptIngestionTest extends TestCase
             ->postJson('/api/receipts', ['number' => 'A-1']);
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['total', 'items']);
+        $response->assertJsonValidationErrors(['total', 'positions', 'openDate', 'openTime']);
     }
 
     public function test_validation_failure_returns_json_even_without_an_accept_header(): void
@@ -215,7 +380,7 @@ class ReceiptIngestionTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertJsonValidationErrors(['total', 'items']);
+        $response->assertJsonValidationErrors(['total', 'positions']);
     }
 
     public function test_ingestion_does_not_touch_stocks(): void
@@ -228,8 +393,17 @@ class ReceiptIngestionTest extends TestCase
         Stock::query()->create(['item_id' => $item->id, 'shop_id' => $shop->id, 'qty' => 50]);
 
         $payload = $this->payload([
-            'items' => [
-                ['item_id' => $item->id, 'qty' => 2, 'price' => 65000, 'discount' => 0, 'total' => 130000],
+            'positions' => [
+                [
+                    'item' => ['id' => $item->id],
+                    'labels' => [],
+                    'barcode' => '1',
+                    'qty' => 2,
+                    'storno' => 0,
+                    'sum' => 130000,
+                    'sumWD' => 130000,
+                    'totalSum' => 130000,
+                ],
             ],
         ]);
 

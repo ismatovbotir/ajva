@@ -13,11 +13,20 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $email = config('admin.email');
+        $password = config('admin.password');
+
+        if (! $email || ! $password) {
+            $this->command?->error('Set ADMIN_EMAIL and ADMIN_PASSWORD in .env before seeding.');
+
+            return;
+        }
+
         User::query()->firstOrCreate(
-            ['email' => 'admin@example.com'],
+            ['email' => $email],
             [
-                'name' => 'Admin',
-                'password' => 'password',
+                'name' => config('admin.name'),
+                'password' => $password,
             ]
         );
     }

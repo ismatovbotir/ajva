@@ -20,6 +20,17 @@ class ReceiptItem extends Model
         'total',
         'receipt_active',
         'receipt_sell',
+        'art',
+        'name',
+        'class_code',
+        'package_code',
+        'line_barcode',
+        'storno',
+        'sum',
+        'sum_r',
+        'sum_wd',
+        'sum_wt',
+        'labels',
     ];
 
     protected $casts = [
@@ -30,6 +41,12 @@ class ReceiptItem extends Model
         'total' => 'decimal:2',
         'receipt_active' => 'boolean',
         'receipt_sell' => 'boolean',
+        'storno' => 'boolean',
+        'sum' => 'decimal:2',
+        'sum_r' => 'decimal:2',
+        'sum_wd' => 'decimal:2',
+        'sum_wt' => 'decimal:2',
+        'labels' => 'array',
     ];
 
     public function receipt(): BelongsTo

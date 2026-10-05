@@ -15,11 +15,22 @@ return new class extends Migration
             $table->id();
             $table->foreignId('receipt_id')->constrained();
             $table->foreignId('item_id')->constrained();
+            $table->string('art')->nullable();
+            $table->string('name')->nullable();
+            $table->string('class_code')->nullable();
+            $table->string('package_code')->nullable();
+            $table->string('line_barcode')->nullable();
+            $table->boolean('storno')->default(false);
             $table->boolean('active')->default(true); // position could be cacelled
             $table->decimal('qty', 10, 3)->default(0);
             $table->decimal('price', 15, 2);
             $table->decimal('discount', 15, 2)->default(0);
             $table->decimal('total', 15, 2)->default(0);
+            $table->decimal('sum', 15, 2)->nullable();
+            $table->decimal('sum_r', 15, 2)->nullable()->default(0);
+            $table->decimal('sum_wd', 15, 2)->nullable();
+            $table->decimal('sum_wt', 15, 2)->nullable();
+            $table->json('labels')->nullable();
 
             $table->boolean('receipt_active')->default(true);
             $table->boolean('receipt_sell')->default(true);

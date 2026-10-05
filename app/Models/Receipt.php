@@ -21,6 +21,19 @@ class Receipt extends Model
         'discount',
         'active',
         'sell',
+        'barcode',
+        'card',
+        'qty_buys',
+        'qty_positions',
+        'session',
+        'type',
+        'status',
+        'gross_total',
+        'fiscal',
+        'pos_user_id',
+        'pos_user_name',
+        'pos_user_text',
+        'aos',
     ];
 
     protected $casts = [
@@ -28,6 +41,8 @@ class Receipt extends Model
         'discount' => 'decimal:2',
         'active' => 'boolean',
         'sell' => 'boolean',
+        'gross_total' => 'decimal:2',
+        'aos' => 'array',
     ];
 
     public function pos(): BelongsTo
