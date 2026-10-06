@@ -1,0 +1,76 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\SalesBoard;
+use App\Models\Item;
+use App\Models\Receipt;
+use App\Models\ReceiptItem;
+use App\Models\Shop;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class SalesBoardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_board_compares_today_with_previous_day_and_ranks_top_items(): void
+    {
+        Carbon::setTestNow('2026-10-06 15:30:00');
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $a = Item::factory()->create(['name' => 'Item A']);
+        $b = Item::factory()->create(['name' => 'Item B']);
+
+        $mk = fn (array $attrs) => Receipt::factory()->create(array_merge(['shop_id' => $shop->id, 'active' => true, 'sell' => true], $attrs));
+        $line = fn (Receipt $r, Item $i, float $qty, float $total) => ReceiptItem::factory()->create(
+            ['receipt_id' => $r->id, 'item_id' => $i->id, 'qty' => $qty, 'total' => $total, 'storno' => false]
+        );
+
+        $t1 = $mk(['total' => 100, 'created_at' => '2026-10-06 09:10:00']);
+        $t2 = $mk(['total' => 50, 'created_at' => '2026-10-06 09:40:00']);
+        $mk(['total' => 999, 'created_at' => '2026-10-06 10:00:00', 'sell' => false]);   // refund: excluded
+        $mk(['total' => 999, 'created_at' => '2026-10-06 10:00:00', 'active' => false]); // cancelled: excluded
+        $mk(['total' => 40, 'created_at' => '2026-10-05 09:30:00']);                     // yesterday, before cut-off
+        $mk(['total' => 777, 'created_at' => '2026-10-05 20:00:00']);                    // yesterday, after cut-off
+
+        $line($t1, $a, 3, 90);
+        $line($t1, $b, 1, 10);
+        $line($t2, $a, 2, 50);
+
+        $data = Livewire::actingAs($user)->test(SalesBoard::class)->viewData('table');
+
+        $this->assertCount(1, $data);
+        $this->assertSame(2, $data[0]['count']);
+        $this->assertEquals(150, $data[0]['sum']);
+        $this->assertSame(1, $data[0]['y_count']);       // same-time cut-off
+        $this->assertEquals(40, $data[0]['y_sum']);
+        $this->assertEquals(275.0, $data[0]['sum_delta']); // (150-40)/40
+
+        $component = Livewire::actingAs($user)->test(SalesBoard::class);
+        $hour9 = $component->viewData('charts')['sum'][9];
+        $this->assertSame('150', $hour9['today']);
+        $this->assertSame('40', $hour9['yesterday']);
+        $top = $component->viewData('topItems');
+        $this->assertSame('Item A', $top['all'][0]['name']);
+        $this->assertSame('5', $top['all'][0]['qty']);
+        $this->assertSame('Item B', $top['all'][1]['name']);
+        $this->assertCount(1, $top['shops']);
+    }
+
+    public function test_dashboard_embeds_the_polling_board(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/')->assertOk()->assertSeeLivewire(SalesBoard::class)->assertSee('wire:poll.60s', false);
+    }
+}

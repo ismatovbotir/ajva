@@ -3,9 +3,9 @@
 namespace App\Livewire\Receipts;
 
 use App\Models\Receipt;
-use App\Models\ReceiptPayment;
-use App\Models\Shop;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -20,6 +20,9 @@ class Index extends Component
     ];
 
     private const COLOR_OTHER = '#898781';
+
+    /** Seconds the day's aggregates are reused, so paging the list doesn't recompute them. */
+    private const ANALYTICS_TTL = 30;
 
     public string $date = '';
 
@@ -43,17 +46,33 @@ class Index extends Component
         $from = $day->copy()->startOfDay();
         $to = $day->copy()->endOfDay();
 
-        $shops = Shop::query()->orderBy('name')->pluck('name', 'id')->all();
+        $analytics = Cache::remember(
+            'receipts.analytics.'.$from->toDateString(),
+            self::ANALYTICS_TTL,
+            fn () => $this->buildAnalytics($from, $to),
+        );
 
-        $receiptQuery = fn () => Receipt::query()
-            ->where('active', true)
-            ->whereBetween('created_at', [$from, $to]);
+        return view('livewire.receipts.index', [
+            'receipts' => Receipt::query()
+                ->with(['pos', 'shop'])
+                ->whereBetween('created_at', [$from, $to])
+                ->orderBy('id', 'desc')
+                ->paginate(15),
+        ] + $analytics);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildAnalytics(Carbon $from, Carbon $to): array
+    {
+        $shops = DB::table('shops')->pluck('name', 'id')->all();
 
         // Refunds count negatively so the totals reflect net sales.
         $sign = fn ($sell) => $sell ? 1 : -1;
 
         // Shop totals by payment type.
-        $paymentRows = ReceiptPayment::query()
+        $paymentRows = DB::table('receipt_payments')
             ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id')
             ->where('receipts.active', true)
             ->whereBetween('receipts.created_at', [$from, $to])
@@ -82,17 +101,22 @@ class Index extends Component
         }
         usort($paymentTable, fn ($a, $b) => $b['total'] <=> $a['total']);
 
-        // Shop totals by hour.
+        // Shop totals by hour — one pass over the day's receipts, no model hydration.
         $hourly = [];
         $shopTotals = [];
-        $receiptQuery()->get(['shop_id', 'sell', 'total', 'created_at'])->each(
-            function ($r) use (&$hourly, &$shopTotals, $sign) {
-                $amount = $sign($r->sell) * (float) $r->total;
-                $hour = (int) $r->created_at->format('G');
-                $hourly[$hour][$r->shop_id] = ($hourly[$hour][$r->shop_id] ?? 0) + $amount;
-                $shopTotals[$r->shop_id] = ($shopTotals[$r->shop_id] ?? 0) + $amount;
-            }
-        );
+        $count = 0;
+        $receiptRows = DB::table('receipts')
+            ->where('active', true)
+            ->whereBetween('created_at', [$from, $to])
+            ->get(['shop_id', 'sell', 'total', 'created_at']);
+
+        foreach ($receiptRows as $r) {
+            $amount = $sign($r->sell) * (float) $r->total;
+            $hour = (int) substr((string) $r->created_at, 11, 2);
+            $hourly[$hour][$r->shop_id] = ($hourly[$hour][$r->shop_id] ?? 0) + $amount;
+            $shopTotals[$r->shop_id] = ($shopTotals[$r->shop_id] ?? 0) + $amount;
+            $count++;
+        }
 
         arsort($shopTotals);
         $colors = [];
@@ -133,25 +157,18 @@ class Index extends Component
             ];
         }
 
-        $summary = [
-            'total' => array_sum($shopTotals),
-            'count' => $receiptQuery()->count(),
-        ];
-
-        return view('livewire.receipts.index', [
-            'receipts' => Receipt::query()
-                ->with(['pos', 'shop'])
-                ->whereBetween('created_at', [$from, $to])
-                ->orderBy('id', 'desc')
-                ->paginate(15),
+        return [
             'paymentTypes' => $paymentTypes,
             'paymentTable' => $paymentTable,
             'columnTotals' => $columnTotals,
             'grandTotal' => array_sum($columnTotals),
             'hours' => $hours,
             'legend' => $legend,
-            'summary' => $summary,
-        ]);
+            'summary' => [
+                'total' => array_sum($shopTotals),
+                'count' => $count,
+            ],
+        ];
     }
 
     private function parsedDate(): ?Carbon

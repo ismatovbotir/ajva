@@ -2,6 +2,8 @@
     <x-ui.page-header :title="__('Dashboard')" :subtitle="__('Overview of shops, stock and receipts will live here.')" />
 
     <div class="space-y-6">
+        <livewire:sales-board />
+
         {{-- Chart 1: Stock by shop — bar / donut / table selector --}}
         <x-ui.card>
             <div x-data="{

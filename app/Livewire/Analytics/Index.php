@@ -4,6 +4,7 @@ namespace App\Livewire\Analytics;
 
 use App\Models\Receipt;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -11,9 +12,14 @@ use Livewire\Component;
 #[Layout('components.layouts.app', ['title' => 'Analytics'])]
 class Index extends Component
 {
+    private const CACHE_TTL = 300;
+
     public string $date = '';
 
     public bool $generated = false;
+
+    /** Changes on every Generate press; part of the result-cache key. */
+    public string $runKey = '';
 
     public ?int $shopId = null;
 
@@ -37,6 +43,8 @@ class Index extends Component
     public function generate(): void
     {
         $this->generated = true;
+        $this->runKey = bin2hex(random_bytes(4));
+        $this->modalItemId = null;
     }
 
     public function selectShop(int $shopId): void
@@ -65,12 +73,12 @@ class Index extends Component
             return null;
         }
 
-        $day = $this->parsedDate() ?? now()->startOfDay();
+        [$from, $to] = $this->dayRange();
 
         return Receipt::query()
             ->where('shop_id', $this->shopId)
             ->where('active', true)
-            ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+            ->whereBetween('created_at', [$from, $to])
             ->whereHas('items', fn ($q) => $q->where('item_id', $this->modalItemId)->where('storno', false))
             ->orderByDesc('created_at')
             ->get(['id', 'number', 'cashier', 'active', 'sell', 'total', 'created_at']);
@@ -78,18 +86,17 @@ class Index extends Component
 
     public function render()
     {
-        $all = $this->generated ? $this->buildRows() : collect();
-
-        $tabs = $all->unique('shop_id')->sortBy('shop')->map(fn ($r) => [
-            'id' => $r['shop_id'],
-            'name' => $r['shop'],
-        ])->values();
+        $tabs = $this->generated ? $this->tabs() : collect();
 
         if ($tabs->isNotEmpty() && ! $tabs->contains('id', $this->shopId)) {
             $this->shopId = $tabs->first()['id'];
         }
 
-        $rows = $all->where('shop_id', $this->shopId)->values();
+        // Only the active shop's rows are built, and they're reused across
+        // tab switches / modal open-close until Generate is pressed again.
+        $rows = $this->generated && $this->shopId !== null && $tabs->isNotEmpty()
+            ? $this->cached('rows.'.$this->shopId, fn () => $this->buildRows($this->shopId))
+            : collect();
 
         return view('livewire.analytics.index', [
             'tabs' => $tabs,
@@ -100,59 +107,105 @@ class Index extends Component
     }
 
     /**
-     * Net sold qty per (shop, item) for the day — successful sale receipts
-     * add, successful refund receipts subtract (storno lines are ignored) —
+     * Result cache scoped to the date and the last Generate press, so a
+     * tab switch or modal toggle doesn't re-run the aggregate queries but
+     * pressing Generate always recomputes from fresh data.
+     */
+    private function cached(string $key, \Closure $callback)
+    {
+        return Cache::remember(
+            "analytics.{$this->date}.{$this->runKey}.{$key}",
+            self::CACHE_TTL,
+            $callback,
+        );
+    }
+
+    /**
+     * Shops that have at least one successful, non-storno line on the day.
+     */
+    private function tabs()
+    {
+        [$from, $to] = $this->dayRange();
+
+        return $this->cached('tabs', fn () => DB::table('shops')
+            ->whereIn('shops.id', function ($q) use ($from, $to) {
+                $q->from('receipts')
+                    ->select('receipts.shop_id')
+                    ->where('receipts.active', true)
+                    ->whereBetween('receipts.created_at', [$from, $to])
+                    ->whereExists(function ($e) {
+                        $e->from('receipt_items')
+                            ->whereColumn('receipt_items.receipt_id', 'receipts.id')
+                            ->where('receipt_items.storno', false);
+                    });
+            })
+            ->orderBy('shops.name')
+            ->get(['shops.id', 'shops.name'])
+            ->map(fn ($s) => ['id' => (int) $s->id, 'name' => $s->name])
+            ->values());
+    }
+
+    /**
+     * Net sold qty per item for one shop — successful sale receipts add,
+     * successful refund receipts subtract (storno lines are ignored) —
      * compared against the shop's current stock qty. Read-only: stocks are
      * never modified, 1C stays the source of truth for them.
+     *
+     * The aggregate groups by item id only; names, stock and min/max are
+     * then fetched by key (PK / unique-index lookups) instead of being
+     * joined and grouped as wide varchar columns.
      */
-    private function buildRows()
+    private function buildRows(int $shopId)
+    {
+        [$from, $to] = $this->dayRange();
+
+        $sold = DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+            ->where('receipts.shop_id', $shopId)
+            ->where('receipts.active', true)
+            ->where('receipt_items.storno', false)
+            ->whereBetween('receipts.created_at', [$from, $to])
+            ->groupBy('receipt_items.item_id')
+            ->selectRaw('receipt_items.item_id, SUM(CASE WHEN receipts.sell = 1 THEN receipt_items.qty ELSE -receipt_items.qty END) as sold_qty')
+            ->pluck('sold_qty', 'item_id');
+
+        $ids = $sold->keys();
+
+        $names = collect();
+        $stocks = collect();
+        $rules = collect();
+        foreach ($ids->chunk(500) as $chunk) {
+            $chunk = $chunk->all();
+            $names = $names->union(DB::table('items')->whereIn('id', $chunk)->pluck('name', 'id'));
+            $stocks = $stocks->union(DB::table('stocks')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->pluck('qty', 'item_id'));
+            $rules = $rules->union(DB::table('item_order_rules')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->get(['item_id', 'min', 'max'])->keyBy('item_id'));
+        }
+
+        return $sold->map(function ($soldQty, $itemId) use ($names, $stocks, $rules) {
+            $stock = (float) ($stocks[$itemId] ?? 0);
+            $net = (float) $soldQty;
+            $rule = $rules[$itemId] ?? null;
+
+            return [
+                'item_id' => (int) $itemId,
+                'item' => $names[$itemId] ?? '#'.$itemId,
+                'stock' => $stock,
+                'sold' => $net,
+                'remaining' => $stock - $net,
+                'min' => $rule ? (float) $rule->min : null,
+                'max' => $rule ? (float) $rule->max : null,
+            ];
+        })->sortBy('remaining')->values();
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function dayRange(): array
     {
         $day = $this->parsedDate() ?? now()->startOfDay();
 
-        return DB::table('receipt_items')
-            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
-            ->join('items', 'items.id', '=', 'receipt_items.item_id')
-            ->join('shops', 'shops.id', '=', 'receipts.shop_id')
-            ->leftJoin('stocks', function ($join) {
-                $join->on('stocks.item_id', '=', 'receipt_items.item_id')
-                    ->on('stocks.shop_id', '=', 'receipts.shop_id');
-            })
-            ->where('receipts.active', true)
-            ->where('receipt_items.storno', false)
-            ->whereBetween('receipts.created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
-            ->leftJoin('item_order_rules', function ($join) {
-                $join->on('item_order_rules.item_id', '=', 'receipt_items.item_id')
-                    ->on('item_order_rules.shop_id', '=', 'receipts.shop_id');
-            })
-            ->groupBy('receipts.shop_id', 'receipt_items.item_id', 'shops.name', 'items.name', 'stocks.qty', 'item_order_rules.min', 'item_order_rules.max')
-            ->get([
-                'receipts.shop_id as shop_id',
-                'receipt_items.item_id as item_id',
-                'shops.name as shop_name',
-                'items.name as item_name',
-                'stocks.qty as stock_qty',
-                'item_order_rules.min as rule_min',
-                'item_order_rules.max as rule_max',
-                DB::raw('SUM(CASE WHEN receipts.sell = 1 THEN receipt_items.qty ELSE -receipt_items.qty END) as sold_qty'),
-            ])
-            ->map(function ($row) {
-                $stock = (float) $row->stock_qty;
-                $sold = (float) $row->sold_qty;
-
-                return [
-                    'shop_id' => (int) $row->shop_id,
-                    'shop' => $row->shop_name,
-                    'item_id' => (int) $row->item_id,
-                    'item' => $row->item_name,
-                    'stock' => $stock,
-                    'sold' => $sold,
-                    'remaining' => $stock - $sold,
-                    'min' => $row->rule_min === null ? null : (float) $row->rule_min,
-                    'max' => $row->rule_max === null ? null : (float) $row->rule_max,
-                ];
-            })
-            ->sortBy('remaining')
-            ->values();
+        return [$day->copy()->startOfDay(), $day->copy()->endOfDay()];
     }
 
     private function parsedDate(): ?Carbon
