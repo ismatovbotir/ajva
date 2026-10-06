@@ -89,10 +89,31 @@ class SalesBoardTest extends TestCase
         $this->assertFalse(Cache::has($key));
     }
 
-    public function test_dashboard_embeds_the_polling_board(): void
+    public function test_dashboard_embeds_the_board_with_a_manual_refresh_and_no_polling(): void
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user)->get('/')->assertOk()->assertSeeLivewire(SalesBoard::class)->assertSee('wire:poll.60s', false);
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSeeLivewire(SalesBoard::class)
+            ->assertSee('wire:click="refresh"', false)
+            ->assertDontSee('wire:poll', false);
+    }
+
+    public function test_refresh_button_recomputes_from_fresh_data(): void
+    {
+        Carbon::setTestNow('2026-10-06 15:30:00');
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+
+        $component = Livewire::actingAs($user)->test(SalesBoard::class);
+        $this->assertSame(0, $component->viewData('totals')['count']);
+
+        // A receipt lands directly in the DB (no ingestion job, so no cache bust)…
+        Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'total' => 50, 'created_at' => '2026-10-06 15:00:00']);
+        $this->assertSame(0, $component->viewData('totals')['count']); // …the cached numbers are still shown
+
+        $component->call('refresh');
+        $this->assertSame(1, $component->viewData('totals')['count']);
     }
 }

@@ -10,13 +10,19 @@
     [$sumDeltaText, $sumDeltaClass] = $deltaBadge($totals['sum_delta']);
     [$countDeltaText, $countDeltaClass] = $deltaBadge($totals['count_delta']);
 @endphp
-<div wire:poll.60s class="space-y-6">
+<div class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-2">
         <div>
             <h2 class="text-lg font-semibold text-[#0b0b0b]">{{ __('Sales today') }}</h2>
             <p class="text-sm text-[#52514e]">{{ __('Successful sales, compared with the previous day up to the same time.') }}</p>
         </div>
-        <p class="text-xs text-[#52514e]">{{ __('Updated') }} {{ $asOf }} · {{ __('refreshes every minute') }}</p>
+        <div class="flex items-center gap-3">
+            <p class="text-xs text-[#52514e]">{{ __('Updated') }} {{ $asOf }}</p>
+            <x-ui.button type="button" variant="secondary" wire:click="refresh" wire:loading.attr="disabled" wire:target="refresh">
+                <span wire:loading.remove wire:target="refresh">{{ __('Refresh') }}</span>
+                <span wire:loading wire:target="refresh">{{ __('Refreshing…') }}</span>
+            </x-ui.button>
+        </div>
     </div>
 
     {{-- KPI cards --}}
