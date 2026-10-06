@@ -70,43 +70,36 @@
                 <ul class="mb-4 flex flex-wrap gap-x-4 gap-y-1.5">
                     @foreach($legend as $item)
                         <li class="flex items-center gap-1.5 text-xs">
-                            <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $item['color'] }}"></span>
+                            <span class="h-0 w-4 shrink-0 border-t-[3px]" style="border-color: {{ $item['color'] }}"></span>
                             <span class="text-[#52514e]">{{ $item['name'] }}</span>
                         </li>
                     @endforeach
                 </ul>
 
-                <div x-data="{ tip: { show: false, x: 0, y: 0, name: '', value: '' } }"
-                     class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
-                    <div class="flex h-56 min-w-[34rem] items-end gap-1">
-                        @foreach($hours as $h)
-                            <div class="flex h-full flex-1 flex-col justify-end" title="{{ $h['hour'] }}:00 — {{ $h['total_label'] }}">
-                                <div class="flex flex-col-reverse overflow-hidden rounded-t-[3px]" style="height: {{ array_sum(array_column($h['segments'], 'percent')) }}%;">
-                                    @foreach($h['segments'] as $seg)
-                                        <div tabindex="0"
-                                             @pointermove="tip = { show: true, x: $event.clientX - $root.getBoundingClientRect().left, y: $event.clientY - $root.getBoundingClientRect().top, name: @js($seg['name'] . ' · ' . $h['hour'] . ':00'), value: @js($seg['label']) }"
-                                             @pointerleave="tip.show = false"
-                                             @focus="tip = { show: true, x: $el.getBoundingClientRect().left - $root.getBoundingClientRect().left, y: $el.getBoundingClientRect().top - $root.getBoundingClientRect().top, name: @js($seg['name'] . ' · ' . $h['hour'] . ':00'), value: @js($seg['label']) }"
-                                             @blur="tip.show = false"
-                                             class="w-full transition hover:brightness-90 focus:outline-none"
-                                             style="height: {{ $h['total'] > 0 ? $seg['percent'] / array_sum(array_column($h['segments'], 'percent')) * 100 : 0 }}%; background-color: {{ $seg['color'] }};"></div>
-                                    @endforeach
-                                </div>
-                            </div>
+                <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                    <svg viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}" class="h-auto min-w-[34rem] w-full" role="img"
+                         aria-label="{{ __('Sales by hour') }}">
+                        {{-- Gridlines and y-axis labels --}}
+                        @foreach($chart['ticks'] as $tick)
+                            <line x1="{{ $chart['left'] }}" x2="{{ $chart['right'] }}" y1="{{ $tick['y'] }}" y2="{{ $tick['y'] }}" stroke="#e1e0d9" stroke-width="1" />
+                            <text x="{{ $chart['left'] - 8 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end" font-size="11" fill="#52514e">{{ $tick['label'] }}</text>
                         @endforeach
-                    </div>
-                    <div class="mt-1 flex min-w-[34rem] gap-1">
-                        @foreach($hours as $h)
-                            <span class="flex-1 text-center text-[10px] text-[#52514e]">{{ $h['hour'] }}</span>
-                        @endforeach
-                    </div>
 
-                    <div x-show="tip.show" x-cloak
-                         class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
-                         :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`">
-                        <p x-text="tip.name" class="font-medium"></p>
-                        <p x-text="tip.value"></p>
-                    </div>
+                        {{-- x-axis hour labels --}}
+                        @foreach($chart['xLabels'] as $label)
+                            <text x="{{ $label['x'] }}" y="{{ $chart['baseline'] + 18 }}" text-anchor="middle" font-size="11" fill="#52514e">{{ $label['label'] }}</text>
+                        @endforeach
+
+                        {{-- One line per shop --}}
+                        @foreach($chart['lines'] as $line)
+                            <polyline points="{{ $line['points'] }}" fill="none" stroke="{{ $line['color'] }}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+                            @foreach($line['dots'] as $dot)
+                                <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="4" fill="#fcfcfb" stroke="{{ $line['color'] }}" stroke-width="2" tabindex="0">
+                                    <title>{{ $dot['tip'] }}</title>
+                                </circle>
+                            @endforeach
+                        @endforeach
+                    </svg>
                 </div>
             @endif
         </x-ui.card>

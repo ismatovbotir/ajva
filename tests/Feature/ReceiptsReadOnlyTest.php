@@ -63,6 +63,7 @@ class ReceiptsReadOnlyTest extends TestCase
             ->test(Index::class)
             ->assertSet('date', now()->toDateString())
             ->assertViewHas('grandTotal', 100.0)
+            ->assertViewHas('chart', fn ($c) => count($c['lines']) === 1 && count($c['lines'][0]['dots']) === 1 && $c['ticks'][4]['label'] === '100')
             ->assertViewHas('paymentTypes', ['cash'])
             ->set('date', now()->subDay()->toDateString())
             ->assertViewHas('grandTotal', 555.0)
