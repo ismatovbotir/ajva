@@ -27,7 +27,7 @@
                 @foreach($tabs as $tab)
                     <button type="button" role="tab" wire:key="tab-{{ $tab['id'] }}" wire:click="selectShop({{ $tab['id'] }})"
                             aria-selected="{{ $tab['id'] === $shopId ? 'true' : 'false' }}"
-                            class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition {{ $tab['id'] === $shopId ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}">
+                            class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition {{ $tab['id'] === $shopId ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700' }}">
                         {{ $tab['name'] }}
                     </button>
                 @endforeach
@@ -38,7 +38,7 @@
         <div class="mb-3 flex flex-wrap gap-1.5 md:hidden">
             @foreach([['item', 'Item'], ['stock', 'Stock'], ['sold', 'Net sold'], ['remaining', 'Remaining']] as [$col, $label])
                 <button type="button" wire:click="sort('{{ $col }}')"
-                        class="rounded-full border px-3 py-1 text-xs font-medium {{ $sortBy === $col ? 'border-accent bg-brand-700 text-white' : 'border-slate-300 bg-surface text-slate-700' }}">
+                        class="rounded-full border px-3 py-1 text-xs font-medium {{ $sortBy === $col ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-300 bg-white text-slate-700' }}">
                     {{ __($label) }} {{ $arrow($col) }}
                 </button>
             @endforeach
@@ -54,7 +54,7 @@
                     <p class="font-medium text-slate-900">{{ $row['item'] }}</p>
                     <dl class="mt-2 grid grid-cols-3 gap-2 text-sm">
                         <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ $fmt($row['stock']) }}</dd></div>
-                        <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd><button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium tabular-nums text-accent underline decoration-dotted underline-offset-2">{{ $fmt($row['sold']) }}</button></dd></div>
+                        <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd><button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium tabular-nums text-brand-700 underline decoration-dotted underline-offset-2">{{ $fmt($row['sold']) }}</button></dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Remaining') }}</dt><dd class="font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : '' }}">{{ $fmt($row['remaining']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Min') }}</dt><dd class="tabular-nums">{{ $fmt($row['min']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Max') }}</dt><dd class="tabular-nums">{{ $fmt($row['max']) }}</dd></div>
@@ -67,12 +67,12 @@
         <x-ui.card padding="p-0" class="hidden md:block">
             <div class="max-h-[65vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Group') }}</th>
                         @foreach([['item', 'Item', 'text-left'], ['stock', 'Stock', 'text-right'], ['sold', 'Net sold', 'text-right'], ['remaining', 'Remaining', 'text-right']] as [$col, $label, $align])
                             <th class="px-4 py-3 {{ $align }} text-xs font-semibold uppercase tracking-wide text-slate-500" aria-sort="{{ $sortBy === $col ? ($sortDir === 'asc' ? 'ascending' : 'descending') : 'none' }}">
-                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-800 {{ $sortBy === $col ? 'text-accent' : '' }}">
+                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-800 {{ $sortBy === $col ? 'text-brand-700' : '' }}">
                                     {{ __($label) }}<span class="text-[10px]">{{ $arrow($col) }}</span>
                                 </button>
                             </th>
@@ -88,7 +88,7 @@
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item'] }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['stock']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums">
-                                <button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium text-accent underline decoration-dotted underline-offset-2 hover:text-accent">{{ $fmt($row['sold']) }}</button>
+                                <button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium text-brand-700 underline decoration-dotted underline-offset-2 hover:text-brand-700">{{ $fmt($row['sold']) }}</button>
                             </td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ $fmt($row['remaining']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['min']) }}</td>
@@ -105,7 +105,7 @@
         @if($modalReceipts && $modalReceipts->isNotEmpty())
             <div class="max-h-[60vh] overflow-auto">
                 <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="sticky top-0 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
+                    <thead class="sticky top-0 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                         <tr>
                             <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Date') }}</th>
                             <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Receipt') }}</th>
@@ -120,7 +120,7 @@
                             <tr wire:key="mr-{{ $receipt->id }}">
                                 <td class="whitespace-nowrap px-3 py-2 text-sm text-slate-500">{{ $receipt->created_at->format('d.m.Y H:i:s') }}</td>
                                 <td class="px-3 py-2 text-sm font-medium">
-                                    <a href="{{ route('receipts.show', $receipt) }}" target="_blank" rel="noopener" class="text-accent hover:underline">{{ $receipt->number }}</a>
+                                    <a href="{{ route('receipts.show', $receipt) }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline">{{ $receipt->number }}</a>
                                 </td>
                                 <td class="px-3 py-2 text-sm text-slate-500">{{ $receipt->cashier ?? '—' }}</td>
                                 <td class="px-3 py-2 text-sm"><x-ui.badge :variant="$receipt->active ? 'success' : 'danger'">{{ $receipt->active ? __('Active') : __('Inactive') }}</x-ui.badge></td>

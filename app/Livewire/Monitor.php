@@ -7,7 +7,6 @@ use App\Support\MonitorSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -17,7 +16,6 @@ use Livewire\Component;
  * screens share one computation, and the cache is dropped when a receipt is
  * ingested (see ProcessReceiptIngestion).
  */
-#[Layout('components.layouts.monitor', ['title' => 'Monitor'])]
 class Monitor extends Component
 {
     private const CACHE_TTL = 25;
@@ -85,6 +83,7 @@ class Monitor extends Component
             $data = $this->withoutProfit($data);
         }
 
+        // The layout gets `public` so only the no-login link carries the light/dark option.
         return view('livewire.monitor', $data + [
             'public' => $public,
             'showProfit' => $showProfit,
@@ -93,7 +92,7 @@ class Monitor extends Component
             'timezone' => config('app.timezone'),
             'currentHour' => (int) $now->format('G'),
             'dateLabel' => $now->format('d.m.Y'),
-        ]);
+        ])->layout('components.layouts.monitor', ['title' => 'Monitor', 'public' => $public]);
     }
 
     /**

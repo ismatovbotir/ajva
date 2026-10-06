@@ -52,7 +52,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $pageTitle }}</title>
-    <x-theme-script />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -68,14 +67,14 @@
         {{-- Desktop sidebar --}}
         <aside
             :class="sidebarCollapsed ? 'md:w-20' : 'md:w-64'"
-            class="hidden md:flex md:flex-shrink-0 md:flex-col md:border-r md:border-slate-200 md:bg-sidebar md:transition-all md:duration-200"
+            class="hidden md:flex md:flex-shrink-0 md:flex-col md:bg-brand-700 md:transition-all md:duration-200"
         >
-            <div class="flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-4">
-                <span x-show="!sidebarCollapsed" x-cloak class="flex min-w-0 items-center gap-2.5"><x-ui.logo-mark class="h-8 w-8 text-base" /><span class="truncate text-lg font-semibold text-slate-900">{{ config('app.name') }}</span></span>
+            <div class="flex h-16 items-center justify-between border-b border-brand-600 px-4">
+                <span x-show="!sidebarCollapsed" x-cloak class="truncate text-lg font-semibold text-white">{{ config('app.name') }}</span>
                 <button
                     type="button"
                     @click="sidebarCollapsed = !sidebarCollapsed"
-                    class="ml-auto rounded-lg p-2 text-slate-500 hover:bg-slate-200/60 hover:text-slate-900"
+                    class="ml-auto rounded-lg p-2 text-brand-100 hover:bg-brand-600 hover:text-white"
                     :title="sidebarCollapsed ? '{{ __('Expand sidebar') }}' : '{{ __('Collapse sidebar') }}'"
                 >
                     <x-icon name="chevron-left" class="h-5 w-5 transition-transform duration-200" x-bind:class="sidebarCollapsed && 'rotate-180'" />
@@ -85,14 +84,13 @@
             <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4" aria-label="{{ __('Main navigation') }}">
                 <x-layouts.nav-list :groups="$navGroups" collapsible />
             </nav>
-            <div class="space-y-1 border-t border-slate-200 p-3">
-                <x-ui.theme-toggle label="sidebar" collapsible class="w-full px-3" />
+            <div class="border-t border-brand-600 p-3">
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button
                         type="submit"
                         :title="sidebarCollapsed ? '{{ __('Log out') }}' : null"
-                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+                        class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-100 hover:bg-brand-600 hover:text-white"
                     >
                         <x-icon name="logout" class="h-5 w-5 flex-shrink-0" />
                         <span x-show="!sidebarCollapsed" x-cloak class="truncate">{{ __('Log out') }}</span>
@@ -103,19 +101,16 @@
 
         <div class="flex flex-1 flex-col">
             {{-- Mobile top bar --}}
-            <header class="flex items-center justify-between border-b border-slate-200 bg-sidebar px-4 py-2.5 md:hidden">
-                <span class="flex items-center gap-2.5"><x-ui.logo-mark class="h-8 w-8 text-base" /><span class="text-lg font-semibold text-slate-900">{{ config('app.name') }}</span></span>
-                <span class="flex items-center gap-1">
-                <x-ui.theme-toggle />
-                <button type="button" @click="mobileMenuOpen = true" class="rounded-lg p-2 text-slate-500 hover:bg-slate-200/60 hover:text-slate-900">
+            <header class="flex items-center justify-between bg-brand-700 px-4 py-3 md:hidden">
+                <span class="text-lg font-semibold text-white">{{ config('app.name') }}</span>
+                <button type="button" @click="mobileMenuOpen = true" class="rounded-lg p-2 text-brand-100 hover:bg-brand-600 hover:text-white">
                     <x-icon name="menu" class="h-6 w-6" />
                     <span class="sr-only">{{ __('Open menu') }}</span>
                 </button>
-                </span>
             </header>
 
             {{-- Desktop top bar --}}
-            <header class="hidden items-center justify-between border-b border-slate-200 bg-surface px-8 py-4 md:flex">
+            <header class="hidden items-center justify-between border-b border-slate-200 bg-white px-8 py-4 md:flex">
                 <h2 class="text-lg font-semibold text-slate-900">{{ $title ?? __('Dashboard') }}</h2>
             </header>
 
@@ -124,15 +119,15 @@
             </main>
 
             {{-- Mobile bottom tab bar --}}
-            <nav class="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-slate-200 bg-sidebar py-2 md:hidden">
+            <nav class="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-brand-600 bg-brand-700 py-2 md:hidden">
                 @foreach ($bottomNavItems as $item)
                     @php $active = request()->routeIs($item['route'].'*'); @endphp
-                    <a href="{{ route($item['route']) }}" @if ($active) aria-current="page" @endif class="flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium {{ $active ? 'text-accent' : 'text-slate-500' }}">
+                    <a href="{{ route($item['route']) }}" @if ($active) aria-current="page" @endif class="flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium {{ $active ? 'text-white' : 'text-brand-200' }}">
                         <x-icon :name="$item['icon']" class="h-5 w-5" />
                         <span class="truncate">{{ __($item['label']) }}</span>
                     </a>
                 @endforeach
-                <button type="button" @click="mobileMenuOpen = true" class="flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium {{ $menuActive ? 'text-accent' : 'text-slate-500' }}">
+                <button type="button" @click="mobileMenuOpen = true" class="flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium {{ $menuActive ? 'text-white' : 'text-brand-200' }}">
                     <x-icon name="menu" class="h-5 w-5" />
                     <span class="truncate">{{ __('Menu') }}</span>
                 </button>
@@ -147,10 +142,10 @@
             style="display: none;"
         >
             <div class="absolute inset-0 bg-slate-900/50" @click="mobileMenuOpen = false"></div>
-            <div class="absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col bg-sidebar shadow-xl">
-                <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                    <span class="flex items-center gap-2.5"><x-ui.logo-mark class="h-8 w-8 text-base" /><span class="text-lg font-semibold text-slate-900">{{ config('app.name') }}</span></span>
-                    <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 text-slate-500 hover:bg-slate-200/60 hover:text-slate-900">
+            <div class="absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col bg-brand-700 shadow-xl">
+                <div class="flex items-center justify-between border-b border-brand-600 px-4 py-3">
+                    <span class="text-lg font-semibold text-white">{{ config('app.name') }}</span>
+                    <button type="button" @click="mobileMenuOpen = false" class="rounded-lg p-2 text-brand-100 hover:bg-brand-600 hover:text-white">
                         <x-icon name="close" class="h-6 w-6" />
                         <span class="sr-only">{{ __('Close menu') }}</span>
                     </button>
@@ -158,11 +153,10 @@
                 <nav class="flex-1 overflow-y-auto px-3 py-4" aria-label="{{ __('Main navigation') }}">
                     <x-layouts.nav-list :groups="$navGroups" />
                 </nav>
-                <div class="space-y-1 border-t border-slate-200 p-3">
-                    <x-ui.theme-toggle label="drawer" class="w-full px-3" />
+                <div class="border-t border-brand-600 p-3">
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <button type="submit" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200/60 hover:text-slate-900">
+                        <button type="submit" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-brand-100 hover:bg-brand-600 hover:text-white">
                             <x-icon name="logout" class="h-5 w-5" />
                             {{ __('Log out') }}
                         </button>

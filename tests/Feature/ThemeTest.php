@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\SalesMetrics;
+use App\Support\MonitorSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -10,74 +12,79 @@ class ThemeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_app_layout_has_the_no_flash_script_and_an_accessible_toggle(): void
+    public function test_admin_layout_is_light_only_olive_without_theme_script_or_toggle(): void
     {
         $html = $this->actingAs(User::factory()->create())->get('/')->assertOk()->getContent();
 
-        $this->assertStringContainsString("localStorage.getItem('theme')", $html);
-        $this->assertStringContainsString("setAttribute('data-theme'", $html);
-        $this->assertStringContainsString("prefers-color-scheme: dark", $html);
-        // the script runs in <head>, before the stylesheet / body
-        $this->assertLessThan(strpos($html, '<body'), strpos($html, "localStorage.getItem('theme')"));
-        $this->assertStringContainsString(':aria-pressed="dark.toString()"', $html);
-        $this->assertStringContainsString('aria-label="'.__('Dark theme').'"', $html);
-        // desktop sidebar + mobile top bar + drawer
-        $this->assertGreaterThanOrEqual(3, substr_count($html, ':aria-pressed="dark.toString()"'));
+        $this->assertStringNotContainsString('data-theme', $html);
+        $this->assertStringNotContainsString("localStorage.getItem('theme')", $html);
+        $this->assertStringNotContainsString('monitorTheme', $html);
+        $this->assertStringNotContainsString('aria-pressed', $html);
+        $this->assertStringContainsString('md:bg-brand-700', $html);   // green sidebar
+        $this->assertStringContainsString('bg-brand-700', $html);      // green mobile bar
     }
 
-    public function test_guest_and_login_layout_have_the_script_and_toggle(): void
+    public function test_guest_and_login_layout_have_no_theme_script_or_toggle(): void
     {
         $html = $this->get('/login')->assertOk()->getContent();
 
-        $this->assertStringContainsString("localStorage.getItem('theme')", $html);
-        $this->assertStringContainsString(':aria-pressed="dark.toString()"', $html);
-        $this->assertStringContainsString('aria-label="'.__('Dark theme').'"', $html);
+        $this->assertStringNotContainsString('data-theme', $html);
+        $this->assertStringNotContainsString("localStorage.getItem('theme')", $html);
+        $this->assertStringNotContainsString('aria-pressed', $html);
+        $this->assertStringContainsString('text-brand-700', $html);
     }
 
-    public function test_monitor_layout_stays_dark_without_a_toggle(): void
+    public function test_public_monitor_has_the_no_flash_script_and_toggle(): void
+    {
+        $token = app(MonitorSettings::class)->generateToken();
+        $html = $this->get('/monitor/'.$token)->assertOk()->getContent();
+
+        $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
+        $this->assertStringContainsString("data-monitor-theme", $html);
+        $this->assertLessThan(strpos($html, '<body'), strpos($html, "localStorage.getItem('monitorTheme')"));
+        $this->assertStringContainsString(':aria-pressed="light.toString()"', $html);
+        $this->assertStringContainsString('aria-label="'.__('Light theme').'"', $html);
+        $this->assertStringContainsString('monitor-root', $html);
+    }
+
+    public function test_authenticated_monitor_stays_dark_without_a_toggle(): void
     {
         $html = $this->actingAs(User::factory()->create())->get('/monitor')->assertOk()->getContent();
 
         $this->assertStringContainsString('monitor-root', $html);
-        $this->assertStringNotContainsString('aria-pressed="dark', $html);
-        $this->assertStringNotContainsString(':aria-pressed="dark.toString()"', $html);
+        $this->assertStringNotContainsString('monitorTheme', $html);
+        $this->assertStringNotContainsString('aria-pressed', $html);
     }
 
-    public function test_no_old_palette_neutral_hex_classes_remain_in_views(): void
+    public function test_admin_palette_is_the_original_olive_and_series_colours(): void
     {
-        // Neutral colours must come from the theme tokens so they flip in dark mode.
-        // Allowed: the monitor (always dark), the unused stock welcome page, and literal
-        // chart/series colours (not neutrals).
-        $allowed = ['livewire/monitor.blade.php', 'layouts/monitor.blade.php', 'welcome.blade.php'];
-        $old = '/(?:text|bg|border|fill|stroke|divide|ring)-\[#(?:52514e|0b0b0b|e1e0d9|fcfcfb|e2e8f0)\]|(?:fill|stroke)="#(?:52514e|0b0b0b|e1e0d9|fcfcfb)"|\bbg-white\b(?![\/-])/i';
+        $css = file_get_contents(resource_path('css/app.css'));
 
+        $this->assertStringContainsString('--color-brand-700: #2a5039', $css);
+        $this->assertStringContainsString('--color-sand-50: #faf3e3', $css);
+        $this->assertStringNotContainsString('html[data-theme', $css);
+        $this->assertStringContainsString('html.monitor-root[data-monitor-theme="light"]', $css);
+
+        $this->assertSame(
+            ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#c23a3a', '#a13a7a'],
+            SalesMetrics::COLORS
+        );
+        $this->assertSame('#898781', SalesMetrics::COLOR_OTHER);
+    }
+
+    public function test_views_use_no_leftover_theme_tokens(): void
+    {
         $offenders = [];
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('views')));
         foreach ($iterator as $file) {
             if (! str_ends_with($file->getFilename(), '.blade.php')) {
                 continue;
             }
-            $path = str_replace('\\', '/', $file->getPathname());
-            foreach ($allowed as $a) {
-                if (str_ends_with($path, $a)) {
-                    continue 2;
-                }
-            }
-            if (preg_match($old, file_get_contents($path), $m)) {
-                $offenders[] = basename($path).': '.$m[0];
+            if (preg_match('/(?<![\w-])bg-surface(?![\w-])|text-accent|bg-sidebar|data-theme|theme-toggle|theme-script/', file_get_contents($file->getPathname()), $m)) {
+                $offenders[] = $file->getFilename().': '.$m[0];
             }
         }
 
         $this->assertSame([], $offenders);
-    }
-
-    public function test_css_defines_light_and_dark_tokens(): void
-    {
-        $css = file_get_contents(resource_path('css/app.css'));
-
-        $this->assertStringContainsString('html[data-theme="dark"]', $css);
-        $this->assertStringContainsString('--color-surface', $css);
-        $this->assertStringContainsString('--color-accent', $css);
-        $this->assertStringContainsString('html.monitor-root', $css);
     }
 }

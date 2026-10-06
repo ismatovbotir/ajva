@@ -1,4 +1,4 @@
-@props(['title' => null])
+@props(['title' => null, 'public' => false])
 <!DOCTYPE html>
 <html lang="en" class="monitor-root">
 <head>
@@ -13,7 +13,7 @@
         @media (min-width: 1024px) {
             html.monitor-root { font-size: clamp(12px, min(1.05vw, 1.85vh), 40px); }
         }
-        html.monitor-root, html.monitor-root body { background: #020617; }
+        html.monitor-root, html.monitor-root body { background: var(--color-slate-950); }
         .tabular { font-variant-numeric: tabular-nums; }
         @media (prefers-reduced-motion: no-preference) {
             .monitor-fade { animation: monitor-fade .6s ease-out; }
@@ -21,6 +21,18 @@
             .monitor-bar { transition: height .6s ease, width .6s ease; }
         }
     </style>
+    @if($public)
+        {{-- Public link only: saved Light/Dark choice (default dark) applied before first paint. --}}
+        <script>
+            (function () {
+                try {
+                    if (localStorage.getItem('monitorTheme') === 'light') {
+                        document.documentElement.setAttribute('data-monitor-theme', 'light');
+                    }
+                } catch (e) {}
+            })();
+        </script>
+    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>

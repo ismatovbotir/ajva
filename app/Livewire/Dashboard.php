@@ -17,16 +17,16 @@ class Dashboard extends Component
      */
     private const CATEGORY_COLORS = [
         '#2a78d6', // slot 1 — blue
-        '#139a6e', // slot 2 — teal/green
-        '#d17a00', // slot 3 — orange
-        '#8e5cc9', // slot 4 — violet
-        '#d6477b', // slot 5 — pink
-        '#2f9bc0', // slot 6 — cyan (chart 3 only, extends beyond the 5 given donut slots)
-        '#9a7b4f', // slot 7 — taupe (chart 3 only, extends beyond the 5 given donut slots)
+        '#1baf7a', // slot 2 — teal/green
+        '#eda100', // slot 3 — amber
+        '#008300', // slot 4 — green
+        '#4a3aa7', // slot 5 — purple
+        '#c23a3a', // slot 6 — red (chart 3 only, extends beyond the 5 given donut slots)
+        '#a13a7a', // slot 7 — magenta (chart 3 only, extends beyond the 5 given donut slots)
     ];
 
     /** Muted neutral used only for "Other" fold-in segments, never a real series color. */
-    private const COLOR_OTHER = '#8f8d85';
+    private const COLOR_OTHER = '#898781';
 
     /** Seconds the catalogue-wide aggregates are shared between viewers. */
     private const CACHE_TTL = 120;
@@ -42,7 +42,7 @@ class Dashboard extends Component
      */
     private const STATUS_COLORS = [
         'critical' => '#d03b3b',
-        'warning' => '#d98200',
+        'warning' => '#fab219',
     ];
 
     public function render()

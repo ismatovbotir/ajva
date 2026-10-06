@@ -84,7 +84,28 @@
                 <x-icon name="monitor" class="h-[1.2rem] w-[1.2rem]" />{{ __('Fullscreen') }}
             </button>
             @if($public)
-                {{-- Public screen: no link back into the admin panel. --}}
+                {{-- Public screen: no link back into the admin panel; instead a Light/Dark switch (remembered per browser). --}}
+                <button
+                    type="button"
+                    x-data="{
+                        light: document.documentElement.getAttribute('data-monitor-theme') === 'light',
+                        toggle() {
+                            this.light = ! this.light;
+                            if (this.light) { document.documentElement.setAttribute('data-monitor-theme', 'light'); }
+                            else { document.documentElement.removeAttribute('data-monitor-theme'); }
+                            try { localStorage.setItem('monitorTheme', this.light ? 'light' : 'dark'); } catch (e) {}
+                        },
+                    }"
+                    @click="toggle()"
+                    :aria-pressed="light.toString()"
+                    aria-label="{{ __('Light theme') }}"
+                    :title="light ? @js(__('Switch to dark theme')) : @js(__('Switch to light theme'))"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                >
+                    <span x-show="! light"><x-icon name="sun" class="h-[1.2rem] w-[1.2rem]" /></span>
+                    <span x-show="light" x-cloak><x-icon name="moon" class="h-[1.2rem] w-[1.2rem]" /></span>
+                    <span x-show="! light">{{ __('Light theme') }}</span><span x-show="light" x-cloak>{{ __('Dark theme') }}</span>
+                </button>
             @elseif(Route::has('dashboard') && auth()->user()?->canUsePanel())
                 <a href="{{ route('dashboard') }}" class="rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800">← {{ __('Dashboard') }}</a>
             @else
@@ -179,7 +200,7 @@
                                 @php $acc += $len; @endphp
                             @endforeach
                         </g>
-                        <text x="50" y="52" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">{{ $short($totals['sum']) }}</text>
+                        <text x="50" y="52" text-anchor="middle" fill="currentColor" class="text-white" font-size="11" font-weight="700">{{ $short($totals['sum']) }}</text>
                     </svg>
                     <ul class="w-full min-w-0 flex-1 space-y-[0.5rem]">
                         @foreach(array_slice($payments, 0, 5) as $pay)

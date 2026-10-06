@@ -28,7 +28,7 @@
             <button type="button" role="switch" aria-checked="{{ $enabled ? 'true' : 'false' }}" wire:click="toggleEnabled"
                     class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition {{ $enabled ? 'bg-brand-700' : 'bg-slate-300' }}">
                 <span class="sr-only">{{ __('Enable public screen') }}</span>
-                <span class="inline-block h-5 w-5 transform rounded-full bg-surface shadow transition {{ $enabled ? 'translate-x-5' : 'translate-x-0.5' }}"></span>
+                <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition {{ $enabled ? 'translate-x-5' : 'translate-x-0.5' }}"></span>
             </button>
         </div>
 
@@ -41,7 +41,7 @@
             @if($link)
                 <div class="mt-1 flex items-center gap-2" x-data="{ copied: false }">
                     <code class="min-w-0 flex-1 break-all rounded bg-sand-50 px-2 py-1 text-sm text-slate-800">{{ $link }}</code>
-                    <button type="button" class="shrink-0 rounded-md border border-slate-300 bg-surface px-2.5 py-1 text-xs font-medium text-slate-700"
+                    <button type="button" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
                             @click="navigator.clipboard.writeText(@js($link)); copied = true; setTimeout(() => copied = false, 1500)"
                             x-text="copied ? @js(__('Copied')) : @js(__('Copy'))"></button>
                 </div>
@@ -68,7 +68,7 @@
             <button type="button" role="switch" aria-checked="{{ $showProfit ? 'true' : 'false' }}" wire:click="toggleProfit"
                     class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition {{ $showProfit ? 'bg-brand-700' : 'bg-slate-300' }}">
                 <span class="sr-only">{{ __('Show profit on the public screen') }}</span>
-                <span class="inline-block h-5 w-5 transform rounded-full bg-surface shadow transition {{ $showProfit ? 'translate-x-5' : 'translate-x-0.5' }}"></span>
+                <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition {{ $showProfit ? 'translate-x-5' : 'translate-x-0.5' }}"></span>
             </button>
         </div>
     </x-ui.card>

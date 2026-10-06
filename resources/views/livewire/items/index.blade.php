@@ -34,7 +34,7 @@
         <x-ui.card padding="p-0" class="hidden md:block">
             <div class="max-h-[70vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Name') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Mark') }}</th>
@@ -47,7 +47,7 @@
                     @foreach($items as $item)
                         <tr>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">
-                                <a href="{{ route('items.show', $item) }}" class="hover:text-accent hover:underline">{{ $item->name }}</a>
+                                <a href="{{ route('items.show', $item) }}" class="hover:text-brand-700 hover:underline">{{ $item->name }}</a>
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $item->mark ?? '—' }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $item->group?->name ?? '—' }}</td>

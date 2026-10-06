@@ -2,7 +2,7 @@
 @if($show)
     <div class="fixed inset-0 z-50 flex items-end justify-center px-4 py-6 sm:items-center" wire:key="modal">
         <div class="fixed inset-0 bg-slate-900/50" wire:click="{{ $close }}"></div>
-        <div {{ $attributes->merge(['class' => 'relative w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl max-h-[90vh] overflow-y-auto']) }}>
+        <div {{ $attributes->merge(['class' => 'relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto']) }}>
             <div class="mb-4 flex items-center justify-between">
                 @if($title)
                     <h2 class="text-lg font-semibold text-slate-900">{{ $title }}</h2>

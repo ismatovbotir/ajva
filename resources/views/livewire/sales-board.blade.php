@@ -97,14 +97,14 @@
             <p class="mb-4 text-sm text-slate-500">{{ __('Sales and profit per day (profit over items with a cost price).') }}</p>
             <ul class="mb-3 flex gap-4 text-xs text-slate-500">
                 <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #2a78d6"></span>{{ __('Sales total') }}</li>
-                <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #139a6e"></span>{{ __('Profit') }}</li>
+                <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #1baf7a"></span>{{ __('Profit') }}</li>
             </ul>
-            <div class="overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
+            <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                 <div class="flex h-48 min-w-[20rem] items-end gap-2">
                     @foreach($trend as $day)
                         <div class="flex h-full flex-1 items-end justify-center gap-1" title="{{ $day['label'] }} — {{ __('Sales total') }}: {{ $day['revenue_label'] }} · {{ __('Profit') }}: {{ $day['profit_label'] }} · {{ __('Receipts') }}: {{ $day['count'] }}">
                             <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['revenue_h'] }}%; background-color: #2a78d6;"></div>
-                            <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['profit_h'] }}%; background-color: #139a6e;"></div>
+                            <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['profit_h'] }}%; background-color: #1baf7a;"></div>
                         </div>
                     @endforeach
                 </div>
@@ -125,7 +125,7 @@
                     <h3 class="text-base font-semibold text-slate-900">{{ __('Receipts by hour') }}</h3>
                     <p class="text-sm text-slate-500">{{ __('Today by shop; the dashed line is the previous day.') }}</p>
                 </div>
-                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-surface p-0.5">
+                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
                     <button type="button" @click="metric = 'sum'" :class="metric === 'sum' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Total') }}</button>
                     <button type="button" @click="metric = 'count'" :class="metric === 'count' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Qty') }}</button>
                 </div>
@@ -149,7 +149,7 @@
 
                 @foreach($charts as $metric => $hours)
                     <div x-show="metric === '{{ $metric }}'" @if($metric !== 'sum') x-cloak @endif
-                         class="overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
+                         class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                         <div class="flex h-56 min-w-[34rem] items-end gap-1">
                             @foreach($hours as $h)
                                 <div class="relative flex h-full flex-1 flex-col justify-end"
@@ -281,9 +281,9 @@
             @else
                 <div class="mb-4 overflow-x-auto border-b border-slate-200">
                     <nav class="-mb-px flex gap-1" role="tablist">
-                        <button type="button" @click="tab = 'all'" :class="tab === 'all' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition">{{ __('All shops') }}</button>
+                        <button type="button" @click="tab = 'all'" :class="tab === 'all' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition">{{ __('All shops') }}</button>
                         @foreach($topItems['shops'] as $shopTab)
-                            <button type="button" @click="tab = '{{ $shopTab['id'] }}'" :class="tab === '{{ $shopTab['id'] }}' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition">{{ $shopTab['name'] }}</button>
+                            <button type="button" @click="tab = '{{ $shopTab['id'] }}'" :class="tab === '{{ $shopTab['id'] }}' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" class="whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition">{{ $shopTab['name'] }}</button>
                         @endforeach
                     </nav>
                 </div>
@@ -297,7 +297,7 @@
                 @foreach($panels as $panel)
                     <div x-show="tab === '{{ $panel['key'] }}'" @if($panel['key'] !== 'all') x-cloak @endif class="max-h-[60vh] overflow-auto">
                         <table class="min-w-full divide-y divide-slate-200">
-                            <thead class="sticky top-0 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
+                            <thead class="sticky top-0 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                                 <tr>
                                     <th class="w-12 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>

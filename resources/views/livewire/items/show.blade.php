@@ -10,25 +10,25 @@
         <button
             type="button"
             @click="tab = 'barcodes'"
-            :class="tab === 'barcodes' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-700'"
+            :class="tab === 'barcodes' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'"
             class="flex-shrink-0 border-b-2 px-4 py-2 text-sm font-medium"
         >{{ __('Barcodes') }}</button>
         <button
             type="button"
             @click="tab = 'prices'"
-            :class="tab === 'prices' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-700'"
+            :class="tab === 'prices' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'"
             class="flex-shrink-0 border-b-2 px-4 py-2 text-sm font-medium"
         >{{ __('Item prices') }}</button>
         <button
             type="button"
             @click="tab = 'orderRules'"
-            :class="tab === 'orderRules' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-700'"
+            :class="tab === 'orderRules' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'"
             class="flex-shrink-0 border-b-2 px-4 py-2 text-sm font-medium"
         >{{ __('Item order rules') }}</button>
         <button
             type="button"
             @click="tab = 'stock'"
-            :class="tab === 'stock' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-700'"
+            :class="tab === 'stock' ? 'border-brand-700 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'"
             class="flex-shrink-0 border-b-2 px-4 py-2 text-sm font-medium"
         >{{ __('Stock') }}</button>
     </div>

@@ -67,7 +67,7 @@
                         <tr class="cursor-pointer hover:bg-sand-50" onclick="window.location='{{ route('shops.show', $shop) }}'">
                             <td class="px-4 py-3 text-sm tabular-nums text-slate-500">{{ $shop->id }}</td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">
-                                <a href="{{ route('shops.show', $shop) }}" class="hover:text-accent hover:underline">{{ $shop->name }}</a>
+                                <a href="{{ route('shops.show', $shop) }}" class="hover:text-brand-700 hover:underline">{{ $shop->name }}</a>
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $shop->item_count }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ number_format((float) $shop->qty_total) }}</td>

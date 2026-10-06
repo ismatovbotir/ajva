@@ -13,10 +13,10 @@ use Livewire\Component;
 class Index extends Component
 {
     private const COLORS = [
-        '#2a78d6', '#139a6e', '#d17a00', '#8e5cc9', '#d6477b', '#2f9bc0', '#9a7b4f',
+        '#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#c23a3a', '#a13a7a',
     ];
 
-    private const COLOR_OTHER = '#8f8d85';
+    private const COLOR_OTHER = '#898781';
 
     /** Seconds the day's aggregates are reused, so paging the list doesn't recompute them. */
     private const ANALYTICS_TTL = 30;
