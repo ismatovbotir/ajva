@@ -113,6 +113,10 @@ Hand-rolled Livewire login (`app/Livewire/Auth/Login.php`) against the standard 
 
 Both controllers are thin: validate via a `FormRequest`, log the raw payload to `api_ingestion_logs`, dispatch a queued Job (`App\Jobs\ProcessLocalItemsBatch` / `ProcessReceiptIngestion`), return `202`. The actual upsert/stock-decrement logic lives in the jobs, run on the `database` queue connection (already configured, no Redis in this stack).
 
+### MCP server (`POST /api/mcp`)
+
+A hand-written, **read-only** Model Context Protocol server (JSON-RPC 2.0 over HTTP — no `laravel/mcp`, which would pull Laravel 12 components into this Laravel 10 app). `App\Http\Controllers\Api\McpController` handles `initialize`, `ping`, `tools/list`, `tools/call`. Tools are classes implementing `App\Mcp\Tool` (extend `App\Mcp\BaseTool` for date/int helpers) listed in `config/mcp.php` — **to add a tool, create the class and add it to that list**; keep tools read-only. Auth is `mcp.token` middleware (`EnsureMcpTokenIsValid`): a bearer token generated in the admin panel (`/settings/mcp`, stored only as a SHA-256 hash in the `settings` table via `App\Mcp\McpSettings`) or env `MCP_API_TOKEN`; the server and each tool can also be switched off there. No token = endpoint closed.
+
 ### Mobile-first UI & design system
 
 Single Blade layout (`components/layouts/app.blade.php`) drives both breakpoints — no separate mobile/desktop templates. Bottom tab bar + top bar are `md:hidden`; the sidebar is `hidden md:flex`. Data tables follow the same pattern per-page: a card-list `md:hidden` block and a `<table>` `hidden md:block` block in the same Blade view (see `resources/views/livewire/products/index.blade.php` for the reference pattern).

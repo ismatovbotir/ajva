@@ -10,6 +10,7 @@
         ['label' => 'Items', 'route' => 'items.index', 'icon' => 'box'],
         ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
         ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
+        ['label' => 'MCP', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
     ];
 
     $bottomNavItems = collect($navItems)->take(4);

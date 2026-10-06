@@ -62,6 +62,7 @@ class Kernel extends HttpKernel
         'local.only' => \App\Http\Middleware\EnsureRequestIsLocal::class,
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
         'pos.token' => \App\Http\Middleware\EnsurePosTokenIsValid::class,
+        'mcp.token' => \App\Http\Middleware\EnsureMcpTokenIsValid::class,
         'precognitive' => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
         'signed' => \App\Http\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,

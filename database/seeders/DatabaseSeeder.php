@@ -23,7 +23,9 @@ class DatabaseSeeder extends Seeder
         }
 
         User::query()->firstOrCreate(
-            ['email' => $email],
+            [
+                'email' => $email
+            ],
             [
                 'name' => config('admin.name'),
                 'password' => $password,
