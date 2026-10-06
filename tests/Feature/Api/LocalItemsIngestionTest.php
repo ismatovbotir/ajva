@@ -80,7 +80,8 @@ class LocalItemsIngestionTest extends TestCase
         // Both price entries in the sample share price id 1, so only one
         // price row/name (the last one processed) survives the dedupe.
         $this->assertSame(1, Price::count());
-        $this->assertDatabaseHas('prices', ['id' => 1]);
+        // Price id 1 is the cost price, so the sync marks it as not a selling price.
+        $this->assertDatabaseHas('prices', ['id' => 1, 'is_sell' => false]);
 
         $this->assertSame(1, ItemPrice::where('item_id', 123)->count());
         $this->assertDatabaseHas('item_prices', [

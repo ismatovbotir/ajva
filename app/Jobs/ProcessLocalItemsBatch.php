@@ -141,18 +141,22 @@ class ProcessLocalItemsBatch implements ShouldQueue
     {
         $rows = [];
 
+        $costPriceId = (int) config('inventory.cost_price_id');
+
         foreach ($this->items as $item) {
             foreach (($item['price'] ?? []) as $priceEntry) {
                 $priceId = $priceEntry['price']['id'];
                 $rows[$priceId] = [
                     'id' => $priceId,
                     'name' => $priceEntry['price']['name'] ?? '',
+                    // The cost price type is the only one that is not a selling price.
+                    'is_sell' => (int) $priceId !== $costPriceId,
                 ];
             }
         }
 
         if ($rows !== []) {
-            Price::upsert(array_values($rows), ['id'], ['name']);
+            Price::upsert(array_values($rows), ['id'], ['name', 'is_sell']);
         }
     }
 

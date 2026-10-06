@@ -364,7 +364,7 @@ class DashboardChartsTest extends TestCase
     {
         $group = Group::factory()->create(['name' => 'Group M']);
 
-        $costPrice = Price::factory()->create(['name' => 'Cost', 'is_sell' => false]);
+        $costPrice = Price::factory()->create(['id' => config('inventory.cost_price_id'), 'name' => 'Cost', 'is_sell' => false]);
         $sellPrice = Price::factory()->create(['name' => 'Sell', 'is_sell' => true]);
 
         $itemGoodMargin = Item::factory()->create(['name' => 'Item Good Margin', 'group_id' => $group->id]);
@@ -424,7 +424,7 @@ class DashboardChartsTest extends TestCase
     public function test_dashboard_excludes_zero_cost_items_from_margin_ranking_but_not_from_completeness(): void
     {
         $user = User::factory()->create();
-        $costPrice = Price::factory()->create(['is_sell' => false]);
+        $costPrice = Price::factory()->create(['id' => config('inventory.cost_price_id'), 'is_sell' => false]);
         $sellPrice = Price::factory()->create(['is_sell' => true]);
         $item = Item::factory()->create(['name' => 'Item Zero Cost']);
 

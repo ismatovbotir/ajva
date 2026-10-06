@@ -148,39 +148,27 @@ class Index extends Component
     }
 
     /**
-     * Shops that have at least one successful, non-storno line on the day.
+     * One tab per shop: every item is listed for every shop, whether or not
+     * it sold that day.
      */
     private function tabs()
     {
-        [$from, $to] = $this->dayRange();
-
         return $this->cached('tabs', fn () => DB::table('shops')
-            ->whereIn('shops.id', function ($q) use ($from, $to) {
-                $q->from('receipts')
-                    ->select('receipts.shop_id')
-                    ->where('receipts.active', true)
-                    ->whereBetween('receipts.created_at', [$from, $to])
-                    ->whereExists(function ($e) {
-                        $e->from('receipt_items')
-                            ->whereColumn('receipt_items.receipt_id', 'receipts.id')
-                            ->where('receipt_items.storno', false);
-                    });
-            })
-            ->orderBy('shops.name')
-            ->get(['shops.id', 'shops.name'])
+            ->orderBy('name')
+            ->get(['id', 'name'])
             ->map(fn ($s) => ['id' => (int) $s->id, 'name' => $s->name])
             ->values());
     }
 
     /**
-     * Net sold qty per item for one shop — successful sale receipts add,
-     * successful refund receipts subtract (storno lines are ignored) —
-     * compared against the shop's current stock qty. Read-only: stocks are
-     * never modified, 1C stays the source of truth for them.
+     * Every item (the base of the report) left-joined to the shop's stock and
+     * min/max rule and to the day's net sold qty — successful sale receipts
+     * add, successful refund receipts subtract, storno lines are ignored. An
+     * item with no stock row or no sales shows 0. Read-only: stocks are never
+     * modified, 1C stays the source of truth for them.
      *
-     * The aggregate groups by item id only; names, stock and min/max are
-     * then fetched by key (PK / unique-index lookups) instead of being
-     * joined and grouped as wide varchar columns.
+     * Sales are aggregated by item id in a separate query and merged in PHP,
+     * so the main query stays a plain left join with no GROUP BY.
      */
     private function buildRows(int $shopId)
     {
@@ -196,38 +184,38 @@ class Index extends Component
             ->selectRaw('receipt_items.item_id, SUM(CASE WHEN receipts.sell = 1 THEN receipt_items.qty ELSE -receipt_items.qty END) as sold_qty')
             ->pluck('sold_qty', 'item_id');
 
-        $ids = $sold->keys();
+        return DB::table('items')
+            ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
+            ->leftJoin('stocks', function ($join) use ($shopId) {
+                $join->on('stocks.item_id', '=', 'items.id')->where('stocks.shop_id', '=', $shopId);
+            })
+            ->leftJoin('item_order_rules', function ($join) use ($shopId) {
+                $join->on('item_order_rules.item_id', '=', 'items.id')->where('item_order_rules.shop_id', '=', $shopId);
+            })
+            ->get([
+                'items.id as item_id',
+                'items.name as item_name',
+                'groups.name as group_name',
+                'stocks.qty as stock_qty',
+                'item_order_rules.min as rule_min',
+                'item_order_rules.max as rule_max',
+            ])
+            ->map(function ($row) use ($sold) {
+                $stock = (float) $row->stock_qty;
+                $net = (float) ($sold[$row->item_id] ?? 0);
 
-        $names = collect();
-        $stocks = collect();
-        $rules = collect();
-        foreach ($ids->chunk(500) as $chunk) {
-            $chunk = $chunk->all();
-            $names = $names->union(DB::table('items')
-                ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
-                ->whereIn('items.id', $chunk)
-                ->get(['items.id', 'items.name', 'groups.name as group_name'])
-                ->keyBy('id'));
-            $stocks = $stocks->union(DB::table('stocks')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->pluck('qty', 'item_id'));
-            $rules = $rules->union(DB::table('item_order_rules')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->get(['item_id', 'min', 'max'])->keyBy('item_id'));
-        }
-
-        return $sold->map(function ($soldQty, $itemId) use ($names, $stocks, $rules) {
-            $stock = (float) ($stocks[$itemId] ?? 0);
-            $net = (float) $soldQty;
-            $rule = $rules[$itemId] ?? null;
-
-            return [
-                'item_id' => (int) $itemId,
-                'group' => $names[$itemId]->group_name ?? null,
-                'item' => $names[$itemId]->name ?? '#'.$itemId,
-                'stock' => $stock,
-                'sold' => $net,
-                'remaining' => $stock - $net,
-                'min' => $rule ? (float) $rule->min : null,
-                'max' => $rule ? (float) $rule->max : null,
-            ];
-        })->values();
+                return [
+                    'item_id' => (int) $row->item_id,
+                    'group' => $row->group_name,
+                    'item' => $row->item_name,
+                    'stock' => $stock,
+                    'sold' => $net,
+                    'remaining' => $stock - $net,
+                    'min' => $row->rule_min === null ? null : (float) $row->rule_min,
+                    'max' => $row->rule_max === null ? null : (float) $row->rule_max,
+                ];
+            })
+            ->values();
     }
 
     /**

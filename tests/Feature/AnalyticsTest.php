@@ -24,6 +24,7 @@ class AnalyticsTest extends TestCase
         $shop = Shop::factory()->create();
         $a = Item::factory()->create(['name' => 'Item A']);
         $b = Item::factory()->create(['name' => 'Item B']);
+        $c = Item::factory()->create(['name' => 'Item C']); // no stock row, no sales: still listed
         Stock::query()->create(['shop_id' => $shop->id, 'item_id' => $a->id, 'qty' => 10]);
         Stock::query()->create(['shop_id' => $shop->id, 'item_id' => $b->id, 'qty' => 50]);
 
@@ -45,29 +46,34 @@ class AnalyticsTest extends TestCase
             ->assertSee(__('Pick a date and press Generate.'))
             ->call('generate');
 
-        $this->assertCount(2, $component->viewData('tabs'));
+        // Every shop gets a tab, whether or not it sold anything.
+        $tabIds = $component->viewData('tabs')->pluck('id');
+        $this->assertTrue($tabIds->contains($shop->id) && $tabIds->contains($otherShop->id));
 
         $component->call('selectShop', $shop->id);
         $rows = $component->viewData('rows')->all();
 
-        $this->assertCount(2, $rows); // only this shop's items
-        $this->assertSame('Item A', $rows[0]['item']); // lowest remaining first
-        $this->assertEquals(3, $rows[0]['sold']);      // 4 sold - 1 refunded
-        $this->assertEquals(7, $rows[0]['remaining']); // 10 - 3
-        $this->assertEquals(2, $rows[0]['min']);
-        $this->assertEquals(20, $rows[0]['max']);
-        $this->assertSame('Item B', $rows[1]['item']);
-        $this->assertEquals(45, $rows[1]['remaining']);
-        $this->assertNull($rows[1]['min']);
+        $this->assertCount(3, $rows); // every item is listed, sold or not
+        $this->assertSame('Item C', $rows[0]['item']); // lowest remaining first
+        $this->assertEquals(0, $rows[0]['stock']);
+        $this->assertEquals(0, $rows[0]['sold']);
+        $this->assertNull($rows[0]['min']);
+        $this->assertSame('Item A', $rows[1]['item']);
+        $this->assertEquals(3, $rows[1]['sold']);      // 4 sold - 1 refunded
+        $this->assertEquals(7, $rows[1]['remaining']); // 10 - 3
+        $this->assertEquals(2, $rows[1]['min']);
+        $this->assertEquals(20, $rows[1]['max']);
+        $this->assertSame('Item B', $rows[2]['item']);
+        $this->assertEquals(45, $rows[2]['remaining']);
 
         // Header sorting: first click sorts ascending, second click flips it.
         $component->call('sort', 'item');
-        $this->assertSame(['Item A', 'Item B'], array_column($component->viewData('rows')->all(), 'item'));
+        $this->assertSame(['Item A', 'Item B', 'Item C'], array_column($component->viewData('rows')->all(), 'item'));
         $component->call('sort', 'item');
-        $this->assertSame(['Item B', 'Item A'], array_column($component->viewData('rows')->all(), 'item'));
+        $this->assertSame(['Item C', 'Item B', 'Item A'], array_column($component->viewData('rows')->all(), 'item'));
         $component->call('sort', 'bogus')->call('sort', 'remaining');
         $this->assertSame('remaining', $component->get('sortBy'));
-        $this->assertSame('Item A', $component->viewData('rows')->first()['item']);
+        $this->assertSame('Item C', $component->viewData('rows')->first()['item']);
 
         // Clicking Item A's net-sold cell lists the day's successful receipts containing it.
         $component->call('showReceipts', $a->id);

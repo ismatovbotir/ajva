@@ -19,7 +19,7 @@
     @if(! $generated)
         <x-ui.empty-state :title="__('No report yet')" :description="__('Pick a date and press Generate.')" />
     @elseif($tabs->isEmpty())
-        <x-ui.empty-state :title="__('No sales for this day')" :description="__('Pick another date to see its sales.')" />
+        <x-ui.empty-state :title="__('No shops yet')" :description="__('Shops will appear here once 1C sends stock data for them.')" />
     @else
         {{-- Shop tabs --}}
         <div class="mb-4 overflow-x-auto border-b border-slate-200">

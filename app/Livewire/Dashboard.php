@@ -406,27 +406,29 @@ class Dashboard extends Component
     }
 
     /**
-     * Per-item cost vs. sell margin, based on `item_prices` joined to
-     * `prices.is_sell`. An item's cost value is the lowest `is_sell = false`
-     * price on file, its sell value the highest `is_sell = true` price
-     * (there's no uniqueness constraint tying an item to a single price of
-     * each type, so ties/multiples are resolved deterministically rather
-     * than picking an arbitrary row). Margin % is only computed when both a
-     * (non-zero) cost and a sell value exist; items missing one or both are
-     * tallied separately as a data-completeness stat.
+     * Per-item cost vs. sell margin, based on `item_prices`. An item's cost
+     * is its value for the cost price type (`config('inventory.cost_price_id')`,
+     * price id 1 in 1C); its sell value is the highest value among all the
+     * other price types (an item can carry several selling prices, so the
+     * highest is used deterministically rather than an arbitrary row).
+     * Margin % is only computed when both a (non-zero) cost and a sell value
+     * exist; items missing one or both are tallied separately as a
+     * data-completeness stat.
      *
      * @return array{best: array, worst: array, total_with_margin: int, missing_cost: int, missing_sell: int, missing_both: int}
      */
     private function itemMargins(): array
     {
+        $costPriceId = (int) config('inventory.cost_price_id');
+
         $rows = DB::table('items')
             ->leftJoin('item_prices', 'item_prices.item_id', '=', 'items.id')
-            ->leftJoin('prices', 'prices.id', '=', 'item_prices.price_id')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
             ->selectRaw(
                 'items.id as item_id, items.name as item_name, groups.name as group_name, '.
-                'MIN(CASE WHEN prices.is_sell = 0 THEN item_prices.value END) as cost_value, '.
-                'MAX(CASE WHEN prices.is_sell = 1 THEN item_prices.value END) as sell_value'
+                'MAX(CASE WHEN item_prices.price_id = ? THEN item_prices.value END) as cost_value, '.
+                'MAX(CASE WHEN item_prices.price_id <> ? THEN item_prices.value END) as sell_value',
+                [$costPriceId, $costPriceId]
             )
             ->groupBy('items.id', 'items.name', 'groups.name')
             ->get();

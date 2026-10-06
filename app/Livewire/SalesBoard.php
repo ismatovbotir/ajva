@@ -10,8 +10,7 @@ use Livewire\Component;
 /**
  * Live sales board for the dashboard: today's successful sale receipts by
  * shop and hour compared with the previous day, plus the day's top items.
- * Updated by the Refresh button (automatic polling is currently off; to turn
- * it back on add wire:poll.60s to the root element of the view).
+ * Polled every 2 minutes from the view (wire:poll.120s).
  */
 class SalesBoard extends Component
 {
@@ -25,15 +24,6 @@ class SalesBoard extends Component
 
     /** Slightly under the poll interval so every poll sees fresh data but concurrent viewers share one computation. */
     private const CACHE_TTL = 50;
-
-    /**
-     * Manual refresh button: drop the cached numbers so the re-render that
-     * follows this action recomputes them from the database.
-     */
-    public function refresh(): void
-    {
-        Cache::forget($this->cacheKey());
-    }
 
     public function render()
     {
