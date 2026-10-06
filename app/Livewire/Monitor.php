@@ -3,10 +3,12 @@
 namespace App\Livewire;
 
 use App\Services\SalesMetrics;
+use App\Support\MonitorSettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -29,9 +31,47 @@ class Monitor extends Component
         return 'dashboard.monitor.'.($at ?? now())->toDateString();
     }
 
+    /**
+     * Set only on the public (no-login) route /monitor/{token}. Locked, so the
+     * browser cannot change it; re-validated on every request below.
+     */
+    #[Locked]
+    public ?string $publicToken = null;
+
+    public function mount(?string $token = null): void
+    {
+        if ($token !== null) {
+            $this->publicToken = $token;
+        }
+
+        $this->guardPublicToken();
+    }
+
+    /** Livewire polls skip the route middleware, so check again after every rehydration. */
+    public function hydrate(): void
+    {
+        $this->guardPublicToken();
+    }
+
+    /**
+     * A public screen is served only while its token is the current one and
+     * the public monitor is enabled; otherwise a plain 404, so an old, wrong
+     * or disabled link never reveals whether it ever existed.
+     */
+    private function guardPublicToken(): void
+    {
+        if ($this->publicToken !== null || request()->routeIs('monitor.public')) {
+            abort_unless(app(MonitorSettings::class)->accepts($this->publicToken), 404);
+        }
+    }
+
     public function render()
     {
+        $this->guardPublicToken();
+
         $now = now();
+        $public = $this->publicToken !== null;
+        $showProfit = ! $public || app(MonitorSettings::class)->showProfit();
 
         $data = Cache::remember(
             self::cacheKey($now),
@@ -41,13 +81,53 @@ class Monitor extends Component
             ],
         );
 
+        if (! $showProfit) {
+            $data = $this->withoutProfit($data);
+        }
+
         return view('livewire.monitor', $data + [
+            'public' => $public,
+            'showProfit' => $showProfit,
             'alerts' => Cache::remember('dashboard.monitor.alerts', self::ALERTS_TTL, fn () => $this->stockAlerts()),
             'renderedAt' => $now->timestamp,
             'timezone' => config('app.timezone'),
             'currentHour' => (int) $now->format('G'),
             'dateLabel' => $now->format('d.m.Y'),
         ]);
+    }
+
+    /**
+     * Drops every profit/cost/margin figure, so none of it reaches the public
+     * view (or the browser) when the profit switch is off.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withoutProfit(array $data): array
+    {
+        unset($data['profit']);
+
+        $data['trend'] = array_map(function (array $day) {
+            unset($day['profit'], $day['profit_h'], $day['profit_label']);
+
+            return $day;
+        }, $data['trend']);
+
+        $strip = function (array $items) {
+            return array_map(function (array $item) {
+                unset($item['profit'], $item['profit_negative']);
+
+                return $item;
+            }, $items);
+        };
+        $data['topItems']['all'] = $strip($data['topItems']['all']);
+        $data['topItems']['shops'] = array_map(function (array $tab) use ($strip) {
+            $tab['items'] = $strip($tab['items']);
+
+            return $tab;
+        }, $data['topItems']['shops']);
+
+        return $data;
     }
 
     /**

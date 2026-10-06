@@ -63,6 +63,7 @@ class Kernel extends HttpKernel
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
         'role' => \App\Http\Middleware\EnsureUserHasRole::class,
         'pos.token' => \App\Http\Middleware\EnsurePosTokenIsValid::class,
+        'monitor.headers' => \App\Http\Middleware\PublicMonitorHeaders::class,
         'mcp.token' => \App\Http\Middleware\EnsureMcpTokenIsValid::class,
         'precognitive' => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
         'signed' => \App\Http\Middleware\ValidateSignature::class,

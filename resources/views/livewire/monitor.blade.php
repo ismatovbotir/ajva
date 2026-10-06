@@ -24,11 +24,14 @@
     $panelTitle = 'text-[1.15rem] font-semibold uppercase tracking-wide text-slate-300';
     $topItemsList = array_slice($topItems['all'], 0, 10);
     $leaders = array_slice($table, 0, 8);
-    $margin = $profit['margin'] === null ? '—' : number_format($profit['margin'], 1).'%';
+    $margin = $showProfit && $profit['margin'] !== null ? number_format($profit['margin'], 1).'%' : '—';
+    $peak = collect($charts['sum'])->sortByDesc('total')->first();
 
     $tiles = [
         ['label' => __('Sales total'), 'value' => $money($totals['sum']), 'prev' => $money($totals['y_sum']), 'delta' => $totals['sum_delta'], 'negative' => false],
-        ['label' => __('Profit'), 'value' => $money($profit['total']), 'prev' => $money($profit['yesterday']), 'delta' => $profit['delta'], 'negative' => $profit['total'] < 0, 'extra' => __('Margin').' '.$margin],
+        $showProfit
+            ? ['label' => __('Profit'), 'value' => $money($profit['total']), 'prev' => $money($profit['yesterday']), 'delta' => $profit['delta'], 'negative' => $profit['total'] < 0, 'extra' => __('Margin').' '.$margin]
+            : ['label' => __('Peak hour'), 'value' => $peak && $peak['total'] > 0 ? $peak['hour'].':00' : '—', 'prev' => null, 'delta' => null, 'negative' => false, 'extra' => $peak && $peak['total'] > 0 ? $money($peak['total']) : null],
         ['label' => __('Receipts'), 'value' => (string) $totals['count'], 'prev' => (string) $totals['y_count'], 'delta' => $totals['count_delta'], 'negative' => false, 'extra' => $refunds['count'] > 0 ? __('Refunds').': '.$refunds['count'].' · '.$money($refunds['sum']) : null],
         ['label' => __('Average check'), 'value' => $money($totals['avg']), 'prev' => $money($totals['y_avg']), 'delta' => $totals['avg_delta'], 'negative' => false],
     ];
@@ -80,7 +83,9 @@
             <button type="button" @click="fullscreen()" class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800">
                 <x-icon name="monitor" class="h-[1.2rem] w-[1.2rem]" />{{ __('Fullscreen') }}
             </button>
-            @if(Route::has('dashboard') && auth()->user()?->canUsePanel())
+            @if($public)
+                {{-- Public screen: no link back into the admin panel. --}}
+            @elseif(Route::has('dashboard') && auth()->user()?->canUsePanel())
                 <a href="{{ route('dashboard') }}" class="rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800">← {{ __('Dashboard') }}</a>
             @else
                 {{-- Monitor-only accounts have no panel to go back to; they can only sign out. --}}
@@ -99,14 +104,16 @@
             <div class="{{ $panel }} justify-between gap-1">
                 <p class="{{ $panelTitle }}">{{ $tile['label'] }}</p>
                 <p class="tabular truncate text-[3.2rem] font-bold leading-none {{ $tile['negative'] ? 'text-red-400' : 'text-white' }}">{{ $tile['value'] }}</p>
-                <p class="tabular text-[1.05rem] text-slate-400">
-                    {{ __('Yesterday') }} {{ $tile['prev'] }}
-                    <span class="ml-2 font-bold {{ $dClass }}">{{ $dText }}</span>
-                </p>
+                @if($tile['prev'] !== null)
+                    <p class="tabular text-[1.05rem] text-slate-400">
+                        {{ __('Yesterday') }} {{ $tile['prev'] }}
+                        <span class="ml-2 font-bold {{ $dClass }}">{{ $dText }}</span>
+                    </p>
+                @endif
                 @if(! empty($tile['extra']))
                     <p class="tabular text-[1.05rem] font-medium {{ $tile['label'] === __('Receipts') ? 'text-red-300' : 'text-slate-200' }}">{{ $tile['extra'] }}</p>
                 @endif
-                @if($tile['label'] === __('Profit') && $profit['missing_items'] > 0)
+                @if($showProfit && $tile['label'] === __('Profit') && $profit['missing_items'] > 0)
                     <p class="text-[0.85rem] leading-snug text-amber-300">{{ __('Cost missing for :count items — :percent% of revenue is not covered.', ['count' => $profit['missing_items'], 'percent' => $profit['uncovered_percent']]) }}</p>
                 @endif
             </div>
@@ -198,7 +205,7 @@
                 <ol class="mt-2 min-h-0 flex-1 space-y-[0.45rem] overflow-hidden">
                     @foreach($leaders as $i => $row)
                         @php
-                            $p = $profit['shops'][$i] ?? null;
+                            $p = $showProfit ? ($profit['shops'][$i] ?? null) : null;
                             [$sdText, $sdClass] = $delta($row['sum_delta']);
                         @endphp
                         <li class="tabular flex items-center gap-[0.6rem]">
@@ -210,9 +217,13 @@
                                     <span class="text-[1.1rem] font-bold text-white">{{ $money($row['sum']) }}</span>
                                 </div>
                                 <div class="flex items-baseline justify-between gap-2 text-[0.9rem]">
-                                    <span class="{{ ($p['profit'] ?? 0) < 0 ? 'text-red-400' : 'text-slate-400' }}">
-                                        {{ __('Profit') }} {{ $money($p['profit'] ?? 0) }}@if(($p['margin'] ?? null) !== null) · {{ number_format($p['margin'], 1) }}%@endif
-                                    </span>
+                                    @if($showProfit)
+                                        <span class="{{ ($p['profit'] ?? 0) < 0 ? 'text-red-400' : 'text-slate-400' }}">
+                                            {{ __('Profit') }} {{ $money($p['profit'] ?? 0) }}@if(($p['margin'] ?? null) !== null) · {{ number_format($p['margin'], 1) }}%@endif
+                                        </span>
+                                    @else
+                                        <span class="text-slate-400">{{ __('Receipts') }} {{ $row['count'] }}</span>
+                                    @endif
                                     <span class="font-semibold {{ $sdClass }}">{{ $sdText }}</span>
                                 </div>
                             </div>
@@ -237,7 +248,7 @@
                             <th class="text-left font-medium">{{ __('Item') }}</th>
                             <th class="w-[4rem] text-right font-medium">{{ __('Qty') }}</th>
                             <th class="w-[6rem] text-right font-medium">{{ __('Total') }}</th>
-                            <th class="w-[6rem] text-right font-medium">{{ __('Profit') }}</th>
+                            @if($showProfit)<th class="w-[6rem] text-right font-medium">{{ __('Profit') }}</th>@endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800">
@@ -247,7 +258,7 @@
                                 <td class="truncate py-[0.18rem] font-medium text-white">{{ $item['name'] }}</td>
                                 <td class="py-[0.18rem] text-right font-semibold text-slate-100">{{ $item['qty'] }}</td>
                                 <td class="py-[0.18rem] text-right text-slate-300">{{ $item['sum'] }}</td>
-                                <td class="py-[0.18rem] text-right font-semibold {{ $item['profit'] === null ? 'text-slate-600' : ($item['profit_negative'] ? 'text-red-400' : 'text-emerald-400') }}">{{ $item['profit'] ?? '—' }}</td>
+                                @if($showProfit)<td class="py-[0.18rem] text-right font-semibold {{ $item['profit'] === null ? 'text-slate-600' : ($item['profit_negative'] ? 'text-red-400' : 'text-emerald-400') }}">{{ $item['profit'] ?? '—' }}</td>@endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -260,7 +271,7 @@
                 <h2 class="{{ $panelTitle }}">{{ __('Last 7 days') }}</h2>
                 <ul class="flex gap-[1rem] text-[0.9rem] text-slate-300">
                     <li class="flex items-center gap-[0.4rem]"><span class="h-[0.8rem] w-[0.8rem] rounded-sm bg-[#2a78d6]"></span>{{ __('Sales total') }}</li>
-                    <li class="flex items-center gap-[0.4rem]"><span class="h-[0.8rem] w-[0.8rem] rounded-sm bg-[#1baf7a]"></span>{{ __('Profit') }}</li>
+                    @if($showProfit)<li class="flex items-center gap-[0.4rem]"><span class="h-[0.8rem] w-[0.8rem] rounded-sm bg-[#1baf7a]"></span>{{ __('Profit') }}</li>@endif
                 </ul>
             </div>
             <div class="relative mt-[1.4rem] min-h-[8rem] flex-1">
@@ -271,7 +282,7 @@
                                 <div class="monitor-bar relative flex-1 rounded-t-[0.25rem] bg-[#2a78d6]" style="height: {{ $day['revenue_h'] }}%;">
                                     @if($day['revenue'] > 0)<span class="tabular absolute inset-x-[-0.5rem] bottom-full text-center text-[0.75rem] font-semibold text-slate-100">{{ $short($day['revenue']) }}</span>@endif
                                 </div>
-                                <div class="monitor-bar relative flex-1 rounded-t-[0.25rem] bg-[#1baf7a]" style="height: {{ $day['profit_h'] }}%;"></div>
+                                @if($showProfit)<div class="monitor-bar relative flex-1 rounded-t-[0.25rem] bg-[#1baf7a]" style="height: {{ $day['profit_h'] }}%;"></div>@endif
                             </div>
                         </div>
                     @endforeach

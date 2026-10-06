@@ -22,6 +22,7 @@
         ]],
         ['label' => 'Settings', 'roles' => ['admin'], 'items' => [
             ['label' => 'MCP server', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
+            ['label' => 'Public monitor', 'route' => 'settings.monitor', 'icon' => 'monitor'],
             ['label' => 'Users', 'route' => 'users.index', 'icon' => 'users'],
         ]],
     ])->map(function ($group) use ($currentRole) {
