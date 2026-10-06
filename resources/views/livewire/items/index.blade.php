@@ -19,7 +19,7 @@
         <x-ui.empty-state :title="__('No items found')" :description="__('Try adjusting your search.')" />
     @else
         {{-- Mobile card list --}}
-        <div class="space-y-3 md:hidden">
+        <div class="max-h-[70vh] space-y-3 overflow-y-auto md:hidden">
             @foreach($items as $item)
                 <x-ui.card>
                     <a href="{{ route('items.show', $item) }}" class="block">
@@ -32,8 +32,9 @@
 
         {{-- Desktop table --}}
         <x-ui.card padding="p-0" class="hidden md:block">
+            <div class="max-h-[70vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-sand-50">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Name') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Mark') }}</th>
@@ -58,8 +59,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         </x-ui.card>
-
-        <div class="mt-4">{{ $items->links() }}</div>
     @endif
 </div>

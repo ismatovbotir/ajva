@@ -8,28 +8,15 @@ use App\Models\Item;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 #[Layout('components.layouts.app', ['title' => 'Items'])]
 class Index extends Component
 {
-    use WithPagination;
-
     #[Url]
     public string $search = '';
 
     #[Url]
     public string $groupFilter = '';
-
-    public function updatingSearch(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatingGroupFilter(): void
-    {
-        $this->resetPage();
-    }
 
     public function render()
     {
@@ -43,7 +30,7 @@ class Index extends Component
             })
             ->when($this->groupFilter, fn ($query) => $query->where('group_id', $this->groupFilter))
             ->orderBy('name')
-            ->paginate(10);
+            ->get();
 
         return view('livewire.items.index', [
             'items' => $items,
