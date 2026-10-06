@@ -8,13 +8,10 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 #[Layout('components.layouts.app', ['title' => 'Receipts'])]
 class Index extends Component
 {
-    use WithPagination;
-
     private const COLORS = [
         '#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#c23a3a', '#a13a7a',
     ];
@@ -36,8 +33,6 @@ class Index extends Component
         if (! $this->parsedDate()) {
             $this->date = now()->toDateString();
         }
-
-        $this->resetPage();
     }
 
     public function render()
@@ -56,8 +51,9 @@ class Index extends Component
             'receipts' => Receipt::query()
                 ->with(['pos', 'shop'])
                 ->whereBetween('created_at', [$from, $to])
-                ->orderBy('id', 'desc')
-                ->paginate(15),
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->get(),
         ] + $analytics);
     }
 

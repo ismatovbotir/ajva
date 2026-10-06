@@ -116,13 +116,13 @@
         <x-ui.empty-state :title="__('No receipts for this day')" :description="__('Receipts will appear here once POS terminals start sending them.')" />
     @else
         {{-- Mobile card list --}}
-        <div class="space-y-3 md:hidden">
+        <div class="max-h-[70vh] space-y-3 overflow-y-auto md:hidden">
             @foreach($receipts as $receipt)
                 <a href="{{ route('receipts.show', $receipt) }}" class="block">
                     <x-ui.card>
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="font-medium text-slate-900">{{ $receipt->number }}</p>
+                                <p class="font-medium text-slate-900">{{ $receipt->number }} <span class="ml-1 text-xs font-normal tabular-nums text-slate-500">{{ $receipt->created_at->format('H:i:s') }}</span></p>
                                 <p class="text-sm text-slate-500">{{ $receipt->shop->name }} &middot; {{ $receipt->pos->name }}</p>
                             </div>
                             <div class="text-right">
@@ -140,9 +140,11 @@
 
         {{-- Desktop table --}}
         <x-ui.card padding="p-0" class="hidden md:block">
+            <div class="max-h-[70vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-sand-50">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Time') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Number') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shop') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Pos') }}</th>
@@ -154,6 +156,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @foreach($receipts as $receipt)
                         <tr>
+                            <td class="whitespace-nowrap px-4 py-3 text-sm tabular-nums text-slate-500">{{ $receipt->created_at->format('H:i:s') }}</td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $receipt->number }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $receipt->shop->name }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $receipt->pos->name }}</td>
@@ -169,8 +172,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         </x-ui.card>
-
-        <div class="mt-4">{{ $receipts->links() }}</div>
     @endif
 </div>

@@ -36,10 +36,6 @@ return new class extends Migration
             $table->string('pos_user_text')->nullable();
             $table->json('aos')->nullable();
             $table->timestamps();
-
-            // created_at is the POS open time and the filter for every
-            // per-day report (receipts analytics, shop "today" counts,
-            // analytics page, dashboard sales board).
             $table->index('created_at');
             $table->index(['shop_id', 'created_at']);
         });
