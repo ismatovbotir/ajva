@@ -36,13 +36,13 @@
         <p class="mb-3 text-sm text-[#52514e]">{{ __('Sorted by stock minus net sold qty, lowest first.') }}</p>
 
         {{-- Mobile card list --}}
-        <div class="space-y-3 md:hidden">
+        <div class="max-h-[65vh] space-y-3 overflow-y-auto md:hidden">
             @foreach($rows as $row)
                 <x-ui.card>
                     <p class="font-medium text-slate-900">{{ $row['item'] }}</p>
                     <dl class="mt-2 grid grid-cols-3 gap-2 text-sm">
                         <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ $fmt($row['stock']) }}</dd></div>
-                        <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd class="tabular-nums">{{ $fmt($row['sold']) }}</dd></div>
+                        <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd><button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium tabular-nums text-brand-700 underline decoration-dotted underline-offset-2">{{ $fmt($row['sold']) }}</button></dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Remaining') }}</dt><dd class="font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : '' }}">{{ $fmt($row['remaining']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Min') }}</dt><dd class="tabular-nums">{{ $fmt($row['min']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Max') }}</dt><dd class="tabular-nums">{{ $fmt($row['max']) }}</dd></div>
@@ -53,8 +53,9 @@
 
         {{-- Desktop table --}}
         <x-ui.card padding="p-0" class="hidden md:block">
+            <div class="max-h-[65vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-sand-50">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Stock') }}</th>
@@ -69,7 +70,9 @@
                         <tr>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item'] }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['stock']) }}</td>
-                            <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['sold']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm tabular-nums">
+                                <button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium text-brand-700 underline decoration-dotted underline-offset-2 hover:text-brand-600">{{ $fmt($row['sold']) }}</button>
+                            </td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ $fmt($row['remaining']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['min']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['max']) }}</td>
@@ -77,8 +80,42 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         </x-ui.card>
-
-        <div class="mt-4">{{ $rows->links() }}</div>
     @endif
+
+    <x-ui.modal :show="$modalReceipts !== null" :title="__('Receipts').' — '.$modalItemName" class="max-w-3xl" wire:keydown.escape.window="closeModal">
+        @if($modalReceipts && $modalReceipts->isNotEmpty())
+            <div class="max-h-[60vh] overflow-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="sticky top-0 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Date') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Receipt') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Cashier') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Status') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Type') }}</th>
+                            <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach($modalReceipts as $receipt)
+                            <tr wire:key="mr-{{ $receipt->id }}">
+                                <td class="whitespace-nowrap px-3 py-2 text-sm text-slate-500">{{ $receipt->created_at->format('d.m.Y H:i:s') }}</td>
+                                <td class="px-3 py-2 text-sm font-medium">
+                                    <a href="{{ route('receipts.show', $receipt) }}" target="_blank" rel="noopener" class="text-brand-700 hover:underline">{{ $receipt->number }}</a>
+                                </td>
+                                <td class="px-3 py-2 text-sm text-slate-500">{{ $receipt->cashier ?? '—' }}</td>
+                                <td class="px-3 py-2 text-sm"><x-ui.badge :variant="$receipt->active ? 'success' : 'danger'">{{ $receipt->active ? __('Active') : __('Inactive') }}</x-ui.badge></td>
+                                <td class="px-3 py-2 text-sm"><x-ui.badge :variant="$receipt->sell ? 'info' : 'warning'">{{ $receipt->sell ? __('Sell') : __('Refund') }}</x-ui.badge></td>
+                                <td class="px-3 py-2 text-right text-sm tabular-nums text-slate-700">{{ number_format((float) $receipt->total, 2) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <x-ui.empty-state :title="__('No receipts for this day')" />
+        @endif
+    </x-ui.modal>
 </div>

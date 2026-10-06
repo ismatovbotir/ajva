@@ -48,7 +48,7 @@ class AnalyticsTest extends TestCase
         $this->assertCount(2, $component->viewData('tabs'));
 
         $component->call('selectShop', $shop->id);
-        $rows = $component->viewData('rows')->items();
+        $rows = $component->viewData('rows')->all();
 
         $this->assertCount(2, $rows); // only this shop's items
         $this->assertSame('Item A', $rows[0]['item']); // lowest remaining first
@@ -59,6 +59,13 @@ class AnalyticsTest extends TestCase
         $this->assertSame('Item B', $rows[1]['item']);
         $this->assertEquals(45, $rows[1]['remaining']);
         $this->assertNull($rows[1]['min']);
+
+        // Clicking Item A's net-sold cell lists the day's successful receipts containing it.
+        $component->call('showReceipts', $a->id);
+        $modal = $component->viewData('modalReceipts');
+        $this->assertEqualsCanonicalizing([$sale->id, $refund->id], $modal->pluck('id')->all());
+        $component->assertSee($sale->number)->call('closeModal');
+        $this->assertNull($component->viewData('modalReceipts'));
         $this->assertSame(10.0, Stock::where('item_id', $a->id)->first()->qty + 0.0); // stock untouched
     }
 }

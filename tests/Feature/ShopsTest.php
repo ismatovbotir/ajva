@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Livewire\Shops\Index;
 use App\Livewire\Shops\Show;
 use App\Models\Item;
+use App\Models\Receipt;
 use App\Models\Shop;
 use App\Models\Stock;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class ShopsTest extends TestCase
@@ -59,6 +61,26 @@ class ShopsTest extends TestCase
             ->assertSeeLivewire(Show::class)
             ->assertSee('Widget')
             ->assertSee('7');
+    }
+
+    public function test_shops_list_shows_todays_receipt_counts_and_sums(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $mk = fn (array $attrs) => Receipt::factory()->create(array_merge(['shop_id' => $shop->id, 'created_at' => now()], $attrs));
+        $mk(['active' => true, 'sell' => true, 'total' => 100]);
+        $mk(['active' => true, 'sell' => true, 'total' => 50]);
+        $mk(['active' => true, 'sell' => false, 'total' => 30]);
+        $mk(['active' => false, 'sell' => true, 'total' => 999]);
+        $mk(['active' => true, 'sell' => true, 'total' => 777, 'created_at' => now()->subDay()]);
+
+        $today = Livewire::actingAs($user)->test(Index::class)->viewData('today')[$shop->id];
+
+        $this->assertEquals(2, $today->sell_count);
+        $this->assertEquals(150, $today->sell_sum);
+        $this->assertEquals(1, $today->refund_count);
+        $this->assertEquals(30, $today->refund_sum);
+        $this->assertEquals(1, $today->cancel_count);
     }
 
     public function test_guest_cannot_access_shops(): void

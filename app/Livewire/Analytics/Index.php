@@ -2,25 +2,22 @@
 
 namespace App\Livewire\Analytics;
 
-use Illuminate\Pagination\LengthAwarePaginator;
+use App\Models\Receipt;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 #[Layout('components.layouts.app', ['title' => 'Analytics'])]
 class Index extends Component
 {
-    use WithPagination;
-
-    private const PER_PAGE = 50;
-
     public string $date = '';
 
     public bool $generated = false;
 
     public ?int $shopId = null;
+
+    public ?int $modalItemId = null;
 
     public function mount(): void
     {
@@ -34,19 +31,49 @@ class Index extends Component
         }
 
         $this->generated = false;
-        $this->resetPage();
+        $this->modalItemId = null;
     }
 
     public function generate(): void
     {
         $this->generated = true;
-        $this->resetPage();
     }
 
     public function selectShop(int $shopId): void
     {
         $this->shopId = $shopId;
-        $this->resetPage();
+        $this->modalItemId = null;
+    }
+
+    public function showReceipts(int $itemId): void
+    {
+        $this->modalItemId = $itemId;
+    }
+
+    public function closeModal(): void
+    {
+        $this->modalItemId = null;
+    }
+
+    /**
+     * The receipts behind a "net sold" cell: the day's successful receipts
+     * for the active shop that contain the item (storno lines excluded).
+     */
+    private function modalReceipts()
+    {
+        if ($this->modalItemId === null || $this->shopId === null) {
+            return null;
+        }
+
+        $day = $this->parsedDate() ?? now()->startOfDay();
+
+        return Receipt::query()
+            ->where('shop_id', $this->shopId)
+            ->where('active', true)
+            ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+            ->whereHas('items', fn ($q) => $q->where('item_id', $this->modalItemId)->where('storno', false))
+            ->orderByDesc('created_at')
+            ->get(['id', 'number', 'cashier', 'active', 'sell', 'total', 'created_at']);
     }
 
     public function render()
@@ -66,12 +93,9 @@ class Index extends Component
 
         return view('livewire.analytics.index', [
             'tabs' => $tabs,
-            'rows' => new LengthAwarePaginator(
-                $rows->forPage($this->getPage(), self::PER_PAGE)->values(),
-                $rows->count(),
-                self::PER_PAGE,
-                $this->getPage(),
-            ),
+            'rows' => $rows,
+            'modalReceipts' => $this->modalReceipts(),
+            'modalItemName' => $rows->firstWhere('item_id', $this->modalItemId)['item'] ?? null,
         ]);
     }
 
@@ -103,6 +127,7 @@ class Index extends Component
             ->groupBy('receipts.shop_id', 'receipt_items.item_id', 'shops.name', 'items.name', 'stocks.qty', 'item_order_rules.min', 'item_order_rules.max')
             ->get([
                 'receipts.shop_id as shop_id',
+                'receipt_items.item_id as item_id',
                 'shops.name as shop_name',
                 'items.name as item_name',
                 'stocks.qty as stock_qty',
@@ -117,6 +142,7 @@ class Index extends Component
                 return [
                     'shop_id' => (int) $row->shop_id,
                     'shop' => $row->shop_name,
+                    'item_id' => (int) $row->item_id,
                     'item' => $row->item_name,
                     'stock' => $stock,
                     'sold' => $sold,
