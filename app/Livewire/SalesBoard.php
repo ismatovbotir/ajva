@@ -86,6 +86,9 @@ class SalesBoard extends Component
         }
         $totals['count_delta'] = $this->delta($totals['count'], $totals['y_count']);
         $totals['sum_delta'] = $this->delta($totals['sum'], $totals['y_sum']);
+        $totals['avg'] = $totals['count'] > 0 ? $totals['sum'] / $totals['count'] : 0.0;
+        $totals['y_avg'] = $totals['y_count'] > 0 ? $totals['y_sum'] / $totals['y_count'] : 0.0;
+        $totals['avg_delta'] = $this->delta($totals['avg'], $totals['y_avg']);
 
         return [
             'asOf' => $now->format('H:i'),
@@ -94,6 +97,10 @@ class SalesBoard extends Component
             'legend' => array_map(fn ($r) => ['name' => $r['name'], 'color' => $r['color']], $table),
             'charts' => $this->hourly($todayStart, $yesterdayStart, $shops, $colors),
             'topItems' => $this->topItems($todayStart, $now, $shops, $colors),
+            'profit' => $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors),
+            'payments' => $this->paymentMix($todayStart, $now),
+            'refunds' => $this->refunds($todayStart, $now),
+            'trend' => $this->trend($todayStart),
         ];
     }
 
@@ -192,19 +199,25 @@ class SalesBoard extends Component
             ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
+            ->tap(fn ($q) => $this->joinCost($q))
             ->where('receipt_items.storno', false)
             ->whereBetween('receipts.created_at', [$from, $to])
             ->groupBy('receipts.shop_id', 'receipt_items.item_id')
-            ->selectRaw('receipts.shop_id, receipt_items.item_id, SUM(receipt_items.qty) as q, SUM(receipt_items.total) as s')
+            ->selectRaw('receipts.shop_id, receipt_items.item_id, SUM(receipt_items.qty) as q, SUM(receipt_items.total) as s, '.$this->profitSql().' as p')
             ->get();
 
         $overall = [];
         $perShop = [];
         foreach ($rows as $r) {
             $o = &$overall[$r->item_id];
-            $o = ['qty' => ($o['qty'] ?? 0) + (float) $r->q, 'sum' => ($o['sum'] ?? 0) + (float) $r->s];
+            $p = $r->p === null ? null : (float) $r->p;
+            $o = [
+                'qty' => ($o['qty'] ?? 0) + (float) $r->q,
+                'sum' => ($o['sum'] ?? 0) + (float) $r->s,
+                'profit' => $p === null ? ($o['profit'] ?? null) : ($o['profit'] ?? 0) + $p,
+            ];
             unset($o);
-            $perShop[$r->shop_id][$r->item_id] = ['qty' => (float) $r->q, 'sum' => (float) $r->s];
+            $perShop[$r->shop_id][$r->item_id] = ['qty' => (float) $r->q, 'sum' => (float) $r->s, 'profit' => $p];
         }
 
         $rank = function (array $items) {
@@ -226,6 +239,8 @@ class SalesBoard extends Component
             'name' => $names[$id] ?? '#'.$id,
             'qty' => rtrim(rtrim(number_format($v['qty'], 3, '.', ' '), '0'), '.'),
             'sum' => number_format($v['sum'], 0, '.', ' '),
+            'profit' => $v['profit'] === null ? null : number_format($v['profit'], 0, '.', ' '),
+            'profit_negative' => $v['profit'] !== null && $v['profit'] < 0,
         ], array_keys($items), $items));
 
         $shopTabs = [];
@@ -236,6 +251,199 @@ class SalesBoard extends Component
         }
 
         return ['all' => $format($overall), 'shops' => $shopTabs];
+    }
+
+    /** LEFT JOIN of the item's cost price (price id from config) onto a receipt_items query. */
+    private function joinCost($query): void
+    {
+        $query->leftJoin('item_prices as cost', function ($join) {
+            $join->on('cost.item_id', '=', 'receipt_items.item_id')
+                ->where('cost.price_id', '=', (int) config('inventory.cost_price_id'));
+        });
+    }
+
+    /** Profit over lines whose item has a cost > 0 (NULL when no line is covered). */
+    private function profitSql(): string
+    {
+        return 'SUM(CASE WHEN cost.value > 0 THEN receipt_items.total - receipt_items.qty * cost.value END)';
+    }
+
+    /**
+     * Profit of successful sales in both windows, per shop and in total.
+     * Only lines whose item has a cost > 0 count; the uncovered share of
+     * revenue and the number of cost-less items are reported alongside.
+     *
+     * @return array<string, mixed>
+     */
+    private function profitSummary(Carbon $from, Carbon $to, Carbon $yFrom, Carbon $yTo, array $shops, array $colors): array
+    {
+        $today = $this->profitByShop($from, $to);
+        $yesterday = $this->profitByShop($yFrom, $yTo);
+
+        $sum = fn (array $rows, string $k) => array_sum(array_column($rows, $k));
+        $tProfit = $sum($today, 'profit');
+        $tCovered = $sum($today, 'covered');
+        $tRevenue = $sum($today, 'revenue');
+        $yProfit = $sum($yesterday, 'profit');
+
+        $empty = ['profit' => 0.0, 'covered' => 0.0, 'revenue' => 0.0];
+        $rows = [];
+        foreach ($colors as $id => $color) {
+            $t = $today[$id] ?? $empty;
+            $y = $yesterday[$id] ?? $empty;
+            $rows[] = [
+                'name' => $shops[$id] ?? '#'.$id,
+                'color' => $color,
+                'profit' => $t['profit'],
+                'y_profit' => $y['profit'],
+                'delta' => $this->delta($t['profit'], $y['profit']),
+                'margin' => $t['covered'] > 0 ? $t['profit'] / $t['covered'] * 100 : null,
+            ];
+        }
+
+        $missingItems = (int) DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+            ->tap(fn ($q) => $this->joinCost($q))
+            ->where('receipts.active', true)
+            ->where('receipts.sell', true)
+            ->where('receipt_items.storno', false)
+            ->whereBetween('receipts.created_at', [$from, $to])
+            ->where(fn ($q) => $q->whereNull('cost.value')->orWhere('cost.value', '<=', 0))
+            ->distinct()
+            ->count('receipt_items.item_id');
+
+        return [
+            'total' => $tProfit,
+            'yesterday' => $yProfit,
+            'delta' => $this->delta($tProfit, $yProfit),
+            'margin' => $tCovered > 0 ? $tProfit / $tCovered * 100 : null,
+            'uncovered_percent' => $tRevenue > 0 ? round(($tRevenue - $tCovered) / $tRevenue * 100, 1) : 0.0,
+            'missing_items' => $missingItems,
+            'shops' => $rows,
+        ];
+    }
+
+    /**
+     * @return array<int, array{profit: float, covered: float, revenue: float}>
+     */
+    private function profitByShop(Carbon $from, Carbon $to): array
+    {
+        return DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+            ->tap(fn ($q) => $this->joinCost($q))
+            ->where('receipts.active', true)
+            ->where('receipts.sell', true)
+            ->where('receipt_items.storno', false)
+            ->whereBetween('receipts.created_at', [$from, $to])
+            ->groupBy('receipts.shop_id')
+            ->selectRaw(
+                'receipts.shop_id, SUM(receipt_items.total) as rev, '
+                .'SUM(CASE WHEN cost.value > 0 THEN receipt_items.total END) as cov, '.$this->profitSql().' as p'
+            )
+            ->get()
+            ->mapWithKeys(fn ($r) => [(int) $r->shop_id => [
+                'profit' => (float) $r->p,
+                'covered' => (float) $r->cov,
+                'revenue' => (float) $r->rev,
+            ]])
+            ->all();
+    }
+
+    /**
+     * Today's payment-type mix (successful sales).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function paymentMix(Carbon $from, Carbon $to): array
+    {
+        $rows = DB::table('receipt_payments')
+            ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id')
+            ->where('receipts.active', true)
+            ->where('receipts.sell', true)
+            ->whereBetween('receipts.created_at', [$from, $to])
+            ->groupBy('receipt_payments.payment')
+            ->selectRaw('receipt_payments.payment as name, SUM(receipt_payments.value) as s')
+            ->orderByDesc('s')
+            ->get();
+
+        $total = (float) $rows->sum('s');
+
+        return $rows->values()->map(fn ($r, $i) => [
+            'name' => (string) $r->name,
+            'sum' => number_format((float) $r->s, 0, '.', ' '),
+            'percent' => $total > 0 ? (float) $r->s / $total * 100 : 0.0,
+            'color' => self::COLORS[$i] ?? self::COLOR_OTHER,
+        ])->all();
+    }
+
+    /**
+     * Refund receipts (sell = 0, active) in the window.
+     *
+     * @return array{count: int, sum: float}
+     */
+    private function refunds(Carbon $from, Carbon $to): array
+    {
+        $r = DB::table('receipts')
+            ->where('active', true)
+            ->where('sell', false)
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('COUNT(*) as c, SUM(total) as s')
+            ->first();
+
+        return ['count' => (int) $r->c, 'sum' => abs((float) $r->s)];
+    }
+
+    /**
+     * Last 7 days including today: revenue and profit (cost-covered lines) per day.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function trend(Carbon $todayStart): array
+    {
+        $from = $todayStart->copy()->subDays(6);
+        $to = $todayStart->copy()->endOfDay();
+
+        $rev = DB::table('receipts')
+            ->where('active', true)
+            ->where('sell', true)
+            ->whereBetween('created_at', [$from, $to])
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->selectRaw('DATE(created_at) as d, COUNT(*) as c, SUM(total) as s')
+            ->get()
+            ->keyBy('d');
+
+        $profit = DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+            ->tap(fn ($q) => $this->joinCost($q))
+            ->where('receipts.active', true)
+            ->where('receipts.sell', true)
+            ->where('receipt_items.storno', false)
+            ->whereBetween('receipts.created_at', [$from, $to])
+            ->groupBy(DB::raw('DATE(receipts.created_at)'))
+            ->selectRaw('DATE(receipts.created_at) as d, '.$this->profitSql().' as p')
+            ->get()
+            ->keyBy('d');
+
+        $days = [];
+        $max = 0.0;
+        for ($i = 0; $i < 7; $i++) {
+            $day = $from->copy()->addDays($i);
+            $key = $day->toDateString();
+            $r = (float) ($rev[$key]->s ?? 0);
+            $p = (float) ($profit[$key]->p ?? 0);
+            $max = max($max, $r, $p);
+            $days[] = ['label' => $day->format('d.m'), 'revenue' => $r, 'profit' => $p, 'count' => (int) ($rev[$key]->c ?? 0)];
+        }
+
+        foreach ($days as &$d) {
+            $d['revenue_h'] = $max > 0 ? max($d['revenue'], 0) / $max * 100 : 0;
+            $d['profit_h'] = $max > 0 ? max($d['profit'], 0) / $max * 100 : 0;
+            $d['revenue_label'] = number_format($d['revenue'], 0, '.', ' ');
+            $d['profit_label'] = number_format($d['profit'], 0, '.', ' ');
+        }
+        unset($d);
+
+        return $days;
     }
 
     private function delta(float|int $current, float|int $previous): ?float

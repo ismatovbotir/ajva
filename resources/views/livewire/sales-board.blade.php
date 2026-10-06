@@ -9,6 +9,8 @@
     };
     [$sumDeltaText, $sumDeltaClass] = $deltaBadge($totals['sum_delta']);
     [$countDeltaText, $countDeltaClass] = $deltaBadge($totals['count_delta']);
+    [$avgDeltaText, $avgDeltaClass] = $deltaBadge($totals['avg_delta']);
+    [$profitDeltaText, $profitDeltaClass] = $deltaBadge($profit['delta']);
 @endphp
 <div wire:poll.120s class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-2">
@@ -20,7 +22,7 @@
     </div>
 
     {{-- KPI cards --}}
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Sales total') }}</p>
             <p class="mt-2 text-3xl font-semibold tabular-nums text-[#0b0b0b]">{{ $money($totals['sum']) }}</p>
@@ -30,12 +32,88 @@
             </p>
         </x-ui.card>
         <x-ui.card>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</p>
+            <p class="mt-2 text-3xl font-semibold tabular-nums {{ $profit['total'] < 0 ? 'text-red-700' : 'text-[#0b0b0b]' }}">{{ $money($profit['total']) }}</p>
+            <p class="mt-1 text-sm text-[#52514e]">
+                {{ __('Yesterday') }}: <span class="tabular-nums">{{ $money($profit['yesterday']) }}</span>
+                <span class="ml-2 font-medium {{ $profitDeltaClass }}">{{ $profitDeltaText }}</span>
+            </p>
+            <p class="mt-1 text-sm text-[#52514e]">{{ __('Margin') }}: <span class="font-medium tabular-nums">{{ $profit['margin'] === null ? '—' : number_format($profit['margin'], 1).'%' }}</span></p>
+            @if($profit['missing_items'] > 0)
+                <p class="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                    {{ __('Cost missing for :count items — :percent% of revenue is not covered.', ['count' => $profit['missing_items'], 'percent' => $profit['uncovered_percent']]) }}
+                </p>
+            @endif
+        </x-ui.card>
+        <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Receipts') }}</p>
             <p class="mt-2 text-3xl font-semibold tabular-nums text-[#0b0b0b]">{{ $totals['count'] }}</p>
             <p class="mt-1 text-sm text-[#52514e]">
                 {{ __('Yesterday') }}: <span class="tabular-nums">{{ $totals['y_count'] }}</span>
                 <span class="ml-2 font-medium {{ $countDeltaClass }}">{{ $countDeltaText }}</span>
             </p>
+            @if($refunds['count'] > 0)
+                <p class="mt-1 text-sm text-red-700">{{ __('Refunds') }}: <span class="tabular-nums">{{ $refunds['count'] }} · {{ $money($refunds['sum']) }}</span></p>
+            @endif
+        </x-ui.card>
+        <x-ui.card>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Average check') }}</p>
+            <p class="mt-2 text-3xl font-semibold tabular-nums text-[#0b0b0b]">{{ $money($totals['avg']) }}</p>
+            <p class="mt-1 text-sm text-[#52514e]">
+                {{ __('Yesterday') }}: <span class="tabular-nums">{{ $money($totals['y_avg']) }}</span>
+                <span class="ml-2 font-medium {{ $avgDeltaClass }}">{{ $avgDeltaText }}</span>
+            </p>
+        </x-ui.card>
+    </div>
+
+    {{-- Payment mix + 7-day trend --}}
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <x-ui.card class="lg:col-span-2">
+            <h3 class="text-base font-semibold text-[#0b0b0b]">{{ __('Payment types today') }}</h3>
+            <p class="mb-4 text-sm text-[#52514e]">{{ __('Share of successful sales by payment type.') }}</p>
+            @if(empty($payments))
+                <x-ui.empty-state :title="__('No sales yet today')" :description="__('Sales will appear here as POS terminals send receipts.')" />
+            @else
+                <div class="mb-4 flex h-4 overflow-hidden rounded-full bg-slate-100">
+                    @foreach($payments as $pay)
+                        <div title="{{ $pay['name'] }}: {{ $pay['sum'] }}" style="width: {{ $pay['percent'] }}%; background-color: {{ $pay['color'] }};"></div>
+                    @endforeach
+                </div>
+                <ul class="space-y-2">
+                    @foreach($payments as $pay)
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $pay['color'] }}"></span>
+                            <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $pay['name'] }}</span>
+                            <span class="tabular-nums text-slate-500">{{ $pay['sum'] }}</span>
+                            <span class="w-14 text-right font-medium tabular-nums text-slate-700">{{ number_format($pay['percent'], 1) }}%</span>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </x-ui.card>
+
+        <x-ui.card class="lg:col-span-3">
+            <h3 class="text-base font-semibold text-[#0b0b0b]">{{ __('Last 7 days') }}</h3>
+            <p class="mb-4 text-sm text-[#52514e]">{{ __('Sales and profit per day (profit over items with a cost price).') }}</p>
+            <ul class="mb-3 flex gap-4 text-xs text-[#52514e]">
+                <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #2a78d6"></span>{{ __('Sales total') }}</li>
+                <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #1baf7a"></span>{{ __('Profit') }}</li>
+            </ul>
+            <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                <div class="flex h-48 min-w-[20rem] items-end gap-2">
+                    @foreach($trend as $day)
+                        <div class="flex h-full flex-1 items-end justify-center gap-1" title="{{ $day['label'] }} — {{ __('Sales total') }}: {{ $day['revenue_label'] }} · {{ __('Profit') }}: {{ $day['profit_label'] }} · {{ __('Receipts') }}: {{ $day['count'] }}">
+                            <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['revenue_h'] }}%; background-color: #2a78d6;"></div>
+                            <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['profit_h'] }}%; background-color: #1baf7a;"></div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="mt-1 flex min-w-[20rem] gap-2">
+                    @foreach($trend as $day)
+                        <span class="flex-1 text-center text-[10px] text-[#52514e]">{{ $day['label'] }}</span>
+                    @endforeach
+                </div>
+            </div>
         </x-ui.card>
     </div>
 
@@ -154,6 +232,44 @@
         @endif
     </x-ui.card>
 
+    {{-- Profit by shop --}}
+    <x-ui.card>
+        <h3 class="text-base font-semibold text-[#0b0b0b]">{{ __('Profit by shop') }}</h3>
+        <p class="mb-4 text-sm text-[#52514e]">{{ __('Profit over items with a cost price; yesterday is counted up to the same time of day.') }}</p>
+        @if(empty($profit['shops']))
+            <x-ui.empty-state :title="__('No sales yet today')" :description="__('Sales will appear here as POS terminals send receipts.')" />
+        @else
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-sand-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shop') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Margin') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach($profit['shops'] as $row)
+                            @php [$dT, $dC] = $deltaBadge($row['delta']); @endphp
+                            <tr>
+                                <td class="px-4 py-3 text-sm font-medium text-slate-900"><span class="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style="background-color: {{ $row['color'] }}"></span>{{ $row['name'] }}</td>
+                                <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $row['profit'] < 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $money($row['profit']) }}</td>
+                                <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['y_profit']) }}</td>
+                                <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $dC }}">{{ $dT }}</td>
+                                <td class="px-4 py-3 text-right text-sm tabular-nums {{ ($row['margin'] ?? 0) < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ $row['margin'] === null ? '—' : number_format($row['margin'], 1).'%' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @if($profit['missing_items'] > 0)
+                <p class="mt-3 text-xs text-amber-800">{{ __('Cost missing for :count items — :percent% of revenue is not covered.', ['count' => $profit['missing_items'], 'percent' => $profit['uncovered_percent']]) }}</p>
+            @endif
+        @endif
+    </x-ui.card>
+
     {{-- Top 20 items --}}
     <x-ui.card>
         <div x-data="{ tab: 'all' }">
@@ -187,6 +303,7 @@
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
                                     <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Qty') }}</th>
                                     <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total') }}</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -196,6 +313,7 @@
                                         <td class="px-4 py-2.5 text-sm font-medium text-slate-900">{{ $item['name'] }}</td>
                                         <td class="px-4 py-2.5 text-right text-sm tabular-nums text-slate-700">{{ $item['qty'] }}</td>
                                         <td class="px-4 py-2.5 text-right text-sm tabular-nums text-slate-500">{{ $item['sum'] }}</td>
+                                        <td class="px-4 py-2.5 text-right text-sm font-medium tabular-nums {{ $item['profit'] === null ? 'text-slate-400' : ($item['profit_negative'] ? 'text-red-700' : 'text-slate-700') }}" @if($item['profit'] === null) title="{{ __('No cost price') }}" @endif>{{ $item['profit'] ?? '—' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>

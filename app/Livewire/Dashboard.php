@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -26,6 +27,12 @@ class Dashboard extends Component
 
     /** Muted neutral used only for "Other" fold-in segments, never a real series color. */
     private const COLOR_OTHER = '#898781';
+
+    /** Seconds the catalogue-wide aggregates are shared between viewers. */
+    private const CACHE_TTL = 120;
+
+    /** Max rows of the below-cost list sent to the browser (the count is always exact). */
+    private const BELOW_COST_CAP = 200;
 
     /**
      * Status palette — reserved for state/severity indicators, always
@@ -69,10 +76,86 @@ class Dashboard extends Component
             'donutGroup' => $this->buildDonut($byGroup),
             'groupShop' => $this->stockByGroupAndShop($byShop, $byGroup),
             'barColor' => self::CATEGORY_COLORS[0],
-            'exceptions' => $this->reorderExceptions(),
-            'coverage' => $this->ruleCoverage(),
-            'margins' => $this->itemMargins(),
+            'exceptions' => $this->cached('exceptions', fn () => $this->reorderExceptions()),
+            'coverage' => $this->cached('coverage', fn () => $this->ruleCoverage()),
+            'margins' => $this->cached('margins', fn () => $this->itemMargins()),
+            'belowCost' => $this->cached('below-cost', fn () => $this->belowCostPrices()),
+            'health' => $this->cached('stock-health', fn () => $this->stockHealth()),
         ]);
+    }
+
+    /** Heavy catalogue-wide aggregates change only on 1C sync, so a short shared cache is enough. */
+    private function cached(string $key, \Closure $callback): array
+    {
+        return Cache::remember('dashboard.'.$key, self::CACHE_TTL, $callback);
+    }
+
+    /**
+     * Stock value at cost (stocks.qty x cost price, cost > 0 only) overall and
+     * per shop, with the share of on-hand units whose item has no usable cost
+     * so the number is never mistaken for the full inventory value. Also the
+     * count of rule-covered (item, shop) pairs that are out of stock.
+     *
+     * @return array<string, mixed>
+     */
+    private function stockHealth(): array
+    {
+        $costId = (int) config('inventory.cost_price_id');
+
+        $base = fn () => DB::table('stocks')
+            ->leftJoin('item_prices as cost', function ($join) use ($costId) {
+                $join->on('cost.item_id', '=', 'stocks.item_id')->where('cost.price_id', '=', $costId);
+            })
+            ->join('shops', 'shops.id', '=', 'stocks.shop_id')
+            ->where('stocks.qty', '>', 0);
+
+        $perShop = $base()
+            ->groupBy('shops.id', 'shops.name')
+            ->selectRaw(
+                'shops.name as name, '
+                .'SUM(CASE WHEN cost.value > 0 THEN stocks.qty * cost.value ELSE 0 END) as value, '
+                .'SUM(stocks.qty) as units, '
+                .'SUM(CASE WHEN cost.value > 0 THEN 0 ELSE stocks.qty END) as uncovered_units'
+            )
+            ->orderByDesc('value')
+            ->get();
+
+        $totalValue = (float) $perShop->sum('value');
+        $units = (float) $perShop->sum('units');
+        $uncovered = (float) $perShop->sum('uncovered_units');
+        $max = (float) ($perShop->max('value') ?: 1);
+
+        $missingItems = (int) DB::table('stocks')
+            ->leftJoin('item_prices as cost', function ($join) use ($costId) {
+                $join->on('cost.item_id', '=', 'stocks.item_id')->where('cost.price_id', '=', $costId);
+            })
+            ->where('stocks.qty', '>', 0)
+            ->where(fn ($q) => $q->whereNull('cost.value')->orWhere('cost.value', '<=', 0))
+            ->distinct()
+            ->count('stocks.item_id');
+
+        $outOfStock = (int) DB::table('stocks')
+            ->join('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
+            })
+            ->where('stocks.qty', '<=', 0)
+            ->where('item_order_rules.min', '>', 0)
+            ->count();
+
+        return [
+            'value' => $totalValue,
+            'value_label' => number_format($totalValue, 0, '.', ' '),
+            'units_label' => $this->formatQty($units),
+            'uncovered_percent' => $units > 0 ? round($uncovered / $units * 100, 1) : 0.0,
+            'missing_items' => $missingItems,
+            'out_of_stock' => $outOfStock,
+            'shops' => $perShop->map(fn ($r) => [
+                'name' => (string) $r->name,
+                'label' => number_format((float) $r->value, 0, '.', ' '),
+                'percent' => round((float) $r->value / $max * 100, 2),
+            ])->values()->all(),
+        ];
     }
 
     /**
@@ -406,6 +489,67 @@ class Dashboard extends Component
     }
 
     /**
+     * Every selling price that is lower than the item's cost price — either
+     * an intentional discount or a data mistake worth checking. One row per
+     * (item, price type), so an item with several selling prices under cost
+     * appears once per price type. Zero values are ignored (a price type that
+     * is simply not set). Worst (deepest below cost) first; not capped, the
+     * view scrolls.
+     *
+     * @return array{count: int, rows: array<int, array<string, string|float>>}
+     */
+    private function belowCostPrices(): array
+    {
+        $costPriceId = (int) config('inventory.cost_price_id');
+
+        $query = DB::table('item_prices as sell')
+            ->join('item_prices as cost', function ($join) use ($costPriceId) {
+                $join->on('cost.item_id', '=', 'sell.item_id')->where('cost.price_id', '=', $costPriceId);
+            })
+            ->join('items', 'items.id', '=', 'sell.item_id')
+            ->join('prices', 'prices.id', '=', 'sell.price_id')
+            ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
+            ->where('sell.price_id', '<>', $costPriceId)
+            ->where('sell.value', '>', 0)
+            ->where('cost.value', '>', 0)
+            ->whereColumn('sell.value', '<', 'cost.value');
+
+        $count = (clone $query)->count();
+
+        $rows = $query
+            ->orderByRaw('((sell.value - cost.value) * 1.0) / cost.value')
+            ->limit(self::BELOW_COST_CAP)
+            ->get([
+                'items.name as item_name',
+                'groups.name as group_name',
+                'prices.name as price_name',
+                'cost.value as cost_value',
+                'sell.value as sell_value',
+            ])
+            ->map(function ($r) {
+                $cost = (float) $r->cost_value;
+                $sell = (float) $r->sell_value;
+                $pct = round(($sell - $cost) / $cost * 100, 2);
+
+                return [
+                    'item_name' => (string) $r->item_name,
+                    'group_name' => $r->group_name !== null ? (string) $r->group_name : __('No group'),
+                    'price_name' => (string) $r->price_name,
+                    'cost_label' => $this->formatMoney($cost),
+                    'sell_label' => $this->formatMoney($sell),
+                    'diff_label' => $this->formatMoney(round($sell - $cost, 2)),
+                    'pct' => $pct,
+                    'pct_label' => $this->formatMoney($pct).'%',
+                ];
+            })
+            ->sortBy('pct')
+            ->values()
+            ->all();
+
+        return ['count' => $count, 'rows' => $rows, 'hidden' => max($count - count($rows), 0)];
+    }
+
+    /**
      * Per-item cost vs. sell margin, based on `item_prices`. An item's cost
      * is its value for the cost price type (`config('inventory.cost_price_id')`,
      * price id 1 in 1C); its sell value is the highest value among all the
@@ -421,7 +565,10 @@ class Dashboard extends Component
     {
         $costPriceId = (int) config('inventory.cost_price_id');
 
-        $rows = DB::table('items')
+        // One row per item with its cost and highest selling price (derived
+        // table); everything below is aggregated/limited in SQL so the whole
+        // catalogue is never loaded into PHP.
+        $perItem = DB::table('items')
             ->leftJoin('item_prices', 'item_prices.item_id', '=', 'items.id')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
             ->selectRaw(
@@ -430,67 +577,52 @@ class Dashboard extends Component
                 'MAX(CASE WHEN item_prices.price_id <> ? THEN item_prices.value END) as sell_value',
                 [$costPriceId, $costPriceId]
             )
-            ->groupBy('items.id', 'items.name', 'groups.name')
-            ->get();
+            ->groupBy('items.id', 'items.name', 'groups.name');
 
-        $missingCost = 0;
-        $missingSell = 0;
-        $missingBoth = 0;
-        $withMargin = [];
+        $stats = DB::query()->fromSub($perItem, 'm')
+            ->selectRaw(
+                'SUM(CASE WHEN cost_value IS NULL AND sell_value IS NULL THEN 1 ELSE 0 END) as missing_both, '.
+                'SUM(CASE WHEN cost_value IS NULL AND sell_value IS NOT NULL THEN 1 ELSE 0 END) as missing_cost, '.
+                'SUM(CASE WHEN cost_value IS NOT NULL AND sell_value IS NULL THEN 1 ELSE 0 END) as missing_sell, '.
+                'SUM(CASE WHEN cost_value IS NOT NULL AND sell_value IS NOT NULL AND cost_value <> 0 THEN 1 ELSE 0 END) as with_margin'
+            )
+            ->first();
 
-        foreach ($rows as $row) {
-            $hasCost = $row->cost_value !== null;
-            $hasSell = $row->sell_value !== null;
+        // Zero-cost rows have an undefined margin %, so they are excluded
+        // from the ranking (but are not "missing" data).
+        $ranked = fn (string $direction) => DB::query()->fromSub($perItem, 'm')
+            ->whereNotNull('cost_value')
+            ->whereNotNull('sell_value')
+            ->where('cost_value', '<>', 0)
+            ->orderByRaw('((sell_value - cost_value) * 1.0) / cost_value '.$direction)
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                $cost = (float) $row->cost_value;
+                $sell = (float) $row->sell_value;
+                $margin = $sell - $cost;
+                $marginPct = round($margin / $cost * 100, 2);
 
-            if (! $hasCost && ! $hasSell) {
-                $missingBoth++;
-            } elseif (! $hasCost) {
-                $missingCost++;
-            } elseif (! $hasSell) {
-                $missingSell++;
-            }
-
-            if (! $hasCost || ! $hasSell) {
-                continue;
-            }
-
-            $cost = (float) $row->cost_value;
-            $sell = (float) $row->sell_value;
-
-            if ($cost == 0.0) {
-                // Zero-cost row: margin % is mathematically undefined, so
-                // it's excluded from the ranked list (it's not "missing"
-                // data though — both prices genuinely exist).
-                continue;
-            }
-
-            $margin = $sell - $cost;
-            $marginPct = round($margin / $cost * 100, 2);
-
-            $withMargin[] = [
-                'item_name' => (string) $row->item_name,
-                'group_name' => $row->group_name !== null ? (string) $row->group_name : __('No group'),
-                'cost_label' => $this->formatMoney($cost),
-                'sell_label' => $this->formatMoney($sell),
-                'margin_label' => $this->formatMoney(round($margin, 2)),
-                'margin_pct' => $marginPct,
-                'margin_pct_label' => $this->formatMoney($marginPct).'%',
-            ];
-        }
-
-        usort($withMargin, fn (array $a, array $b) => $a['margin_pct'] <=> $b['margin_pct']);
-
-        $cap = 10;
-        $worst = array_slice($withMargin, 0, $cap);
-        $best = array_slice(array_reverse($withMargin), 0, $cap);
+                return [
+                    'item_name' => (string) $row->item_name,
+                    'group_name' => $row->group_name !== null ? (string) $row->group_name : __('No group'),
+                    'cost_label' => $this->formatMoney($cost),
+                    'sell_label' => $this->formatMoney($sell),
+                    'margin_label' => $this->formatMoney(round($margin, 2)),
+                    'margin_pct' => $marginPct,
+                    'margin_pct_label' => $this->formatMoney($marginPct).'%',
+                ];
+            })
+            ->values()
+            ->all();
 
         return [
-            'best' => $best,
-            'worst' => $worst,
-            'total_with_margin' => count($withMargin),
-            'missing_cost' => $missingCost,
-            'missing_sell' => $missingSell,
-            'missing_both' => $missingBoth,
+            'best' => $ranked('DESC'),
+            'worst' => $ranked('ASC'),
+            'total_with_margin' => (int) $stats->with_margin,
+            'missing_cost' => (int) $stats->missing_cost,
+            'missing_sell' => (int) $stats->missing_sell,
+            'missing_both' => (int) $stats->missing_both,
         ];
     }
 }

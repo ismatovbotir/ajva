@@ -421,6 +421,36 @@ class DashboardChartsTest extends TestCase
             });
     }
 
+    public function test_dashboard_lists_every_selling_price_below_cost(): void
+    {
+        $user = User::factory()->create();
+        $cost = Price::factory()->create(['id' => config('inventory.cost_price_id'), 'name' => 'Cost', 'is_sell' => false]);
+        $retail = Price::factory()->create(['name' => 'Retail', 'is_sell' => true]);
+        $wholesale = Price::factory()->create(['name' => 'Wholesale', 'is_sell' => true]);
+
+        $loss = Item::factory()->create(['name' => 'Item Loss']);       // retail 80 < cost 100, wholesale 90 < cost 100
+        $fine = Item::factory()->create(['name' => 'Item Fine']);       // retail 150 >= cost 100
+        $unset = Item::factory()->create(['name' => 'Item Unset']);     // price type present but 0 = not set
+
+        foreach ([[$loss, $cost, 100], [$loss, $retail, 80], [$loss, $wholesale, 90],
+            [$fine, $cost, 100], [$fine, $retail, 150],
+            [$unset, $cost, 100], [$unset, $retail, 0]] as [$item, $price, $value]) {
+            ItemPrice::factory()->create(['item_id' => $item->id, 'price_id' => $price->id, 'value' => $value]);
+        }
+
+        Livewire::actingAs($user)
+            ->test(Dashboard::class)
+            ->assertViewHas('belowCost', function (array $below) {
+                $this->assertSame(2, $below['count']); // Item Loss, once per price type under cost
+                $this->assertSame(['Item Loss', 'Item Loss'], array_column($below['rows'], 'item_name'));
+                $this->assertSame('Retail', $below['rows'][0]['price_name']);   // deepest below cost first (-20%)
+                $this->assertEqualsWithDelta(-20.0, $below['rows'][0]['pct'], 0.01);
+                $this->assertSame('Wholesale', $below['rows'][1]['price_name']); // -10%
+
+                return true;
+            });
+    }
+
     public function test_dashboard_excludes_zero_cost_items_from_margin_ranking_but_not_from_completeness(): void
     {
         $user = User::factory()->create();

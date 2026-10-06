@@ -14,6 +14,7 @@ use App\Livewire\Receipts\Show as ReceiptsShow;
 use App\Livewire\Settings\Mcp as McpSettingsPage;
 use App\Livewire\Shops\Index as ShopsIndex;
 use App\Livewire\Shops\Show as ShopsShow;
+use App\Livewire\Users\Index as UsersIndex;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -54,4 +55,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
     Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
     Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
+    Route::get('/settings/users', UsersIndex::class)->name('users.index');
 });
