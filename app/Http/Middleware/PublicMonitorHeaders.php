@@ -16,7 +16,7 @@ class PublicMonitorHeaders
         $response = $next($request);
 
         $response->headers->set('Referrer-Policy', 'no-referrer');
-        $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex');
         $response->headers->set('Cache-Control', 'no-store, private');
 
         return $response;

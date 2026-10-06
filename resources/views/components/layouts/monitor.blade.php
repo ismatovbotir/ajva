@@ -3,7 +3,7 @@
 <html lang="en" class="monitor-root">
 <head>
     <meta charset="utf-8">
-    <meta name="robots" content="noindex, nofollow">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ? $title.' - '.config('app.name') : config('app.name') }}</title>

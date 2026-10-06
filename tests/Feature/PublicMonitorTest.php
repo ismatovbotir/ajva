@@ -58,7 +58,8 @@ class PublicMonitorTest extends TestCase
             ->assertDontSee('/logout', false)
             ->assertDontSee('href="'.route('dashboard').'"', false)
             ->assertHeader('Referrer-Policy', 'no-referrer')
-            ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex')
+            ->assertSee('<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">', false);
 
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         $this->assertStringContainsString('private', $response->headers->get('Cache-Control'));
@@ -168,5 +169,46 @@ class PublicMonitorTest extends TestCase
         $this->assertTrue($settings->showProfit());
         $this->assertFalse($settings->enabled());
         $this->assertFalse($settings->accepts($settings->token()));
+    }
+
+    public function test_the_link_is_built_from_app_url_and_warns_when_it_is_local(): void
+    {
+        $admin = User::factory()->create();
+        $settings = app(MonitorSettings::class);
+        $settings->generateToken();
+        $token = $settings->token();
+
+        // A real public APP_URL (with a trailing slash) gives exactly APP_URL + /monitor/{token}.
+        config(['app.url' => 'https://crm.example.uz/']);
+        Livewire::actingAs($admin)->test(PublicMonitor::class)
+            ->assertSee('https://crm.example.uz/monitor/'.$token)
+            ->assertDontSee(__('APP_URL points to localhost, so this link will not work on the TV. Set APP_URL to the public address of this server in .env and clear the config cache.'));
+
+        // A localhost APP_URL still builds the link from it, plus a visible warning.
+        config(['app.url' => 'http://localhost']);
+        Livewire::actingAs($admin)->test(PublicMonitor::class)
+            ->assertSee('http://localhost/monitor/'.$token)
+            ->assertSee(__('APP_URL points to localhost, so this link will not work on the TV. Set APP_URL to the public address of this server in .env and clear the config cache.'));
+    }
+
+    public function test_monitor_shows_each_shops_share_of_sales_as_a_pie(): void
+    {
+        $user = User::factory()->create();
+        $a = Shop::factory()->create(['name' => 'Shop Alpha']);
+        $b = Shop::factory()->create(['name' => 'Shop Beta']);
+        foreach ([[$a, 300], [$b, 100]] as [$shop, $total]) {
+            Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'total' => $total, 'created_at' => now()->subMinute()]);
+        }
+        // Refunds and cancelled receipts must not count towards the share.
+        Receipt::factory()->create(['shop_id' => $b->id, 'active' => true, 'sell' => false, 'total' => 5000, 'created_at' => now()->subMinute()]);
+        Receipt::factory()->create(['shop_id' => $b->id, 'active' => false, 'sell' => true, 'total' => 5000, 'created_at' => now()->subMinute()]);
+
+        $html = $this->actingAs($user)->get('/monitor')->assertOk()
+            ->assertSee(__('Shops: share of sales'))
+            ->getContent();
+
+        $this->assertStringContainsString('75%', $html);   // Alpha 300 of 400
+        $this->assertStringContainsString('25%', $html);   // Beta 100 of 400
+        $this->assertSame(2, substr_count($html, 'stroke-width="50"')); // one pie slice per shop
     }
 }

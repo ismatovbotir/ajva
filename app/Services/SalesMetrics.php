@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\DB;
 class SalesMetrics
 {
     public const COLORS = [
-        '#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#c23a3a', '#a13a7a',
+        '#2a78d6', '#139a6e', '#d17a00', '#8e5cc9', '#d6477b', '#2f9bc0', '#9a7b4f',
     ];
 
-    public const COLOR_OTHER = '#898781';
+    public const COLOR_OTHER = '#8f8d85';
 
     public const TOP_ITEMS = 20;
 

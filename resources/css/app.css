@@ -1,35 +1,226 @@
 @import "tailwindcss";
 
-@theme {
-    /* Brand green — muted forest/pine green used for the sidebar, mobile nav
-       chrome, and primary accent (buttons, links, focus rings). Chosen for
-       an enterprise feel (desaturated, not a bright "kelly" green) while
-       still reading clearly as green rather than near-black. */
-    --color-brand-50: #edf5f0;
-    --color-brand-100: #dcebe0;
-    --color-brand-200: #b9d7c2;
-    --color-brand-300: #8fbe9e;
-    --color-brand-400: #679d79;
-    --color-brand-500: #487f5c;
-    --color-brand-600: #35664a;
-    --color-brand-700: #2a5039;
-    --color-brand-800: #1f3d2c;
-    --color-brand-900: #16301f;
+/*
+ * Theme system (light = Claude-style warm paper, dark = warm charcoal).
+ *
+ * Views use ordinary Tailwind utilities (bg-surface, text-slate-900, border-slate-200,
+ * bg-sand-50, text-accent, bg-brand-700 ...). The *values* of those colour variables
+ * are swapped under html[data-theme="dark"], so no view needs dark: variants.
+ * The attribute is set before first paint by an inline script in the app/guest layouts
+ * (saved choice in localStorage, else prefers-color-scheme) and toggled by <x-ui.theme-toggle>.
+ *
+ * Tokens:
+ *   surface          cards, modals, inputs, top bar            (white   / #30302e)
+ *   sidebar          sidebar + mobile chrome                   (#f0eee6 / #1f1e1d)
+ *   sand-50/100/200  app canvas, table headers, hover areas
+ *   slate-50..950    warm neutrals: 900 = text, 500 = muted text, 200 = borders, 300 = input borders
+ *                    (inverted in dark, so slate-900 is always "main text")
+ *   gray-*           alias of slate-* (kept for legacy markup)
+ *   brand-50..900    terracotta accent. Use brand-700 as a FILL under white text (AA 4.95:1);
+ *                    brand-500/600 for rings and decoration
+ *   accent           accent used as TEXT / active borders: AA on both themes
+ *   red / amber / emerald / blue 50..900   semantic scales, re-tuned for dark below
+ * Series (chart) colours are literal hex in PHP (SalesMetrics::COLORS) and work on both backgrounds.
+ * The Monitor page is always dark: html.monitor-root restores Tailwind's default dark-friendly scales.
+ */
 
-    /* Sand — warm, muted tan/gold used for the main content canvas. Kept
-       very light/low-saturation at the 50–100 end (where body text and
-       cards live) so long reading sessions over dense tables stay
-       comfortable; deeper steps are available for borders/accents. */
-    --color-sand-50: #faf3e3;
-    --color-sand-100: #f3e7cb;
-    --color-sand-200: #e7d4a3;
-    --color-sand-300: #d8bc79;
-    --color-sand-400: #c6a356;
-    --color-sand-500: #ad8740;
-    --color-sand-600: #8d6c32;
-    --color-sand-700: #705428;
-    --color-sand-800: #57411f;
-    --color-sand-900: #423218;
+@theme {
+    --color-surface: #ffffff;
+    --color-sidebar: #f0eee6;
+    --color-accent: #a64a27;
+
+    --color-slate-50: #faf9f5;
+    --color-slate-100: #f0eee6;
+    --color-slate-200: #e8e6dc;
+    --color-slate-300: #d6d3c6;
+    --color-slate-400: #87867f;
+    --color-slate-500: #5e5d59;
+    --color-slate-600: #4d4c48;
+    --color-slate-700: #3d3d3a;
+    --color-slate-800: #2b2a28;
+    --color-slate-900: #141413;
+    --color-slate-950: #0d0d0c;
+
+    --color-gray-50: #faf9f5;
+    --color-gray-100: #f0eee6;
+    --color-gray-200: #e8e6dc;
+    --color-gray-300: #d6d3c6;
+    --color-gray-400: #87867f;
+    --color-gray-500: #5e5d59;
+    --color-gray-600: #4d4c48;
+    --color-gray-700: #3d3d3a;
+    --color-gray-800: #2b2a28;
+    --color-gray-900: #141413;
+    --color-gray-950: #0d0d0c;
+
+    /* Sand: app canvas (50), table headers/hover (100), soft borders (200) */
+    --color-sand-50: #faf9f5;
+    --color-sand-100: #f0eee6;
+    --color-sand-200: #e8e6dc;
+    --color-sand-300: #d6d3c6;
+    --color-sand-400: #b8b5a6;
+    --color-sand-500: #8f8c7c;
+    --color-sand-600: #6e6b5d;
+    --color-sand-700: #55534a;
+    --color-sand-800: #3f3d35;
+    --color-sand-900: #2b2a26;
+
+    /* Claude terracotta */
+    --color-brand-50: #fbf1ec;
+    --color-brand-100: #f7e3d9;
+    --color-brand-200: #efc8b6;
+    --color-brand-300: #e5a78c;
+    --color-brand-400: #de8c6a;
+    --color-brand-500: #d97757;
+    --color-brand-600: #c6613f;
+    --color-brand-700: #b5532f;
+    --color-brand-800: #964426;
+    --color-brand-900: #78371f;
+}
+
+@layer base {
+    html { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; }
+
+    *, ::before, ::after { border-color: var(--color-slate-200); }
+    input, select, textarea { background-color: var(--color-surface); color: var(--color-slate-900); }
+    ::placeholder { color: var(--color-slate-400); opacity: 1; }
+    input[type="checkbox"], input[type="radio"] { accent-color: var(--color-brand-700); }
+    ::selection { background-color: var(--color-brand-200); color: #141413; }
+}
+
+/* ---------- Dark theme: same variable names, dark values ---------- */
+html[data-theme="dark"] {
+    --color-surface: #30302e;
+    --color-sidebar: #1f1e1d;
+    --color-accent: #e8906f;
+
+    --color-slate-50: #1f1e1d;
+    --color-slate-100: #3a3a37;
+    --color-slate-200: #3d3d3a;
+    --color-slate-300: #52524e;
+    --color-slate-400: #8a8880;
+    --color-slate-500: #b0aea5;
+    --color-slate-600: #c2c0b6;
+    --color-slate-700: #d4d2c8;
+    --color-slate-800: #e8e6dc;
+    --color-slate-900: #faf9f5;
+    --color-slate-950: #ffffff;
+
+    --color-gray-50: #1f1e1d;
+    --color-gray-100: #3a3a37;
+    --color-gray-200: #3d3d3a;
+    --color-gray-300: #52524e;
+    --color-gray-400: #8a8880;
+    --color-gray-500: #b0aea5;
+    --color-gray-600: #c2c0b6;
+    --color-gray-700: #d4d2c8;
+    --color-gray-800: #e8e6dc;
+    --color-gray-900: #faf9f5;
+    --color-gray-950: #ffffff;
+
+    --color-sand-50: #262624;
+    --color-sand-100: #1f1e1d;
+    --color-sand-200: #3d3d3a;
+    --color-sand-300: #4a4a46;
+    --color-sand-400: #6b6a64;
+    --color-sand-500: #8a8880;
+    --color-sand-600: #b0aea5;
+    --color-sand-700: #c2c0b6;
+    --color-sand-800: #d4d2c8;
+    --color-sand-900: #e8e6dc;
+
+    --color-brand-50: #3a2a24;
+    --color-brand-100: #47302a;
+    --color-brand-200: #6a4235;
+    --color-brand-300: #a35c40;
+    --color-brand-400: #c6613f;
+    --color-brand-500: #d97757;
+    --color-brand-600: #c6613f;
+    --color-brand-700: #b5532f;
+    --color-brand-800: #964426;
+    --color-brand-900: #78371f;
+
+    /* Semantic scales: tints become dark, text shades become light */
+    --color-red-50: #3b1f1d;
+    --color-red-100: #4a2724;
+    --color-red-200: #5e322e;
+    --color-red-300: #8c4b44;
+    --color-red-400: #f08a7e;
+    --color-red-500: #f2766a;
+    --color-red-700: #f3a29a;
+    --color-red-800: #f7b8b1;
+    --color-red-900: #fbd0cb;
+    --color-amber-50: #3a2f15;
+    --color-amber-100: #4a3a14;
+    --color-amber-200: #5c4814;
+    --color-amber-300: #7a5e1b;
+    --color-amber-500: #e0a21b;
+    --color-amber-700: #f2c14e;
+    --color-amber-800: #f5cc70;
+    --color-amber-900: #f8d98e;
+    --color-emerald-100: #17382c;
+    --color-emerald-700: #5fd3a0;
+    --color-emerald-800: #7fddb4;
+    --color-blue-100: #1d3047;
+    --color-blue-700: #8db8f0;
+
+    --tw-ring-offset-color: #262624;
+}
+html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="dark"] ::after {
+    --tw-ring-offset-color: #262624;
+}
+
+/* ---------- Monitor: always-dark TV screen, independent of the theme switch ---------- */
+html.monitor-root {
+    color-scheme: dark;
+    --color-slate-50: oklch(98.4% 0.003 247.858);
+    --color-slate-100: oklch(96.8% 0.007 247.896);
+    --color-slate-200: oklch(92.9% 0.013 255.508);
+    --color-slate-300: oklch(86.9% 0.022 252.894);
+    --color-slate-400: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-600: oklch(44.6% 0.043 257.281);
+    --color-slate-700: oklch(37.2% 0.044 257.287);
+    --color-slate-800: oklch(27.9% 0.041 260.031);
+    --color-slate-900: oklch(20.8% 0.042 265.755);
+    --color-slate-950: oklch(12.9% 0.042 264.695);
+    --color-red-50: oklch(97.1% 0.013 17.38);
+    --color-red-100: oklch(93.6% 0.032 17.717);
+    --color-red-200: oklch(88.5% 0.062 18.334);
+    --color-red-300: oklch(80.8% 0.114 19.571);
+    --color-red-400: oklch(70.4% 0.191 22.216);
+    --color-red-500: oklch(63.7% 0.237 25.331);
+    --color-red-600: oklch(57.7% 0.245 27.325);
+    --color-red-700: oklch(50.5% 0.213 27.518);
+    --color-red-800: oklch(44.4% 0.177 26.899);
+    --color-red-900: oklch(39.6% 0.141 25.723);
+    --color-red-950: oklch(25.8% 0.092 26.042);
+    --color-amber-50: oklch(98.7% 0.022 95.277);
+    --color-amber-100: oklch(96.2% 0.059 95.617);
+    --color-amber-200: oklch(92.4% 0.12 95.746);
+    --color-amber-300: oklch(87.9% 0.169 91.605);
+    --color-amber-400: oklch(82.8% 0.189 84.429);
+    --color-amber-500: oklch(76.9% 0.188 70.08);
+    --color-amber-600: oklch(66.6% 0.179 58.318);
+    --color-amber-700: oklch(55.5% 0.163 48.998);
+    --color-amber-800: oklch(47.3% 0.137 46.201);
+    --color-amber-900: oklch(41.4% 0.112 45.904);
+    --color-amber-950: oklch(27.9% 0.077 45.635);
+    --color-emerald-50: oklch(97.9% 0.021 166.113);
+    --color-emerald-100: oklch(95% 0.052 163.051);
+    --color-emerald-200: oklch(90.5% 0.093 164.15);
+    --color-emerald-300: oklch(84.5% 0.143 164.978);
+    --color-emerald-400: oklch(76.5% 0.177 163.223);
+    --color-emerald-500: oklch(69.6% 0.17 162.48);
+    --color-emerald-600: oklch(59.6% 0.145 163.225);
+    --color-emerald-700: oklch(50.8% 0.118 165.612);
+    --color-emerald-800: oklch(43.2% 0.095 166.913);
+    --color-emerald-900: oklch(37.8% 0.077 168.94);
+    --color-emerald-950: oklch(26.2% 0.051 172.552);
+    --color-surface: #0f172a;
+    --color-accent: #e8906f;
+    --color-brand-600: #c6613f;
 }
 
 [x-cloak] {

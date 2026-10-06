@@ -8,17 +8,17 @@
             <input type="date" id="date" wire:model.live="date" max="{{ now()->toDateString() }}"
                    class="block w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-600 focus:ring-brand-600 sm:text-sm" />
         </div>
-        <div class="flex gap-6 text-sm text-[#52514e]">
-            <span>{{ __('Receipts') }}: <strong class="text-[#0b0b0b]">{{ $summary['count'] }}</strong></span>
-            <span>{{ __('Total sales') }}: <strong class="text-[#0b0b0b]">{{ number_format($summary['total'], 0, '.', ' ') }}</strong></span>
+        <div class="flex gap-6 text-sm text-slate-500">
+            <span>{{ __('Receipts') }}: <strong class="text-slate-900">{{ $summary['count'] }}</strong></span>
+            <span>{{ __('Total sales') }}: <strong class="text-slate-900">{{ number_format($summary['total'], 0, '.', ' ') }}</strong></span>
         </div>
     </div>
 
     <div class="mb-6 space-y-6">
         {{-- Shop totals by payment type --}}
         <x-ui.card>
-            <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Shop totals by payment type') }}</h2>
-            <p class="mb-4 text-sm text-[#52514e]">{{ __('Net sales per shop for the selected day.') }}</p>
+            <h2 class="text-base font-semibold text-slate-900">{{ __('Shop totals by payment type') }}</h2>
+            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per shop for the selected day.') }}</p>
 
             @if(empty($paymentTable))
                 <x-ui.empty-state :title="__('No sales for this day')" :description="__('Pick another date to see its sales.')" />
@@ -61,8 +61,8 @@
 
         {{-- Shop sales by hour --}}
         <x-ui.card>
-            <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Sales by hour') }}</h2>
-            <p class="mb-4 text-sm text-[#52514e]">{{ __('Net sales per hour, split by shop.') }}</p>
+            <h2 class="text-base font-semibold text-slate-900">{{ __('Sales by hour') }}</h2>
+            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per hour, split by shop.') }}</p>
 
             @if($summary['count'] === 0)
                 <x-ui.empty-state :title="__('No sales for this day')" :description="__('Pick another date to see its sales.')" />
@@ -71,30 +71,30 @@
                     @foreach($legend as $item)
                         <li class="flex items-center gap-1.5 text-xs">
                             <span class="h-0 w-4 shrink-0 border-t-[3px]" style="border-color: {{ $item['color'] }}"></span>
-                            <span class="text-[#52514e]">{{ $item['name'] }}</span>
+                            <span class="text-slate-500">{{ $item['name'] }}</span>
                         </li>
                     @endforeach
                 </ul>
 
-                <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                <div class="overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
                     <svg viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}" class="h-auto min-w-[34rem] w-full" role="img"
                          aria-label="{{ __('Sales by hour') }}">
                         {{-- Gridlines and y-axis labels --}}
                         @foreach($chart['ticks'] as $tick)
-                            <line x1="{{ $chart['left'] }}" x2="{{ $chart['right'] }}" y1="{{ $tick['y'] }}" y2="{{ $tick['y'] }}" stroke="#e1e0d9" stroke-width="1" />
-                            <text x="{{ $chart['left'] - 8 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end" font-size="11" fill="#52514e">{{ $tick['label'] }}</text>
+                            <line x1="{{ $chart['left'] }}" x2="{{ $chart['right'] }}" y1="{{ $tick['y'] }}" y2="{{ $tick['y'] }}" class="stroke-slate-200" stroke-width="1" />
+                            <text x="{{ $chart['left'] - 8 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end" class="fill-slate-500" font-size="11">{{ $tick['label'] }}</text>
                         @endforeach
 
                         {{-- x-axis hour labels --}}
                         @foreach($chart['xLabels'] as $label)
-                            <text x="{{ $label['x'] }}" y="{{ $chart['baseline'] + 18 }}" text-anchor="middle" font-size="11" fill="#52514e">{{ $label['label'] }}</text>
+                            <text x="{{ $label['x'] }}" y="{{ $chart['baseline'] + 18 }}" text-anchor="middle" class="fill-slate-500" font-size="11">{{ $label['label'] }}</text>
                         @endforeach
 
                         {{-- One line per shop --}}
                         @foreach($chart['lines'] as $line)
                             <polyline points="{{ $line['points'] }}" fill="none" stroke="{{ $line['color'] }}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
                             @foreach($line['dots'] as $dot)
-                                <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="4" fill="#fcfcfb" stroke="{{ $line['color'] }}" stroke-width="2" tabindex="0">
+                                <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="4" class="fill-sand-50" stroke="{{ $line['color'] }}" stroke-width="2" tabindex="0">
                                     <title>{{ $dot['tip'] }}</title>
                                 </circle>
                             @endforeach
@@ -135,7 +135,7 @@
         <x-ui.card padding="p-0" class="hidden md:block">
             <div class="max-h-[70vh] overflow-auto">
             <table class="min-w-full divide-y divide-slate-200">
-                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
+                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Time') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Number') }}</th>

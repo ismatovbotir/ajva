@@ -7,15 +7,15 @@
         {{-- Section: Stock health --}}
         <section class="space-y-4" aria-labelledby="sec-stock-health">
             <div>
-                <h2 id="sec-stock-health" class="text-lg font-semibold text-[#0b0b0b]">{{ __('Stock health') }}</h2>
-                <p class="text-sm text-[#52514e]">{{ __('On-hand stock from the latest 1C sync, valued at cost price.') }}</p>
+                <h2 id="sec-stock-health" class="text-lg font-semibold text-slate-900">{{ __('Stock health') }}</h2>
+                <p class="text-sm text-slate-500">{{ __('On-hand stock from the latest 1C sync, valued at cost price.') }}</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Stock value at cost') }}</p>
-                    <p class="mt-2 text-3xl font-semibold tabular-nums text-[#0b0b0b]">{{ $health['value_label'] }}</p>
-                    <p class="mt-1 text-sm text-[#52514e]">{{ __(':units units on hand', ['units' => $health['units_label']]) }}</p>
+                    <p class="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{{ $health['value_label'] }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ __(':units units on hand', ['units' => $health['units_label']]) }}</p>
                     @if($health['missing_items'] > 0)
                         <p class="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
                             {{ __('Cost missing for :count items — :percent% of units are not valued.', ['count' => $health['missing_items'], 'percent' => $health['uncovered_percent']]) }}
@@ -24,28 +24,28 @@
                 </x-ui.card>
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Below minimum') }}</p>
-                    <p class="mt-2 text-3xl font-semibold tabular-nums {{ $exceptions['total'] > 0 ? 'text-red-700' : 'text-[#0b0b0b]' }}">{{ $exceptions['total'] }}</p>
-                    <p class="mt-1 text-sm text-[#52514e]">{{ __('Item and shop pairs at or below their minimum.') }}</p>
+                    <p class="mt-2 text-3xl font-semibold tabular-nums {{ $exceptions['total'] > 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $exceptions['total'] }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('Item and shop pairs at or below their minimum.') }}</p>
                     @if(Route::has('items.index'))
-                        <a href="{{ route('items.index') }}" class="mt-2 inline-block text-sm font-medium text-brand-700 hover:underline">{{ __('Open items list') }} →</a>
+                        <a href="{{ route('items.index') }}" class="mt-2 inline-block text-sm font-medium text-accent hover:underline">{{ __('Open items list') }} →</a>
                     @endif
                 </x-ui.card>
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Out of stock') }}</p>
-                    <p class="mt-2 text-3xl font-semibold tabular-nums {{ $health['out_of_stock'] > 0 ? 'text-red-700' : 'text-[#0b0b0b]' }}">{{ $health['out_of_stock'] }}</p>
-                    <p class="mt-1 text-sm text-[#52514e]">{{ __('Item and shop pairs with a minimum rule and zero stock.') }}</p>
+                    <p class="mt-2 text-3xl font-semibold tabular-nums {{ $health['out_of_stock'] > 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $health['out_of_stock'] }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('Item and shop pairs with a minimum rule and zero stock.') }}</p>
                 </x-ui.card>
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Reorder-rule coverage') }}</p>
-                    <p class="mt-2 text-3xl font-semibold tabular-nums text-[#0b0b0b]">{{ number_format($coverage['percent'], 1) }}%</p>
-                    <p class="mt-1 text-sm text-[#52514e]">{{ __(':covered of :total stock records have a rule.', ['covered' => $coverage['covered'], 'total' => $coverage['total']]) }}</p>
+                    <p class="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{{ number_format($coverage['percent'], 1) }}%</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ __(':covered of :total stock records have a rule.', ['covered' => $coverage['covered'], 'total' => $coverage['total']]) }}</p>
                 </x-ui.card>
             </div>
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <x-ui.card class="lg:col-span-1">
-                    <h3 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock value by shop') }}</h3>
-                    <p class="mb-4 text-sm text-[#52514e]">{{ __('At cost price; items without a cost are not valued.') }}</p>
+                    <h3 class="text-base font-semibold text-slate-900">{{ __('Stock value by shop') }}</h3>
+                    <p class="mb-4 text-sm text-slate-500">{{ __('At cost price; items without a cost are not valued.') }}</p>
                     @if(empty($health['shops']))
                         <x-ui.empty-state :title="__('No stock records yet')" :description="__('Stock records are created automatically from 1C sync.')" />
                     @else
@@ -53,7 +53,7 @@
                             @foreach($health['shops'] as $s)
                                 <li>
                                     <div class="flex items-baseline justify-between gap-2 text-sm">
-                                        <span class="min-w-0 truncate font-medium text-[#0b0b0b]">{{ $s['name'] }}</span>
+                                        <span class="min-w-0 truncate font-medium text-slate-900">{{ $s['name'] }}</span>
                                         <span class="shrink-0 tabular-nums text-slate-600">{{ $s['label'] }}</span>
                                     </div>
                                     <div class="mt-1 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full" style="width: {{ max($s['percent'], 1) }}%; background-color: {{ $barColor }};"></div></div>
@@ -65,8 +65,8 @@
                 <div class="lg:col-span-2">
             <x-ui.card class="h-full">
                 <div class="mb-4">
-                    <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Reorder risk') }}</h2>
-                    <p class="text-sm text-[#52514e]">{{ __('Items at or below their minimum threshold, most urgent first.') }}</p>
+                    <h2 class="text-base font-semibold text-slate-900">{{ __('Reorder risk') }}</h2>
+                    <p class="text-sm text-slate-500">{{ __('Items at or below their minimum threshold, most urgent first.') }}</p>
                 </div>
 
                 @if(empty($exceptions['rows']))
@@ -103,7 +103,7 @@
                     </div>
 
                     @if($exceptions['hidden'] > 0)
-                        <p class="mt-3 text-xs text-[#52514e]">{{ __(':count more not shown', ['count' => $exceptions['hidden']]) }}</p>
+                        <p class="mt-3 text-xs text-slate-500">{{ __(':count more not shown', ['count' => $exceptions['hidden']]) }}</p>
                     @endif
                 @endif
             </x-ui.card>
@@ -114,15 +114,15 @@
         {{-- Section: Pricing health --}}
         <section class="space-y-4" aria-labelledby="sec-pricing">
             <div>
-                <h2 id="sec-pricing" class="text-lg font-semibold text-[#0b0b0b]">{{ __('Pricing health') }}</h2>
-                <p class="text-sm text-[#52514e]">{{ __('Cost vs. sell price consistency and missing prices.') }}</p>
+                <h2 id="sec-pricing" class="text-lg font-semibold text-slate-900">{{ __('Pricing health') }}</h2>
+                <p class="text-sm text-slate-500">{{ __('Cost vs. sell price consistency and missing prices.') }}</p>
             </div>
         {{-- View 5: Price integrity / margin — best/worst margin % ranked by item --}}
         <x-ui.card>
             <div x-data="{ tab: 'best' }">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h2 class="flex flex-wrap items-center gap-2 text-base font-semibold text-[#0b0b0b]">
+                        <h2 class="flex flex-wrap items-center gap-2 text-base font-semibold text-slate-900">
                             {{ __('Margin by item') }}
                             @if($belowCost['count'] > 0)
                                 <button type="button" @click="tab = 'below'" class="focus:outline-none">
@@ -130,30 +130,30 @@
                                 </button>
                             @endif
                         </h2>
-                        <p class="text-sm text-[#52514e]">{{ __('Cost vs. sell price margin, based on the latest 1C sync.') }}</p>
+                        <p class="text-sm text-slate-500">{{ __('Cost vs. sell price margin, based on the latest 1C sync.') }}</p>
                     </div>
-                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-surface p-0.5">
                         <button type="button" @click="tab = 'best'" :class="tab === 'best' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Best margins') }}</button>
                         <button type="button" @click="tab = 'worst'" :class="tab === 'worst' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Worst margins') }}</button>
                         <button type="button" @click="tab = 'below'" :class="tab === 'below' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Below cost') }} ({{ $belowCost['count'] }})</button>
                     </div>
                 </div>
 
-                <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#52514e]">
-                    <span>{{ __('Items missing a cost price') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_cost'] }}</strong></span>
-                    <span>{{ __('Items missing a sell price') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_sell'] }}</strong></span>
-                    <span>{{ __('Items missing both prices') }}: <strong class="text-[#0b0b0b]">{{ $margins['missing_both'] }}</strong></span>
+                <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+                    <span>{{ __('Items missing a cost price') }}: <strong class="text-slate-900">{{ $margins['missing_cost'] }}</strong></span>
+                    <span>{{ __('Items missing a sell price') }}: <strong class="text-slate-900">{{ $margins['missing_sell'] }}</strong></span>
+                    <span>{{ __('Items missing both prices') }}: <strong class="text-slate-900">{{ $margins['missing_both'] }}</strong></span>
                 </div>
 
                 {{-- Selling price below cost: every case, scrollable --}}
                 <div x-show="tab === 'below'" x-cloak>
-                    <p class="mb-3 text-sm text-[#52514e]">{{ __('A selling price lower than the cost price — an intentional discount or a data mistake. Worth checking.') }}</p>
+                    <p class="mb-3 text-sm text-slate-500">{{ __('A selling price lower than the cost price — an intentional discount or a data mistake. Worth checking.') }}</p>
                     @if($belowCost['count'] === 0)
                         <x-ui.empty-state :title="__('No prices below cost')" :description="__('Every selling price is at or above its cost price.')" />
                     @else
                         <div class="max-h-[60vh] overflow-auto rounded-lg border border-slate-200">
                             <table class="min-w-full divide-y divide-slate-200">
-                                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
+                                <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_var(--color-slate-200)]">
                                     <tr>
                                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
                                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Group') }}</th>
@@ -183,7 +183,7 @@
                             </table>
                         </div>
                         @if(($belowCost['hidden'] ?? 0) > 0)
-                            <p class="mt-3 text-xs text-[#52514e]">{{ __(':count more not shown', ['count' => $belowCost['hidden']]) }}</p>
+                            <p class="mt-3 text-xs text-slate-500">{{ __(':count more not shown', ['count' => $belowCost['hidden']]) }}</p>
                         @endif
                     @endif
                 </div>
@@ -249,8 +249,8 @@
         {{-- Section: Stock distribution --}}
         <section class="space-y-4" aria-labelledby="sec-distribution">
             <div>
-                <h2 id="sec-distribution" class="text-lg font-semibold text-[#0b0b0b]">{{ __('Stock distribution') }}</h2>
-                <p class="text-sm text-[#52514e]">{{ __('Where the on-hand quantity sits, by shop and by product group.') }}</p>
+                <h2 id="sec-distribution" class="text-lg font-semibold text-slate-900">{{ __('Stock distribution') }}</h2>
+                <p class="text-sm text-slate-500">{{ __('Where the on-hand quantity sits, by shop and by product group.') }}</p>
             </div>
         {{-- Chart 1: Stock by shop — bar / donut / table selector --}}
         <x-ui.card>
@@ -270,10 +270,10 @@
             }">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock by shop') }}</h2>
-                        <p class="text-sm text-[#52514e]">{{ __('Total on-hand quantity per shop.') }}</p>
+                        <h2 class="text-base font-semibold text-slate-900">{{ __('Stock by shop') }}</h2>
+                        <p class="text-sm text-slate-500">{{ __('Total on-hand quantity per shop.') }}</p>
                     </div>
-                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-surface p-0.5">
                         <button type="button" @click="view = 'bar'" :class="view === 'bar' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Bar') }}</button>
                         <button type="button" @click="view = 'donut'" :class="view === 'donut' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Donut') }}</button>
                         <button type="button" @click="view = 'table'" :class="view === 'table' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Table') }}</button>
@@ -285,17 +285,17 @@
                 @else
                     {{-- Bar view --}}
                     <div x-show="view === 'bar'">
-                        <div data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                        <div data-chart-surface class="relative overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
                             <div class="space-y-3">
                                 @foreach($shopRows as $row)
                                     <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                                        <div class="text-sm font-medium text-[#0b0b0b] sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
+                                        <div class="text-sm font-medium text-slate-900 sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
                                             {{ $row['name'] }}
                                         </div>
                                         <div class="relative h-9 flex-1">
                                             <div class="pointer-events-none absolute inset-0 flex items-stretch justify-between">
                                                 @foreach ([0, 25, 50, 75, 100] as $tick)
-                                                    <span class="w-px bg-[#e1e0d9]"></span>
+                                                    <span class="w-px bg-slate-200"></span>
                                                 @endforeach
                                             </div>
                                             <div class="relative flex h-full items-center">
@@ -316,7 +316,7 @@
                                                     @endif
                                                 </div>
                                                 @if($row['percent'] < 25)
-                                                    <span class="ml-2 shrink-0 text-xs font-medium text-[#52514e]">{{ $row['label'] }}</span>
+                                                    <span class="ml-2 shrink-0 text-xs font-medium text-slate-500">{{ $row['label'] }}</span>
                                                 @endif
                                             </div>
                                         </div>
@@ -325,7 +325,7 @@
                             </div>
 
                             <div x-show="tip.show" x-cloak
-                                class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
                                 :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
                             >
                                 <p x-text="tip.name" class="font-medium"></p>
@@ -337,7 +337,7 @@
                     {{-- Donut view --}}
                     <div x-show="view === 'donut'" x-cloak>
                         @if(!empty($donut['segments']))
-                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4 sm:flex-row sm:justify-center">
+                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-slate-200 bg-sand-50 p-4 sm:flex-row sm:justify-center">
                                 <svg viewBox="0 0 160 160" class="h-40 w-40 shrink-0">
                                     <g transform="rotate(-90 80 80)">
                                         @foreach($donut['segments'] as $segment)
@@ -366,14 +366,14 @@
                                     @foreach($donut['segments'] as $segment)
                                         <li class="flex items-center gap-2 text-sm">
                                             <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $segment['color'] }}"></span>
-                                            <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $segment['name'] }}</span>
-                                            <span class="shrink-0 font-medium text-[#52514e]">{{ $segment['label'] }}</span>
+                                            <span class="min-w-0 flex-1 truncate text-slate-900">{{ $segment['name'] }}</span>
+                                            <span class="shrink-0 font-medium text-slate-500">{{ $segment['label'] }}</span>
                                         </li>
                                     @endforeach
                                 </ul>
 
                                 <div x-show="tip.show" x-cloak
-                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
                                     :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
                                 >
                                     <p x-text="tip.name" class="font-medium"></p>
@@ -424,10 +424,10 @@
             }">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock by group') }}</h2>
-                        <p class="text-sm text-[#52514e]">{{ __('Total on-hand quantity per product group.') }}</p>
+                        <h2 class="text-base font-semibold text-slate-900">{{ __('Stock by group') }}</h2>
+                        <p class="text-sm text-slate-500">{{ __('Total on-hand quantity per product group.') }}</p>
                     </div>
-                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-white p-0.5">
+                    <div class="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-300 bg-surface p-0.5">
                         <button type="button" @click="view = 'bar'" :class="view === 'bar' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Bar') }}</button>
                         <button type="button" @click="view = 'donut'" :class="view === 'donut' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Donut') }}</button>
                         <button type="button" @click="view = 'table'" :class="view === 'table' ? 'bg-brand-700 text-white' : 'text-slate-700 hover:bg-sand-50'" class="rounded-md px-2.5 py-1 text-xs font-medium transition">{{ __('Table') }}</button>
@@ -437,17 +437,17 @@
                 @if(empty($groupRows))
                     <x-ui.empty-state :title="__('No stock records yet')" :description="__('Stock records are created automatically from 1C sync.')" />
                 @else
-                    <div x-show="view === 'bar'" data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                    <div x-show="view === 'bar'" data-chart-surface class="relative overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
                         <div class="space-y-3">
                             @foreach($groupRows as $row)
                                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                                    <div class="text-sm font-medium text-[#0b0b0b] sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
+                                    <div class="text-sm font-medium text-slate-900 sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
                                         {{ $row['name'] }}
                                     </div>
                                     <div class="relative h-9 flex-1">
                                         <div class="pointer-events-none absolute inset-0 flex items-stretch justify-between">
                                             @foreach ([0, 25, 50, 75, 100] as $tick)
-                                                <span class="w-px bg-[#e1e0d9]"></span>
+                                                <span class="w-px bg-slate-200"></span>
                                             @endforeach
                                         </div>
                                         <div class="relative flex h-full items-center">
@@ -468,7 +468,7 @@
                                                 @endif
                                             </div>
                                             @if($row['percent'] < 25)
-                                                <span class="ml-2 shrink-0 text-xs font-medium text-[#52514e]">{{ $row['label'] }}</span>
+                                                <span class="ml-2 shrink-0 text-xs font-medium text-slate-500">{{ $row['label'] }}</span>
                                             @endif
                                         </div>
                                     </div>
@@ -477,7 +477,7 @@
                         </div>
 
                         <div x-show="tip.show" x-cloak
-                            class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                            class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
                             :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
                         >
                             <p x-text="tip.name" class="font-medium"></p>
@@ -488,7 +488,7 @@
                     {{-- Donut view --}}
                     <div x-show="view === 'donut'" x-cloak>
                         @if(!empty($donutGroup['segments']))
-                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4 sm:flex-row sm:justify-center">
+                            <div data-chart-surface class="relative flex flex-col items-center gap-6 rounded-lg border border-slate-200 bg-sand-50 p-4 sm:flex-row sm:justify-center">
                                 <svg viewBox="0 0 160 160" class="h-40 w-40 shrink-0">
                                     <g transform="rotate(-90 80 80)">
                                         @foreach($donutGroup['segments'] as $segment)
@@ -517,14 +517,14 @@
                                     @foreach($donutGroup['segments'] as $segment)
                                         <li class="flex items-center gap-2 text-sm">
                                             <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $segment['color'] }}"></span>
-                                            <span class="min-w-0 flex-1 truncate text-[#0b0b0b]">{{ $segment['name'] }}</span>
-                                            <span class="shrink-0 font-medium text-[#52514e]">{{ $segment['label'] }}</span>
+                                            <span class="min-w-0 flex-1 truncate text-slate-900">{{ $segment['name'] }}</span>
+                                            <span class="shrink-0 font-medium text-slate-500">{{ $segment['label'] }}</span>
                                         </li>
                                     @endforeach
                                 </ul>
 
                                 <div x-show="tip.show" x-cloak
-                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                    class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
                                     :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
                                 >
                                     <p x-text="tip.name" class="font-medium"></p>
@@ -574,13 +574,13 @@
             }">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-base font-semibold text-[#0b0b0b]">{{ __('Stock by group and shop') }}</h2>
-                        <p class="text-sm text-[#52514e]">{{ __('Total on-hand quantity broken down by group and shop.') }}</p>
+                        <h2 class="text-base font-semibold text-slate-900">{{ __('Stock by group and shop') }}</h2>
+                        <p class="text-sm text-slate-500">{{ __('Total on-hand quantity broken down by group and shop.') }}</p>
                     </div>
                     <button
                         type="button"
                         @click="view = view === 'chart' ? 'table' : 'chart'"
-                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-sand-50"
+                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-sand-50"
                     >
                         <x-icon name="clipboard" class="h-4 w-4" />
                         <span x-text="view === 'chart' ? @js(__('Show table')) : @js(__('Show chart'))"></span>
@@ -595,26 +595,26 @@
                             @foreach($groupShop['legend'] as $legendItem)
                                 <li class="flex items-center gap-1.5 text-xs">
                                     <span class="h-3 w-3 shrink-0 rounded-sm" style="background-color: {{ $legendItem['color'] }}"></span>
-                                    <span class="text-[#52514e]">{{ $legendItem['name'] }}</span>
+                                    <span class="text-slate-500">{{ $legendItem['name'] }}</span>
                                 </li>
                             @endforeach
                         </ul>
 
-                        <div data-chart-surface class="relative overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
+                        <div data-chart-surface class="relative overflow-x-auto rounded-lg border border-slate-200 bg-sand-50 p-4">
                             <div class="space-y-3">
                                 @foreach($groupShop['rows'] as $row)
                                     <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                                        <div class="text-sm font-medium text-[#0b0b0b] sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
+                                        <div class="text-sm font-medium text-slate-900 sm:w-32 sm:shrink-0 sm:truncate md:w-40" title="{{ $row['name'] }}">
                                             {{ $row['name'] }}
                                         </div>
                                         <div class="relative h-9 flex-1">
                                             <div class="pointer-events-none absolute inset-0 flex items-stretch justify-between">
                                                 @foreach ([0, 25, 50, 75, 100] as $tick)
-                                                    <span class="w-px bg-[#e1e0d9]"></span>
+                                                    <span class="w-px bg-slate-200"></span>
                                                 @endforeach
                                             </div>
                                             <div class="relative flex h-full items-center">
-                                                <div class="flex h-6 gap-[2px] overflow-hidden rounded-r-[4px]" style="width: {{ max($row['bar_percent'], 0) }}%; background-color: #fcfcfb;">
+                                                <div class="flex h-6 gap-[2px] overflow-hidden rounded-r-[4px]" style="width: {{ max($row['bar_percent'], 0) }}%; background-color: var(--color-sand-50);">
                                                     @foreach($row['segments'] as $segment)
                                                         @php $trackPercent = $row['bar_percent'] * $segment['percent_of_bar'] / 100; @endphp
                                                         <div
@@ -635,7 +635,7 @@
                                                         </div>
                                                     @endforeach
                                                 </div>
-                                                <span class="ml-2 shrink-0 text-xs font-medium text-[#52514e]">{{ $row['total_label'] }}</span>
+                                                <span class="ml-2 shrink-0 text-xs font-medium text-slate-500">{{ $row['total_label'] }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -643,7 +643,7 @@
                             </div>
 
                             <div x-show="tip.show" x-cloak
-                                class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-[#0b0b0b] px-2 py-1 text-xs text-white shadow-lg"
+                                class="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
                                 :style="`left: ${tip.x}px; top: ${Math.max(tip.y - 8, 0)}px;`"
                             >
                                 <p x-text="tip.name" class="font-medium"></p>

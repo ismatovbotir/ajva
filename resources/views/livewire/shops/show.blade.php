@@ -23,7 +23,7 @@
                     @foreach($stocks as $stock)
                         <tr class="cursor-pointer hover:bg-sand-50" onclick="window.location='{{ route('items.show', $stock->item) }}'">
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">
-                                <a href="{{ route('items.show', $stock->item) }}" class="hover:text-brand-700 hover:underline">{{ $stock->item->name }}</a>
+                                <a href="{{ route('items.show', $stock->item) }}" class="hover:text-accent hover:underline">{{ $stock->item->name }}</a>
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $stock->item->mark ?? '—' }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $stock->qty }}</td>

@@ -198,38 +198,51 @@
         </div>
 
         <div class="{{ $panel }} lg:col-span-3">
-            <h2 class="{{ $panelTitle }}">{{ __('Shops') }}</h2>
+            <h2 class="{{ $panelTitle }}">{{ __('Shops: share of sales') }}</h2>
             @if(empty($leaders))
                 <div class="flex flex-1 items-center justify-center text-center text-[1.2rem] text-slate-400">{{ __('Waiting for the first sale today') }}</div>
             @else
-                <ol class="mt-2 min-h-0 flex-1 space-y-[0.45rem] overflow-hidden">
-                    @foreach($leaders as $i => $row)
-                        @php
-                            $p = $showProfit ? ($profit['shops'][$i] ?? null) : null;
-                            [$sdText, $sdClass] = $delta($row['sum_delta']);
-                        @endphp
-                        <li class="tabular flex items-center gap-[0.6rem]">
-                            <span class="w-[1.3rem] text-[1.1rem] font-bold text-slate-500">{{ $i + 1 }}</span>
-                            <span class="h-[2rem] w-[0.35rem] shrink-0 rounded-full" style="background-color: {{ $row['color'] }}"></span>
-                            <div class="min-w-0 flex-1 leading-tight">
-                                <div class="flex items-baseline justify-between gap-2">
-                                    <span class="truncate text-[1.1rem] font-semibold text-white">{{ $row['name'] }}</span>
-                                    <span class="text-[1.1rem] font-bold text-white">{{ $money($row['sum']) }}</span>
+                @php
+                    // Each shop's share of today's successful sales (refunds are not part of this).
+                    $shareTotal = array_sum(array_map(fn ($r) => max($r['sum'], 0), $table));
+                    $pieCirc = 2 * M_PI * 25;
+                    $pieAcc = 0.0;
+                    $leaders = array_slice($table, 0, 6);
+                @endphp
+                <div class="mt-2 flex min-h-0 flex-1 flex-col items-center gap-[0.8rem] lg:flex-col xl:flex-row">
+                    {{-- Pie: a full-radius stroke draws a filled slice per shop --}}
+                    <svg viewBox="0 0 100 100" class="h-[9rem] w-[9rem] shrink-0 xl:h-[10rem] xl:w-[10rem]" role="img" aria-label="{{ __('Shops: share of sales') }}">
+                        <g transform="rotate(-90 50 50)">
+                            @foreach($table as $row)
+                                @php $len = $shareTotal > 0 ? max($row['sum'], 0) / $shareTotal * $pieCirc : 0; @endphp
+                                @if($len > 0)
+                                    <circle cx="50" cy="50" r="25" fill="none" stroke="{{ $row['color'] }}" stroke-width="50" stroke-dasharray="{{ number_format($len, 3, '.', '') }} {{ number_format($pieCirc - $len, 3, '.', '') }}" stroke-dashoffset="{{ number_format(-$pieAcc, 3, '.', '') }}"></circle>
+                                    @php $pieAcc += $len; @endphp
+                                @endif
+                            @endforeach
+                        </g>
+                        <circle cx="50" cy="50" r="49.5" fill="none" stroke="#0f172a" stroke-width="1"></circle>
+                    </svg>
+                    <ol class="min-h-0 w-full min-w-0 flex-1 space-y-[0.4rem] overflow-hidden">
+                        @foreach($leaders as $i => $row)
+                            @php
+                                $share = $shareTotal > 0 ? max($row['sum'], 0) / $shareTotal * 100 : 0;
+                                [$sdText, $sdClass] = $delta($row['sum_delta']);
+                            @endphp
+                            <li class="tabular leading-tight">
+                                <div class="flex items-center gap-[0.5rem] text-[1.05rem]">
+                                    <span class="h-[0.9rem] w-[0.9rem] shrink-0 rounded-sm" style="background-color: {{ $row['color'] }}"></span>
+                                    <span class="min-w-0 flex-1 truncate font-semibold text-white">{{ $row['name'] }}</span>
+                                    <span class="font-bold text-white">{{ number_format($share, $share < 10 ? 1 : 0) }}%</span>
                                 </div>
-                                <div class="flex items-baseline justify-between gap-2 text-[0.9rem]">
-                                    @if($showProfit)
-                                        <span class="{{ ($p['profit'] ?? 0) < 0 ? 'text-red-400' : 'text-slate-400' }}">
-                                            {{ __('Profit') }} {{ $money($p['profit'] ?? 0) }}@if(($p['margin'] ?? null) !== null) · {{ number_format($p['margin'], 1) }}%@endif
-                                        </span>
-                                    @else
-                                        <span class="text-slate-400">{{ __('Receipts') }} {{ $row['count'] }}</span>
-                                    @endif
+                                <div class="flex items-baseline justify-between gap-2 pl-[1.4rem] text-[0.85rem] text-slate-400">
+                                    <span>{{ $money($row['sum']) }}</span>
                                     <span class="font-semibold {{ $sdClass }}">{{ $sdText }}</span>
                                 </div>
-                            </div>
-                        </li>
-                    @endforeach
-                </ol>
+                            </li>
+                        @endforeach
+                    </ol>
+                </div>
             @endif
         </div>
     </section>

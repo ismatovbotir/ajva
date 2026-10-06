@@ -326,5 +326,12 @@
     "Regenerate link": "Havolani qayta yaratish",
     "Generate link": "Havola yaratish",
     "Show profit on the public screen": "Ommaviy ekranda foydani koʻrsatish",
-    "Off by default: profit, margin and cost figures are then not sent to the public screen at all.": "Odatda oʻchiq: foyda, marja va tannarx raqamlari ommaviy ekranga umuman yuborilmaydi."
+    "Off by default: profit, margin and cost figures are then not sent to the public screen at all.": "Odatda oʻchiq: foyda, marja va tannarx raqamlari ommaviy ekranga umuman yuborilmaydi.",
+    "Shops: share of sales": "Doʻkonlar: savdodagi ulush",
+    "The link is built from APP_URL in the server .env:": "Havola serverdagi .env faylidagi APP_URL asosida yaratiladi:",
+    "APP_URL points to localhost, so this link will not work on the TV. Set APP_URL to the public address of this server in .env and clear the config cache.": "APP_URL localhost manziliga ishora qilmoqda, shuning uchun havola televizorda ishlamaydi. .env faylida APP_URL ni serverning ochiq manziliga oʻzgartiring va config keshini tozalang.",
+    "Dark theme": "Qorongʻi mavzu",
+    "Light theme": "Yorugʻ mavzu",
+    "Switch to dark theme": "Qorongʻi mavzuga oʻtish",
+    "Switch to light theme": "Yorugʻ mavzuga oʻtish"
 }
