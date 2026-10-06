@@ -70,7 +70,10 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // POS terminals send receipt times in shop-local time and they are stored
+    // as-is, so the app clock must be in the same zone or "today" / "now"
+    // filters (dashboard, reports) miss receipts. Override with APP_TIMEZONE.
+    'timezone' => env('APP_TIMEZONE', 'Asia/Tashkent'),
 
     /*
     |--------------------------------------------------------------------------
