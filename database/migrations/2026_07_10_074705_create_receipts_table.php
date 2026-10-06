@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('pos_id')->constrained();
             $table->foreignId('shop_id')->constrained();
-            $table->string('number')->unique();
+            $table->string('number');
             $table->string('barcode')->nullable();
             $table->string('card')->nullable();
             $table->string('client')->nullable();
@@ -36,6 +36,13 @@ return new class extends Migration
             $table->string('pos_user_text')->nullable();
             $table->json('aos')->nullable();
             $table->timestamps();
+
+            // Receipt numbers are only unique per till; the ingestion job
+            // keys its idempotent updateOrCreate on this same (pos_id, number)
+            // pair so a retried submission updates the existing receipt
+            // instead of creating a duplicate.
+            $table->unique(['pos_id', 'number']);
+
             $table->index('created_at');
             $table->index(['shop_id', 'created_at']);
         });

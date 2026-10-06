@@ -60,6 +60,15 @@ class AnalyticsTest extends TestCase
         $this->assertEquals(45, $rows[1]['remaining']);
         $this->assertNull($rows[1]['min']);
 
+        // Header sorting: first click sorts ascending, second click flips it.
+        $component->call('sort', 'item');
+        $this->assertSame(['Item A', 'Item B'], array_column($component->viewData('rows')->all(), 'item'));
+        $component->call('sort', 'item');
+        $this->assertSame(['Item B', 'Item A'], array_column($component->viewData('rows')->all(), 'item'));
+        $component->call('sort', 'bogus')->call('sort', 'remaining');
+        $this->assertSame('remaining', $component->get('sortBy'));
+        $this->assertSame('Item A', $component->viewData('rows')->first()['item']);
+
         // Clicking Item A's net-sold cell lists the day's successful receipts containing it.
         $component->call('showReceipts', $a->id);
         $modal = $component->viewData('modalReceipts');

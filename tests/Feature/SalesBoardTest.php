@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessReceiptIngestion;
 use App\Livewire\SalesBoard;
 use App\Models\Item;
 use App\Models\Receipt;
@@ -10,6 +11,7 @@ use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -65,6 +67,26 @@ class SalesBoardTest extends TestCase
         $this->assertSame('5', $top['all'][0]['qty']);
         $this->assertSame('Item B', $top['all'][1]['name']);
         $this->assertCount(1, $top['shops']);
+    }
+
+    public function test_ingesting_a_receipt_clears_the_boards_cache(): void
+    {
+        $shop = Shop::factory()->create();
+        $item = Item::factory()->create();
+        $key = 'dashboard.sales-board.'.now()->toDateString();
+        Cache::put($key, ['stale' => true], 50);
+
+        ProcessReceiptIngestion::dispatchSync([
+            'shop' => $shop->id,
+            'pos' => 1,
+            'number' => 'R-1',
+            'openDate' => now()->format('d.m.y'),
+            'openTime' => '10:00:00',
+            'total' => 10,
+            'positions' => [['item' => ['id' => $item->id], 'qty' => 1, 'totalSum' => 10]],
+        ], 1);
+
+        $this->assertFalse(Cache::has($key));
     }
 
     public function test_dashboard_embeds_the_polling_board(): void

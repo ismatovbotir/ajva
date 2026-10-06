@@ -1,5 +1,6 @@
 @php
     $fmt = fn ($n) => $n === null ? '—' : rtrim(rtrim(number_format($n, 3, '.', ' '), '0'), '.');
+    $arrow = fn ($col) => $sortBy === $col ? ($sortDir === 'asc' ? '▲' : '▼') : '↕';
 @endphp
 <div>
     <x-ui.page-header :title="__('Analytics')" :subtitle="__('Stock left after the selected day\'s net sales, per shop and item.')" />
@@ -33,12 +34,23 @@
             </nav>
         </div>
 
-        <p class="mb-3 text-sm text-[#52514e]">{{ __('Sorted by stock minus net sold qty, lowest first.') }}</p>
+        <p class="mb-3 hidden text-sm text-[#52514e] md:block">{{ __('Click a column header to sort.') }}</p>
+        <div class="mb-3 flex flex-wrap gap-1.5 md:hidden">
+            @foreach([['item', 'Item'], ['stock', 'Stock'], ['sold', 'Net sold'], ['remaining', 'Remaining']] as [$col, $label])
+                <button type="button" wire:click="sort('{{ $col }}')"
+                        class="rounded-full border px-3 py-1 text-xs font-medium {{ $sortBy === $col ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-300 bg-white text-slate-700' }}">
+                    {{ __($label) }} {{ $arrow($col) }}
+                </button>
+            @endforeach
+        </div>
 
         {{-- Mobile card list --}}
         <div class="max-h-[65vh] space-y-3 overflow-y-auto md:hidden">
             @foreach($rows as $row)
                 <x-ui.card>
+                    @if($row['group'])
+                        <p class="text-xs text-slate-500">{{ $row['group'] }}</p>
+                    @endif
                     <p class="font-medium text-slate-900">{{ $row['item'] }}</p>
                     <dl class="mt-2 grid grid-cols-3 gap-2 text-sm">
                         <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ $fmt($row['stock']) }}</dd></div>
@@ -57,10 +69,14 @@
             <table class="min-w-full divide-y divide-slate-200">
                 <thead class="sticky top-0 z-10 bg-sand-50 shadow-[0_1px_0_0_#e2e8f0]">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Stock') }}</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Net sold') }}</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Remaining') }}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Group') }}</th>
+                        @foreach([['item', 'Item', 'text-left'], ['stock', 'Stock', 'text-right'], ['sold', 'Net sold', 'text-right'], ['remaining', 'Remaining', 'text-right']] as [$col, $label, $align])
+                            <th class="px-4 py-3 {{ $align }} text-xs font-semibold uppercase tracking-wide text-slate-500" aria-sort="{{ $sortBy === $col ? ($sortDir === 'asc' ? 'ascending' : 'descending') : 'none' }}">
+                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-800 {{ $sortBy === $col ? 'text-brand-700' : '' }}">
+                                    {{ __($label) }}<span class="text-[10px]">{{ $arrow($col) }}</span>
+                                </button>
+                            </th>
+                        @endforeach
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Min') }}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Max') }}</th>
                     </tr>
@@ -68,6 +84,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @foreach($rows as $row)
                         <tr>
+                            <td class="px-4 py-3 text-sm text-slate-500">{{ $row['group'] ?? '—' }}</td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item'] }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['stock']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums">

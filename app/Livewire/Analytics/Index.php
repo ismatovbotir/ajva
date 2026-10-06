@@ -14,6 +14,9 @@ class Index extends Component
 {
     private const CACHE_TTL = 300;
 
+    /** Row keys the column headers can sort by. */
+    private const SORTABLE = ['item', 'stock', 'sold', 'remaining'];
+
     public string $date = '';
 
     public bool $generated = false;
@@ -24,6 +27,10 @@ class Index extends Component
     public ?int $shopId = null;
 
     public ?int $modalItemId = null;
+
+    public string $sortBy = 'remaining';
+
+    public string $sortDir = 'asc';
 
     public function mount(): void
     {
@@ -51,6 +58,20 @@ class Index extends Component
     {
         $this->shopId = $shopId;
         $this->modalItemId = null;
+    }
+
+    public function sort(string $column): void
+    {
+        if (! in_array($column, self::SORTABLE, true)) {
+            return;
+        }
+
+        if ($this->sortBy === $column) {
+            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDir = 'asc';
+        }
     }
 
     public function showReceipts(int $itemId): void
@@ -98,9 +119,15 @@ class Index extends Component
             ? $this->cached('rows.'.$this->shopId, fn () => $this->buildRows($this->shopId))
             : collect();
 
+        // Sorting is applied on top of the cached rows, so it costs no queries.
+        $flags = $this->sortBy === 'item' ? SORT_NATURAL | SORT_FLAG_CASE : SORT_REGULAR;
+        $rows = $rows->sortBy($this->sortBy, $flags, $this->sortDir === 'desc')->values();
+
         return view('livewire.analytics.index', [
             'tabs' => $tabs,
             'rows' => $rows,
+            'sortBy' => $this->sortBy,
+            'sortDir' => $this->sortDir,
             'modalReceipts' => $this->modalReceipts(),
             'modalItemName' => $rows->firstWhere('item_id', $this->modalItemId)['item'] ?? null,
         ]);
@@ -176,7 +203,11 @@ class Index extends Component
         $rules = collect();
         foreach ($ids->chunk(500) as $chunk) {
             $chunk = $chunk->all();
-            $names = $names->union(DB::table('items')->whereIn('id', $chunk)->pluck('name', 'id'));
+            $names = $names->union(DB::table('items')
+                ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
+                ->whereIn('items.id', $chunk)
+                ->get(['items.id', 'items.name', 'groups.name as group_name'])
+                ->keyBy('id'));
             $stocks = $stocks->union(DB::table('stocks')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->pluck('qty', 'item_id'));
             $rules = $rules->union(DB::table('item_order_rules')->where('shop_id', $shopId)->whereIn('item_id', $chunk)->get(['item_id', 'min', 'max'])->keyBy('item_id'));
         }
@@ -188,14 +219,15 @@ class Index extends Component
 
             return [
                 'item_id' => (int) $itemId,
-                'item' => $names[$itemId] ?? '#'.$itemId,
+                'group' => $names[$itemId]->group_name ?? null,
+                'item' => $names[$itemId]->name ?? '#'.$itemId,
                 'stock' => $stock,
                 'sold' => $net,
                 'remaining' => $stock - $net,
                 'min' => $rule ? (float) $rule->min : null,
                 'max' => $rule ? (float) $rule->max : null,
             ];
-        })->sortBy('remaining')->values();
+        })->values();
     }
 
     /**

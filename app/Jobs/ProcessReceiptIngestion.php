@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ProcessReceiptIngestion implements ShouldQueue
@@ -155,6 +156,10 @@ class ProcessReceiptIngestion implements ShouldQueue
             // Decrementing stock again here would risk double-adjustment
             // against 1C's own periodic sync.
         });
+
+        // Drop the dashboard sales board's cached numbers so its next
+        // 1-minute poll reflects this receipt instead of a stale copy.
+        Cache::forget('dashboard.sales-board.'.now()->toDateString());
     }
 
     protected function parseDateTime(string $date, string $time): Carbon
