@@ -1,0 +1,50 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\Analytics\Index;
+use App\Models\Item;
+use App\Models\Receipt;
+use App\Models\ReceiptItem;
+use App\Models\Shop;
+use App\Models\Stock;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class AnalyticsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_generate_nets_sales_and_refunds_against_stock_sorted_descending(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $a = Item::factory()->create(['name' => 'Item A']);
+        $b = Item::factory()->create(['name' => 'Item B']);
+        Stock::query()->create(['shop_id' => $shop->id, 'item_id' => $a->id, 'qty' => 10]);
+        Stock::query()->create(['shop_id' => $shop->id, 'item_id' => $b->id, 'qty' => 50]);
+
+        $sale = Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'created_at' => now()]);
+        $refund = Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => false, 'created_at' => now()]);
+        $failed = Receipt::factory()->create(['shop_id' => $shop->id, 'active' => false, 'sell' => true, 'created_at' => now()]);
+
+        foreach ([[$sale, $a, 4], [$refund, $a, 1], [$failed, $a, 99], [$sale, $b, 5]] as [$r, $i, $qty]) {
+            ReceiptItem::factory()->create(['receipt_id' => $r->id, 'item_id' => $i->id, 'qty' => $qty, 'storno' => false]);
+        }
+
+        $component = Livewire::actingAs($user)->test(Index::class)
+            ->assertSee(__('Pick a date and press Generate.'))
+            ->call('generate');
+
+        $rows = $component->viewData('rows')->items();
+
+        $this->assertSame('Item B', $rows[0]['item']);
+        $this->assertEquals(45, $rows[0]['remaining']);
+        $this->assertSame('Item A', $rows[1]['item']);
+        $this->assertEquals(3, $rows[1]['sold']);      // 4 sold - 1 refunded
+        $this->assertEquals(7, $rows[1]['remaining']); // 10 - 3
+        $this->assertSame(10.0, Stock::where('item_id', $a->id)->first()->qty + 0.0); // stock untouched
+    }
+}

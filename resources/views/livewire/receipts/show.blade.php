@@ -12,6 +12,14 @@
                 <dd class="mt-1 text-sm font-medium text-slate-900">{{ $receipt->number }}</dd>
             </div>
             <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Date') }}</dt>
+                <dd class="mt-1 text-sm text-slate-900">{{ $receipt->created_at->format('d.m.Y') }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Time') }}</dt>
+                <dd class="mt-1 text-sm text-slate-900">{{ $receipt->created_at->format('H:i:s') }}</dd>
+            </div>
+            <div>
                 <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Client') }}</dt>
                 <dd class="mt-1 text-sm text-slate-900">{{ $receipt->client ?? '—' }}</dd>
             </div>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\Auth\Login;
 use App\Livewire\Categories\Index as CategoriesIndex;
 use App\Livewire\Dashboard;
@@ -50,4 +51,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/items/{item}', ItemsShow::class)->name('items.show');
     Route::get('/receipts', ReceiptsIndex::class)->name('receipts.index');
     Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
+    Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
 });

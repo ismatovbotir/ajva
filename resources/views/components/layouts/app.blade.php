@@ -9,6 +9,7 @@
         ['label' => 'Prices', 'route' => 'prices.index', 'icon' => 'currency'],
         ['label' => 'Items', 'route' => 'items.index', 'icon' => 'box'],
         ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
+        ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
     ];
 
     $bottomNavItems = collect($navItems)->take(4);
