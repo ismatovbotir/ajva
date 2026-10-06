@@ -118,7 +118,7 @@
     "No report yet": "Hisobot hali yoʻq",
     "Pick a date and press Generate.": "Sanani tanlang va «Hisoblash» tugmasini bosing.",
     "Stock left after the selected day's net sales, per shop and item.": "Tanlangan kunning sof savdosidan keyingi qoldiq, doʻkon va tovar boʻyicha.",
-    "Sorted by stock minus net sold qty, highest first.": "Qoldiq minus sof sotilgan miqdor boʻyicha, kattasidan kichigiga.",
+    "Sorted by stock minus net sold qty, lowest first.": "Qoldiq minus sof sotilgan miqdor boʻyicha, kichigidan kattasiga.",
     "Stock": "Qoldiq",
     "Net sold": "Sof sotilgan",
     "Remaining": "Qolgan",

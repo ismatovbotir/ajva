@@ -20,6 +20,8 @@ class Index extends Component
 
     public bool $generated = false;
 
+    public ?int $shopId = null;
+
     public function mount(): void
     {
         $this->date = now()->toDateString();
@@ -41,11 +43,29 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function selectShop(int $shopId): void
+    {
+        $this->shopId = $shopId;
+        $this->resetPage();
+    }
+
     public function render()
     {
-        $rows = $this->generated ? $this->buildRows() : collect();
+        $all = $this->generated ? $this->buildRows() : collect();
+
+        $tabs = $all->unique('shop_id')->sortBy('shop')->map(fn ($r) => [
+            'id' => $r['shop_id'],
+            'name' => $r['shop'],
+        ])->values();
+
+        if ($tabs->isNotEmpty() && ! $tabs->contains('id', $this->shopId)) {
+            $this->shopId = $tabs->first()['id'];
+        }
+
+        $rows = $all->where('shop_id', $this->shopId)->values();
 
         return view('livewire.analytics.index', [
+            'tabs' => $tabs,
             'rows' => new LengthAwarePaginator(
                 $rows->forPage($this->getPage(), self::PER_PAGE)->values(),
                 $rows->count(),
@@ -76,11 +96,18 @@ class Index extends Component
             ->where('receipts.active', true)
             ->where('receipt_items.storno', false)
             ->whereBetween('receipts.created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
-            ->groupBy('receipts.shop_id', 'receipt_items.item_id', 'shops.name', 'items.name', 'stocks.qty')
+            ->leftJoin('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'receipt_items.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'receipts.shop_id');
+            })
+            ->groupBy('receipts.shop_id', 'receipt_items.item_id', 'shops.name', 'items.name', 'stocks.qty', 'item_order_rules.min', 'item_order_rules.max')
             ->get([
+                'receipts.shop_id as shop_id',
                 'shops.name as shop_name',
                 'items.name as item_name',
                 'stocks.qty as stock_qty',
+                'item_order_rules.min as rule_min',
+                'item_order_rules.max as rule_max',
                 DB::raw('SUM(CASE WHEN receipts.sell = 1 THEN receipt_items.qty ELSE -receipt_items.qty END) as sold_qty'),
             ])
             ->map(function ($row) {
@@ -88,14 +115,17 @@ class Index extends Component
                 $sold = (float) $row->sold_qty;
 
                 return [
+                    'shop_id' => (int) $row->shop_id,
                     'shop' => $row->shop_name,
                     'item' => $row->item_name,
                     'stock' => $stock,
                     'sold' => $sold,
                     'remaining' => $stock - $sold,
+                    'min' => $row->rule_min === null ? null : (float) $row->rule_min,
+                    'max' => $row->rule_max === null ? null : (float) $row->rule_max,
                 ];
             })
-            ->sortByDesc('remaining')
+            ->sortBy('remaining')
             ->values();
     }
 
