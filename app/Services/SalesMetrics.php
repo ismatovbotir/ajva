@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -23,19 +24,20 @@ class SalesMetrics
     public const TOP_ITEMS = 20;
 
     /**
+     * @param  array<int, int>|null  $shopIds  restrict to these shops (null = all, see ShopAccess)
      * @return array<string, mixed>
      */
-    public function board(Carbon $now): array
+    public function board(Carbon $now, ?array $shopIds = null): array
     {
         $todayStart = $now->copy()->startOfDay();
         $yesterdayStart = $todayStart->copy()->subDay();
         $yesterdayCut = $now->copy()->subDay(); // same time of day, previous day
 
-        $shops = DB::table('shops')->orderBy('name')->pluck('name', 'id')->all();
+        $shops = ShopAccess::restrictTo(DB::table('shops')->orderBy('name'), 'id', $shopIds)->pluck('name', 'id')->all();
 
         // Per shop: today so far vs. the previous day up to the same time.
-        $today = $this->shopTotals($todayStart, $now);
-        $yesterday = $this->shopTotals($yesterdayStart, $yesterdayCut);
+        $today = $this->shopTotals($todayStart, $now, $shopIds);
+        $yesterday = $this->shopTotals($yesterdayStart, $yesterdayCut, $shopIds);
 
         $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday)));
         usort($shopIds, fn ($a, $b) => ($today[$b]['sum'] ?? 0) <=> ($today[$a]['sum'] ?? 0));
@@ -76,12 +78,12 @@ class SalesMetrics
             'table' => $table,
             'totals' => $totals,
             'legend' => array_map(fn ($r) => ['name' => $r['name'], 'color' => $r['color']], $table),
-            'charts' => $this->hourly($todayStart, $yesterdayStart, $shops, $colors),
-            'topItems' => $this->topItems($todayStart, $now, $shops, $colors),
-            'profit' => $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors),
-            'payments' => $this->paymentMix($todayStart, $now),
-            'refunds' => $this->refunds($todayStart, $now),
-            'trend' => $this->trend($todayStart),
+            'charts' => $this->hourly($todayStart, $yesterdayStart, $shops, $colors, $shopIds),
+            'topItems' => $this->topItems($todayStart, $now, $shops, $colors, $shopIds),
+            'profit' => $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors, $shopIds),
+            'payments' => $this->paymentMix($todayStart, $now, $shopIds),
+            'refunds' => $this->refunds($todayStart, $now, $shopIds),
+            'trend' => $this->trend($todayStart, $shopIds),
         ];
     }
 
@@ -90,9 +92,9 @@ class SalesMetrics
      *
      * @return array<int, array{count: int, sum: float}>
      */
-    public function shopTotals(Carbon $from, Carbon $to): array
+    public function shopTotals(Carbon $from, Carbon $to, ?array $shopIds = null): array
     {
-        return DB::table('receipts')
+        return ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
             ->where('active', true)
             ->where('sell', true)
             ->whereBetween('created_at', [$from, $to])
@@ -108,13 +110,13 @@ class SalesMetrics
      *
      * @return array<string, array<int, array<string, mixed>>>
      */
-    public function hourly(Carbon $todayStart, Carbon $yesterdayStart, array $shops, array $colors): array
+    public function hourly(Carbon $todayStart, Carbon $yesterdayStart, array $shops, array $colors, ?array $shopIds = null): array
     {
         $hourExpr = DB::getDriverName() === 'sqlite'
             ? "CAST(strftime('%H', created_at) AS INTEGER)"
             : 'HOUR(created_at)';
 
-        $rows = DB::table('receipts')
+        $rows = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
             ->where('active', true)
             ->where('sell', true)
             ->whereBetween('created_at', [$yesterdayStart, $todayStart->copy()->endOfDay()])
@@ -176,10 +178,10 @@ class SalesMetrics
      *
      * @return array{all: array, shops: array}
      */
-    public function topItems(Carbon $from, Carbon $to, array $shops, array $colors): array
+    public function topItems(Carbon $from, Carbon $to, array $shops, array $colors, ?array $shopIds = null): array
     {
-        $rows = DB::table('receipt_items')
-            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+        $rows = ShopAccess::restrictTo(DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
             ->tap(fn ($q) => $this->joinCost($q))
@@ -258,10 +260,10 @@ class SalesMetrics
      *
      * @return array<string, mixed>
      */
-    public function profitSummary(Carbon $from, Carbon $to, Carbon $yFrom, Carbon $yTo, array $shops, array $colors): array
+    public function profitSummary(Carbon $from, Carbon $to, Carbon $yFrom, Carbon $yTo, array $shops, array $colors, ?array $shopIds = null): array
     {
-        $today = $this->profitByShop($from, $to);
-        $yesterday = $this->profitByShop($yFrom, $yTo);
+        $today = $this->profitByShop($from, $to, $shopIds);
+        $yesterday = $this->profitByShop($yFrom, $yTo, $shopIds);
 
         $sum = fn (array $rows, string $k) => array_sum(array_column($rows, $k));
         $tProfit = $sum($today, 'profit');
@@ -284,8 +286,8 @@ class SalesMetrics
             ];
         }
 
-        $missingItems = (int) DB::table('receipt_items')
-            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+        $missingItems = (int) ShopAccess::restrictTo(DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->tap(fn ($q) => $this->joinCost($q))
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
@@ -309,10 +311,10 @@ class SalesMetrics
     /**
      * @return array<int, array{profit: float, covered: float, revenue: float}>
      */
-    public function profitByShop(Carbon $from, Carbon $to): array
+    public function profitByShop(Carbon $from, Carbon $to, ?array $shopIds = null): array
     {
-        return DB::table('receipt_items')
-            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+        return ShopAccess::restrictTo(DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->tap(fn ($q) => $this->joinCost($q))
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
@@ -337,10 +339,10 @@ class SalesMetrics
      *
      * @return array<int, array<string, mixed>>
      */
-    public function paymentMix(Carbon $from, Carbon $to): array
+    public function paymentMix(Carbon $from, Carbon $to, ?array $shopIds = null): array
     {
-        $rows = DB::table('receipt_payments')
-            ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id')
+        $rows = ShopAccess::restrictTo(DB::table('receipt_payments')
+            ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id'), 'receipts.shop_id', $shopIds)
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
             ->whereBetween('receipts.created_at', [$from, $to])
@@ -364,9 +366,9 @@ class SalesMetrics
      *
      * @return array{count: int, sum: float}
      */
-    public function refunds(Carbon $from, Carbon $to): array
+    public function refunds(Carbon $from, Carbon $to, ?array $shopIds = null): array
     {
-        $r = DB::table('receipts')
+        $r = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
             ->where('active', true)
             ->where('sell', false)
             ->whereBetween('created_at', [$from, $to])
@@ -381,12 +383,12 @@ class SalesMetrics
      *
      * @return array<int, array<string, mixed>>
      */
-    public function trend(Carbon $todayStart): array
+    public function trend(Carbon $todayStart, ?array $shopIds = null): array
     {
         $from = $todayStart->copy()->subDays(6);
         $to = $todayStart->copy()->endOfDay();
 
-        $rev = DB::table('receipts')
+        $rev = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
             ->where('active', true)
             ->where('sell', true)
             ->whereBetween('created_at', [$from, $to])
@@ -395,8 +397,8 @@ class SalesMetrics
             ->get()
             ->keyBy('d');
 
-        $profit = DB::table('receipt_items')
-            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
+        $profit = ShopAccess::restrictTo(DB::table('receipt_items')
+            ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->tap(fn ($q) => $this->joinCost($q))
             ->where('receipts.active', true)
             ->where('receipts.sell', true)

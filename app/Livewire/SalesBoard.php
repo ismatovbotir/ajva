@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Services\SalesMetrics;
+use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
@@ -21,16 +22,18 @@ class SalesBoard extends Component
     public function render()
     {
         $now = now();
+        $ids = ShopAccess::ids();
 
         return view('livewire.sales-board', Cache::remember(
-            $this->cacheKey($now),
+            $this->cacheKey($now, $ids),
             self::CACHE_TTL,
-            fn () => app(SalesMetrics::class)->board($now->copy()),
-        ));
+            fn () => app(SalesMetrics::class)->board($now->copy(), $ids),
+        ) + ['noShops' => $ids === []]);
     }
 
-    private function cacheKey(?Carbon $at = null): string
+    /** Varies by day, shop scope and the sales version (bumped on receipt ingestion). */
+    private function cacheKey(?Carbon $at = null, ?array $ids = null): string
     {
-        return 'dashboard.sales-board.'.($at ?? now())->toDateString();
+        return ShopAccess::salesKey('dashboard.sales-board', ($at ?? now())->toDateString(), $ids);
     }
 }

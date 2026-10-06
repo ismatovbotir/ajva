@@ -1,6 +1,10 @@
 <div>
     <x-ui.page-header :title="__('Receipts')" :subtitle="__('Sales receipts ingested from POS terminals.')" />
 
+    @if($noShops)
+        <div class="mb-6"><x-ui.no-shops /></div>
+    @endif
+
     {{-- Day selector --}}
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div class="w-full sm:w-56">

@@ -4,6 +4,7 @@ namespace App\Livewire\Shops;
 
 use App\Models\Receipt;
 use App\Models\Shop;
+use App\Support\ShopAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -15,7 +16,7 @@ class Index extends Component
 
     public function render()
     {
-        $shops = Shop::query()
+        $shops = ShopAccess::restrict(Shop::query(), 'shops.id')
             ->withCount('stocks as item_count')
             ->withSum('stocks as qty_total', 'qty')
             ->orderBy('name')
@@ -37,6 +38,7 @@ class Index extends Component
             ->keyBy('shop_id');
 
         return view('livewire.shops.index', [
+            'noShops' => ShopAccess::hasNone(),
             'shops' => $shops,
             'today' => $today,
         ]);

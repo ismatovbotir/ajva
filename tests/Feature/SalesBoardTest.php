@@ -9,6 +9,7 @@ use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\Shop;
 use App\Models\User;
+use App\Support\ShopAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -73,8 +74,9 @@ class SalesBoardTest extends TestCase
     {
         $shop = Shop::factory()->create();
         $item = Item::factory()->create();
-        $key = 'dashboard.sales-board.'.now()->toDateString();
-        Cache::put($key, ['stale' => true], 50);
+        $keyFor = fn () => ShopAccess::salesKey('dashboard.sales-board', now()->toDateString(), null);
+        $before = $keyFor();
+        Cache::put($before, ['stale' => true], 50);
 
         ProcessReceiptIngestion::dispatchSync([
             'shop' => $shop->id,
@@ -86,7 +88,8 @@ class SalesBoardTest extends TestCase
             'positions' => [['item' => ['id' => $item->id], 'qty' => 1, 'totalSum' => 10]],
         ], 1);
 
-        $this->assertFalse(Cache::has($key));
+        // The version is part of every key, so the stale entry is simply never read again.
+        $this->assertNotSame($before, $keyFor());
     }
 
     public function test_dashboard_embeds_the_board_polling_every_two_minutes_without_a_refresh_button(): void

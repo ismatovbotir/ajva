@@ -3,6 +3,7 @@
 namespace App\Livewire\Items;
 
 use App\Models\Item;
+use App\Support\ShopAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -21,8 +22,8 @@ class Show extends Component
         return view('livewire.items.show', [
             'barcodes' => $this->item->barcodes()->orderBy('id')->get(),
             'itemPrices' => $this->item->itemPrices()->with('price')->orderBy('id')->get(),
-            'orderRules' => $this->item->orderRules()->with('shop')->orderBy('id')->get(),
-            'stocks' => $this->item->stocks()->with('shop')->orderBy('id')->get(),
+            'orderRules' => ShopAccess::restrict($this->item->orderRules(), 'item_order_rules.shop_id')->with('shop')->orderBy('id')->get(),
+            'stocks' => ShopAccess::restrict($this->item->stocks(), 'stocks.shop_id')->with('shop')->orderBy('id')->get(),
         ]);
     }
 }

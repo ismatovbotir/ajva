@@ -5,7 +5,9 @@
         </x-slot:actions>
     </x-ui.page-header>
 
-    @if($poses->isEmpty())
+    @if($noShops)
+        <x-ui.no-shops />
+    @elseif($poses->isEmpty())
         <x-ui.empty-state :title="__('No pos terminals yet')" :description="__('Create your first pos terminal to get started.')" />
     @else
         {{-- Mobile card list --}}

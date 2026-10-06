@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Support\ShopAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -45,8 +46,13 @@ class Dashboard extends Component
         'warning' => '#fab219',
     ];
 
+    /** Shop ids the current user may see (null = all); set at the start of every render. */
+    private ?array $scope = null;
+
     public function render()
     {
+        $this->scope = ShopAccess::ids();
+
         $byShop = $this->stockByShop();
         $byGroup = $this->stockByGroup();
 
@@ -68,6 +74,7 @@ class Dashboard extends Component
         })->values()->all();
 
         return view('livewire.dashboard', [
+            'noShops' => $this->scope === [],
             'shopRows' => $shopRows,
             'shopMax' => $shopMax,
             'donut' => $this->buildDonut($byShop),
@@ -76,18 +83,27 @@ class Dashboard extends Component
             'donutGroup' => $this->buildDonut($byGroup),
             'groupShop' => $this->stockByGroupAndShop($byShop, $byGroup),
             'barColor' => self::CATEGORY_COLORS[0],
-            'exceptions' => $this->cached('exceptions', fn () => $this->reorderExceptions()),
-            'coverage' => $this->cached('coverage', fn () => $this->ruleCoverage()),
-            'margins' => $this->cached('margins', fn () => $this->itemMargins()),
-            'belowCost' => $this->cached('below-cost', fn () => $this->belowCostPrices()),
-            'health' => $this->cached('stock-health', fn () => $this->stockHealth()),
+            'exceptions' => $this->cached('exceptions', true, fn () => $this->reorderExceptions()),
+            'coverage' => $this->cached('coverage', true, fn () => $this->ruleCoverage()),
+            'margins' => $this->cached('margins', false, fn () => $this->itemMargins()),
+            'belowCost' => $this->cached('below-cost', false, fn () => $this->belowCostPrices()),
+            'health' => $this->cached('stock-health', true, fn () => $this->stockHealth()),
         ]);
     }
 
-    /** Heavy catalogue-wide aggregates change only on 1C sync, so a short shared cache is enough. */
-    private function cached(string $key, \Closure $callback): array
+    /** Limits a query on `stocks` to the shops the current user may see. */
+    private function shopScoped($query)
     {
-        return Cache::remember('dashboard.'.$key, self::CACHE_TTL, $callback);
+        return ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope);
+    }
+
+    /** Heavy catalogue-wide aggregates change only on 1C sync, so a short shared cache is enough. */
+    private function cached(string $key, bool $shopBound, \Closure $callback): array
+    {
+        // Shop-bound results are cached per scope so operators never share numbers.
+        $suffix = $shopBound ? '.'.ShopAccess::scopeKey($this->scope) : '';
+
+        return Cache::remember('dashboard.'.$key.$suffix, self::CACHE_TTL, $callback);
     }
 
     /**
@@ -102,7 +118,7 @@ class Dashboard extends Component
     {
         $costId = (int) config('inventory.cost_price_id');
 
-        $base = fn () => DB::table('stocks')
+        $base = fn () => $this->shopScoped(DB::table('stocks'))
             ->leftJoin('item_prices as cost', function ($join) use ($costId) {
                 $join->on('cost.item_id', '=', 'stocks.item_id')->where('cost.price_id', '=', $costId);
             })
@@ -125,7 +141,7 @@ class Dashboard extends Component
         $uncovered = (float) $perShop->sum('uncovered_units');
         $max = (float) ($perShop->max('value') ?: 1);
 
-        $missingItems = (int) DB::table('stocks')
+        $missingItems = (int) $this->shopScoped(DB::table('stocks'))
             ->leftJoin('item_prices as cost', function ($join) use ($costId) {
                 $join->on('cost.item_id', '=', 'stocks.item_id')->where('cost.price_id', '=', $costId);
             })
@@ -134,7 +150,7 @@ class Dashboard extends Component
             ->distinct()
             ->count('stocks.item_id');
 
-        $outOfStock = (int) DB::table('stocks')
+        $outOfStock = (int) $this->shopScoped(DB::table('stocks'))
             ->join('item_order_rules', function ($join) {
                 $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                     ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
@@ -165,7 +181,7 @@ class Dashboard extends Component
      */
     private function stockByShop(): Collection
     {
-        return DB::table('stocks')
+        return $this->shopScoped(DB::table('stocks'))
             ->join('shops', 'shops.id', '=', 'stocks.shop_id')
             ->selectRaw('shops.id as id, shops.name as name, SUM(stocks.qty) as total')
             ->groupBy('shops.id', 'shops.name')
@@ -186,7 +202,7 @@ class Dashboard extends Component
      */
     private function stockByGroup(): Collection
     {
-        return DB::table('stocks')
+        return $this->shopScoped(DB::table('stocks'))
             ->join('items', 'items.id', '=', 'stocks.item_id')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
             ->selectRaw('items.group_id as id, groups.name as name, SUM(stocks.qty) as total')
@@ -208,7 +224,7 @@ class Dashboard extends Component
      */
     private function stockByGroupAndShop(Collection $byShop, Collection $byGroup): array
     {
-        $raw = DB::table('stocks')
+        $raw = $this->shopScoped(DB::table('stocks'))
             ->join('items', 'items.id', '=', 'stocks.item_id')
             ->join('shops', 'shops.id', '=', 'stocks.shop_id')
             ->selectRaw('items.group_id as group_id, shops.id as shop_id, SUM(stocks.qty) as total')
@@ -408,7 +424,7 @@ class Dashboard extends Component
     {
         $cap = 20;
 
-        $base = DB::table('stocks')
+        $base = $this->shopScoped(DB::table('stocks'))
             ->join('item_order_rules', function ($join) {
                 $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                     ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
@@ -472,9 +488,9 @@ class Dashboard extends Component
      */
     private function ruleCoverage(): array
     {
-        $total = DB::table('stocks')->count();
+        $total = $this->shopScoped(DB::table('stocks'))->count();
 
-        $covered = DB::table('stocks')
+        $covered = $this->shopScoped(DB::table('stocks'))
             ->join('item_order_rules', function ($join) {
                 $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                     ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');

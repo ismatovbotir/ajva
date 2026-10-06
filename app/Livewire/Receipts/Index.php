@@ -3,6 +3,7 @@
 namespace App\Livewire\Receipts;
 
 use App\Models\Receipt;
+use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -41,14 +42,17 @@ class Index extends Component
         $from = $day->copy()->startOfDay();
         $to = $day->copy()->endOfDay();
 
+        $ids = ShopAccess::ids();
+
         $analytics = Cache::remember(
-            'receipts.analytics.'.$from->toDateString(),
+            ShopAccess::salesKey('receipts.analytics', $from->toDateString(), $ids),
             self::ANALYTICS_TTL,
-            fn () => $this->buildAnalytics($from, $to),
+            fn () => $this->buildAnalytics($from, $to, $ids),
         );
 
         return view('livewire.receipts.index', [
-            'receipts' => Receipt::query()
+            'noShops' => $ids === [],
+            'receipts' => ShopAccess::restrictTo(Receipt::query(), 'receipts.shop_id', $ids)
                 ->with(['pos', 'shop'])
                 ->whereBetween('created_at', [$from, $to])
                 ->orderBy('created_at')
@@ -60,16 +64,16 @@ class Index extends Component
     /**
      * @return array<string, mixed>
      */
-    private function buildAnalytics(Carbon $from, Carbon $to): array
+    private function buildAnalytics(Carbon $from, Carbon $to, ?array $ids): array
     {
-        $shops = DB::table('shops')->pluck('name', 'id')->all();
+        $shops = ShopAccess::restrictTo(DB::table('shops'), 'id', $ids)->pluck('name', 'id')->all();
 
         // Refunds count negatively so the totals reflect net sales.
         $sign = fn ($sell) => $sell ? 1 : -1;
 
         // Shop totals by payment type.
-        $paymentRows = DB::table('receipt_payments')
-            ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id')
+        $paymentRows = ShopAccess::restrictTo(DB::table('receipt_payments')
+            ->join('receipts', 'receipts.id', '=', 'receipt_payments.receipt_id'), 'receipts.shop_id', $ids)
             ->where('receipts.active', true)
             ->whereBetween('receipts.created_at', [$from, $to])
             ->get(['receipts.shop_id', 'receipts.sell', 'receipt_payments.payment', 'receipt_payments.value']);
@@ -101,7 +105,7 @@ class Index extends Component
         $hourly = [];
         $shopTotals = [];
         $count = 0;
-        $receiptRows = DB::table('receipts')
+        $receiptRows = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $ids)
             ->where('active', true)
             ->whereBetween('created_at', [$from, $to])
             ->get(['shop_id', 'sell', 'total', 'created_at']);

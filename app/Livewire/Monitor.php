@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Services\SalesMetrics;
 use App\Support\MonitorSettings;
+use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +25,10 @@ class Monitor extends Component
 
     private const TICKER_ROWS = 8;
 
-    public static function cacheKey(?Carbon $at = null): string
+    /** Varies by day, shop scope and the sales version (bumped on receipt ingestion). */
+    public static function cacheKey(?Carbon $at = null, ?array $ids = null): string
     {
-        return 'dashboard.monitor.'.($at ?? now())->toDateString();
+        return ShopAccess::salesKey('dashboard.monitor', ($at ?? now())->toDateString(), $ids);
     }
 
     /**
@@ -70,12 +72,14 @@ class Monitor extends Component
         $now = now();
         $public = $this->publicToken !== null;
         $showProfit = ! $public || app(MonitorSettings::class)->showProfit();
+        // The public (no-login) screen is global by design; the authenticated one follows the user's shops.
+        $ids = $public ? null : ShopAccess::ids();
 
         $data = Cache::remember(
-            self::cacheKey($now),
+            self::cacheKey($now, $ids),
             self::CACHE_TTL,
-            fn () => app(SalesMetrics::class)->board($now->copy()) + [
-                'latest' => $this->latestReceipts($now->copy()->startOfDay(), $now),
+            fn () => app(SalesMetrics::class)->board($now->copy(), $ids) + [
+                'latest' => $this->latestReceipts($now->copy()->startOfDay(), $now, $ids),
             ],
         );
 
@@ -87,7 +91,8 @@ class Monitor extends Component
         return view('livewire.monitor', $data + [
             'public' => $public,
             'showProfit' => $showProfit,
-            'alerts' => Cache::remember('dashboard.monitor.alerts', self::ALERTS_TTL, fn () => $this->stockAlerts()),
+            'alerts' => Cache::remember('dashboard.monitor.alerts.'.ShopAccess::scopeKey($ids), self::ALERTS_TTL, fn () => $this->stockAlerts($ids)),
+            'noShops' => $ids === [],
             'renderedAt' => $now->timestamp,
             'timezone' => config('app.timezone'),
             'currentHour' => (int) $now->format('G'),
@@ -134,9 +139,9 @@ class Monitor extends Component
      *
      * @return array<int, array<string, mixed>>
      */
-    private function latestReceipts(Carbon $from, Carbon $to): array
+    private function latestReceipts(Carbon $from, Carbon $to, ?array $ids = null): array
     {
-        $rows = DB::table('receipts')
+        $rows = ShopAccess::restrictTo(DB::table('receipts'), 'receipts.shop_id', $ids)
             ->join('shops', 'shops.id', '=', 'receipts.shop_id')
             ->where('receipts.active', true)
             ->whereBetween('receipts.created_at', [$from, $to])
@@ -165,9 +170,9 @@ class Monitor extends Component
     /**
      * @return array{below_min: int, out_of_stock: int}
      */
-    private function stockAlerts(): array
+    private function stockAlerts(?array $ids = null): array
     {
-        $pairs = fn () => DB::table('stocks')->join('item_order_rules', function ($join) {
+        $pairs = fn () => ShopAccess::restrictTo(DB::table('stocks'), 'stocks.shop_id', $ids)->join('item_order_rules', function ($join) {
             $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                 ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
         });

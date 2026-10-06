@@ -52,6 +52,10 @@
     @offline.window="online = false"
     class="flex min-h-screen flex-col gap-[0.9rem] p-[1rem] lg:h-screen lg:overflow-hidden"
 >
+    @if($noShops)
+        <p class="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-[1.2rem] py-[0.7rem] text-[1.1rem] text-amber-300">{{ __('No shops are assigned to you. Ask an admin.') }}</p>
+    @endif
+
     {{-- Header strip --}}
     <header class="flex flex-wrap items-center justify-between gap-x-[1.5rem] gap-y-2 rounded-2xl border bg-slate-900 px-[1.2rem] py-[0.7rem]"
             :class="stale ? 'border-red-500' : 'border-slate-800'">

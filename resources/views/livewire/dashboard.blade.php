@@ -1,6 +1,10 @@
 <div>
     <x-ui.page-header :title="__('Dashboard')" :subtitle="__('Sales, profit and stock health across all shops.')" />
 
+    @if($noShops)
+        <div class="mb-6"><x-ui.no-shops /></div>
+    @endif
+
     <div class="space-y-6">
         <livewire:sales-board />
 

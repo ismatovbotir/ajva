@@ -16,7 +16,9 @@
         </x-ui.button>
     </div>
 
-    @if(! $generated)
+    @if($noShops)
+        <x-ui.no-shops />
+    @elseif(! $generated)
         <x-ui.empty-state :title="__('No report yet')" :description="__('Pick a date and press Generate.')" />
     @elseif($tabs->isEmpty())
         <x-ui.empty-state :title="__('No shops yet')" :description="__('Shops will appear here once 1C sends stock data for them.')" />

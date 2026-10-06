@@ -9,6 +9,21 @@
         <x-ui.input name="search" :label="__('Search')" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search by name or email') }}" />
     </div>
 
+    @php
+        // Operators: first two assigned shop names (+N); others see everything.
+        $shopSummary = function ($user) {
+            if ($user->role !== App\Enums\UserRole::Operator) {
+                return __('All shops');
+            }
+            if ($user->shops->isEmpty()) {
+                return __('No shops assigned');
+            }
+            $names = $user->shops->sortBy('name')->pluck('name');
+
+            return $names->take(2)->implode(', ').($names->count() > 2 ? ' +'.($names->count() - 2) : '');
+        };
+    @endphp
+
     @error('delete')
         <div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{{ $message }}</div>
     @enderror
@@ -30,6 +45,7 @@
                             </p>
                             <p class="truncate text-sm text-slate-500">{{ $user->email }}</p>
                             <x-ui.badge :variant="$user->role->badgeVariant()" class="mt-1">{{ $user->role->label() }}</x-ui.badge>
+                            <p class="mt-1 truncate text-xs text-slate-500" title="{{ $user->shops->pluck('name')->implode(', ') }}">{{ $shopSummary($user) }}</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <x-ui.button variant="secondary" wire:click="edit({{ $user->id }})">{{ __('Edit') }}</x-ui.button>
@@ -50,6 +66,7 @@
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Name') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Email') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Role') }}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shops') }}</th>
                         <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
@@ -64,6 +81,7 @@
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $user->email }}</td>
                             <td class="px-4 py-3 text-sm"><x-ui.badge :variant="$user->role->badgeVariant()">{{ $user->role->label() }}</x-ui.badge></td>
+                            <td class="max-w-xs truncate px-4 py-3 text-sm text-slate-500" title="{{ $user->shops->pluck('name')->implode(', ') }}">{{ $shopSummary($user) }}</td>
                             <td class="px-4 py-3 text-right text-sm">
                                 <x-ui.button variant="secondary" wire:click="edit({{ $user->id }})">{{ __('Edit') }}</x-ui.button>
                                 @if($user->id !== auth()->id())
@@ -102,6 +120,33 @@
                     @endforeach
                 </ul>
             </div>
+
+            @if($role === App\Enums\UserRole::Operator->value)
+                <div>
+                    <div class="flex items-center justify-between">
+                        <x-ui.label>{{ __('Shops') }}</x-ui.label>
+                        <div class="flex gap-3 text-xs">
+                            <button type="button" wire:click="selectAllShops" class="font-medium text-brand-700 hover:underline">{{ __('Select all') }}</button>
+                            <button type="button" wire:click="clearShops" class="font-medium text-slate-500 hover:underline">{{ __('Clear') }}</button>
+                        </div>
+                    </div>
+                    <div class="mt-1 max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-300">
+                        @forelse($shops as $shopOption)
+                            <label wire:key="shop-opt-{{ $shopOption->id }}" class="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm text-slate-800 hover:bg-sand-50">
+                                <input type="checkbox" value="{{ $shopOption->id }}" wire:model="shopIds" class="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600" />
+                                <span class="min-w-0 truncate">{{ $shopOption->name }}</span>
+                            </label>
+                        @empty
+                            <p class="px-3 py-2.5 text-sm text-slate-500">{{ __('No shops yet') }}</p>
+                        @endforelse
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">{{ __('The operator sees data of the selected shops only.') }}</p>
+                    @error('shopIds')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    @error('shopIds.*')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+            @else
+                <p class="rounded-lg bg-sand-50 px-3 py-2 text-xs text-slate-500">{{ __('Admins and monitor accounts see all shops.') }}</p>
+            @endif
 
             <div class="flex justify-end gap-2">
                 <x-ui.button type="button" variant="secondary" wire:click="closeModal">{{ __('Cancel') }}</x-ui.button>

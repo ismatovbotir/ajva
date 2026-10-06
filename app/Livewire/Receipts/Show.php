@@ -3,6 +3,7 @@
 namespace App\Livewire\Receipts;
 
 use App\Models\Receipt;
+use App\Support\ShopAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -13,7 +14,13 @@ class Show extends Component
 
     public function mount(Receipt $receipt): void
     {
+        ShopAccess::authorize($receipt->shop_id);
         $this->receipt = $receipt;
+    }
+
+    public function hydrate(): void
+    {
+        ShopAccess::authorize($this->receipt->shop_id);
     }
 
     public function render()

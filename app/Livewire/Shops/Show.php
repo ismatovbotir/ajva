@@ -3,6 +3,7 @@
 namespace App\Livewire\Shops;
 
 use App\Models\Shop;
+use App\Support\ShopAccess;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -13,7 +14,14 @@ class Show extends Component
 
     public function mount(Shop $shop): void
     {
+        ShopAccess::authorize($shop->id);
         $this->shop = $shop;
+    }
+
+    /** Livewire updates skip the route; re-check in case the assignment changed meanwhile. */
+    public function hydrate(): void
+    {
+        ShopAccess::authorize($this->shop->id);
     }
 
     public function render()

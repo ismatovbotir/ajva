@@ -3,6 +3,7 @@
 namespace App\Livewire\Users;
 
 use App\Enums\UserRole;
+use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -27,6 +28,9 @@ class Index extends Component
     public string $password = '';
 
     public string $role = 'operator';
+
+    /** @var array<int, int|string> Shops an operator may see (ignored for other roles). */
+    public array $shopIds = [];
 
     /**
      * Runs on every request, including Livewire updates, which skip the route
@@ -57,6 +61,7 @@ class Index extends Component
         $this->name = $user->name;
         $this->email = $user->email;
         $this->role = $user->role->value;
+        $this->shopIds = $user->shops()->pluck('shops.id')->map(fn ($id) => (string) $id)->all();
         $this->showModal = true;
     }
 
@@ -67,7 +72,15 @@ class Index extends Component
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
             'password' => [$this->userId ? 'nullable' : 'required', 'string', 'min:8'],
             'role' => ['required', Rule::enum(UserRole::class)],
+            'shopIds' => ['array'],
+            'shopIds.*' => ['integer', 'exists:shops,id'],
         ]);
+
+        // Shop access is a pivot, not a column; only operators carry it.
+        $shopIds = $data['role'] === UserRole::Operator->value
+            ? array_values(array_unique(array_map('intval', $data['shopIds'] ?? [])))
+            : [];
+        unset($data['shopIds']);
 
         if (($data['password'] ?? '') === '') {
             unset($data['password']);
@@ -95,8 +108,10 @@ class Index extends Component
 
             $user->update($data);
         } else {
-            User::query()->create($data);
+            $user = User::query()->create($data);
         }
+
+        $user->shops()->sync($shopIds);
 
         $this->closeModal();
     }
@@ -125,6 +140,16 @@ class Index extends Component
         $target->delete();
     }
 
+    public function selectAllShops(): void
+    {
+        $this->shopIds = Shop::query()->pluck('id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    public function clearShops(): void
+    {
+        $this->shopIds = [];
+    }
+
     public function closeModal(): void
     {
         $this->showModal = false;
@@ -138,18 +163,20 @@ class Index extends Component
             'email' => __('Email'),
             'password' => __('Password'),
             'role' => __('Role'),
+            'shopIds' => __('Shops'),
         ];
     }
 
     private function resetForm(): void
     {
-        $this->reset(['userId', 'name', 'email', 'password', 'role']);
+        $this->reset(['userId', 'name', 'email', 'password', 'role', 'shopIds']);
         $this->resetErrorBag();
     }
 
     public function render()
     {
         $users = User::query()
+            ->with('shops:id,name')
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($q) {
                     $q->where('name', 'like', "%{$this->search}%")
@@ -159,6 +186,10 @@ class Index extends Component
             ->orderBy('name')
             ->paginate(20);
 
-        return view('livewire.users.index', ['users' => $users, 'roles' => UserRole::cases()]);
+        return view('livewire.users.index', [
+            'users' => $users,
+            'roles' => UserRole::cases(),
+            'shops' => Shop::query()->orderBy('name')->get(['id', 'name']),
+        ]);
     }
 }

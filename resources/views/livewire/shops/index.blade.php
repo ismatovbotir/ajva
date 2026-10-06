@@ -4,7 +4,9 @@
 <div>
     <x-ui.page-header :title="__('Shops')" :subtitle="__('Shops synced from 1C, with their current stock.')" />
 
-    @if($shops->isEmpty())
+    @if($noShops)
+        <x-ui.no-shops />
+    @elseif($shops->isEmpty())
         <x-ui.empty-state :title="__('No shops yet')" :description="__('Shops will appear here once 1C sends stock data for them.')" />
     @else
         {{-- Mobile card list --}}

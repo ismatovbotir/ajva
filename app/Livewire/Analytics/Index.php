@@ -3,6 +3,7 @@
 namespace App\Livewire\Analytics;
 
 use App\Models\Receipt;
+use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,9 @@ class Index extends Component
 
     public function selectShop(int $shopId): void
     {
+        // Never trust the client: a shop outside the user's scope is a 404.
+        ShopAccess::authorize($shopId);
+
         $this->shopId = $shopId;
         $this->modalItemId = null;
     }
@@ -76,6 +80,8 @@ class Index extends Component
 
     public function showReceipts(int $itemId): void
     {
+        ShopAccess::authorize($this->shopId);
+
         $this->modalItemId = $itemId;
     }
 
@@ -90,7 +96,7 @@ class Index extends Component
      */
     private function modalReceipts()
     {
-        if ($this->modalItemId === null || $this->shopId === null) {
+        if ($this->modalItemId === null || $this->shopId === null || ! ShopAccess::allows($this->shopId)) {
             return null;
         }
 
@@ -109,6 +115,7 @@ class Index extends Component
     {
         $tabs = $this->generated ? $this->tabs() : collect();
 
+        // A forged/stale shop id (outside the user's tabs) falls back to the first allowed tab.
         if ($tabs->isNotEmpty() && ! $tabs->contains('id', $this->shopId)) {
             $this->shopId = $tabs->first()['id'];
         }
@@ -125,6 +132,7 @@ class Index extends Component
 
         return view('livewire.analytics.index', [
             'tabs' => $tabs,
+            'noShops' => ShopAccess::hasNone(),
             'rows' => $rows,
             'sortBy' => $this->sortBy,
             'sortDir' => $this->sortDir,
@@ -141,7 +149,7 @@ class Index extends Component
     private function cached(string $key, \Closure $callback)
     {
         return Cache::remember(
-            "analytics.{$this->date}.{$this->runKey}.{$key}",
+            'analytics.'.ShopAccess::scopeKey(ShopAccess::ids()).".{$this->date}.{$this->runKey}.{$key}",
             self::CACHE_TTL,
             $callback,
         );
@@ -153,7 +161,7 @@ class Index extends Component
      */
     private function tabs()
     {
-        return $this->cached('tabs', fn () => DB::table('shops')
+        return $this->cached('tabs', fn () => ShopAccess::restrict(DB::table('shops'), 'id')
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn ($s) => ['id' => (int) $s->id, 'name' => $s->name])

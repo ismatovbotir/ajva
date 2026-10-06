@@ -6,13 +6,13 @@ use App\Models\Pos;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\ReceiptPayment;
+use App\Support\ShopAccess;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ProcessReceiptIngestion implements ShouldQueue
@@ -157,11 +157,10 @@ class ProcessReceiptIngestion implements ShouldQueue
             // against 1C's own periodic sync.
         });
 
-        // Drop the dashboard sales board's cached numbers so its next
-        // 1-minute poll reflects this receipt instead of a stale copy.
-        Cache::forget('dashboard.sales-board.'.now()->toDateString());
-        // Same for the wall-display Monitor page.
-        Cache::forget('dashboard.monitor.'.now()->toDateString());
+        // Sales caches (board, monitor, receipts analytics) are keyed by shop
+        // scope as well as day, so bump the shared version instead of
+        // forgetting keys: every scope variant is invalidated at once.
+        ShopAccess::bumpSalesVersion();
     }
 
     protected function parseDateTime(string $date, string $time): Carbon
