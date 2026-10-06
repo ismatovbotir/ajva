@@ -21,12 +21,6 @@ class Index extends Component
 
     public ?int $shop_id = null;
 
-    public bool $showTokenModal = false;
-
-    public ?string $generatedToken = null;
-
-    public ?string $generatedTokenPosName = null;
-
     public function create(): void
     {
         $this->resetForm();
@@ -56,20 +50,6 @@ class Index extends Component
     public function delete(Pos $pos): void
     {
         $pos->delete();
-    }
-
-    public function generateToken(Pos $pos): void
-    {
-        $this->generatedToken = $pos->issueApiToken();
-        $this->generatedTokenPosName = $pos->name;
-        $this->showTokenModal = true;
-    }
-
-    public function closeTokenModal(): void
-    {
-        $this->showTokenModal = false;
-        $this->generatedToken = null;
-        $this->generatedTokenPosName = null;
     }
 
     public function closeModal(): void

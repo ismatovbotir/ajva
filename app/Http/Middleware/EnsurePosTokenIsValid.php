@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Pos;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -10,21 +9,18 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class EnsurePosTokenIsValid
 {
     /**
-     * Handle an incoming request.
+     * POS terminals share a single token (env POS_API_TOKEN) — it
+     * authenticates the request only; the terminal itself is identified
+     * by the `pos` id in the payload.
      */
     public function handle(Request $request, Closure $next)
     {
-        $token = $request->bearerToken();
+        $expected = (string) config('services.pos.token');
+        $token = (string) $request->bearerToken();
 
-        $pos = $token
-            ? Pos::query()->where('api_token_hash', hash('sha256', $token))->first()
-            : null;
-
-        if (! $pos) {
+        if ($expected === '' || ! hash_equals($expected, $token)) {
             throw new HttpException(401, 'Invalid or missing API token.');
         }
-
-        $request->attributes->set('pos', $pos);
 
         return $next($request);
     }

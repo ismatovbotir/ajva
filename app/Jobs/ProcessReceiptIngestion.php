@@ -26,7 +26,17 @@ class ProcessReceiptIngestion implements ShouldQueue
     public function handle(): void
     {
         DB::transaction(function () {
-            $pos = Pos::query()->findOrFail($this->posId);
+            // POS terminals have no token — they're identified by the id in
+            // the payload, and registered on first sight with a default name.
+            $shopId = (int) $this->data['shop'];
+
+            $pos = Pos::query()->firstOrCreate(
+                ['id' => $this->posId],
+                [
+                    'name' => "kassa {$this->posId}",
+                    'shop_id' => $shopId,
+                ]
+            );
 
             $status = $this->data['status'] ?? null;
             $active = $status === null ? true : $status === 'success';
@@ -51,7 +61,7 @@ class ProcessReceiptIngestion implements ShouldQueue
             $receipt = Receipt::query()->updateOrCreate(
                 ['pos_id' => $pos->id, 'number' => $this->data['number']],
                 [
-                    'shop_id' => $pos->shop_id,
+                    'shop_id' => $pos->shop_id ?? $shopId,
                     'client' => $this->data['client'] ?? null,
                     'cashier' => $user['name'] ?? null,
                     'total' => $total,

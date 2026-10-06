@@ -19,7 +19,7 @@ class ReceiptIngestionTest extends TestCase
     protected function payload(array $overrides = []): array
     {
         return array_merge([
-            'shop' => 5,
+            'shop' => Shop::factory()->create()->id,
             'pos' => 1,
             'barcode' => '12345',
             'card' => '1234567890',
@@ -63,30 +63,79 @@ class ReceiptIngestionTest extends TestCase
         ], $overrides);
     }
 
-    public function test_request_with_no_token_is_rejected(): void
+    protected function position(Item $item): array
     {
-        $response = $this->postJson('/api/receipts', $this->payload());
-
-        $response->assertStatus(401);
-        $response->assertJson(['message' => 'Invalid or missing API token.']);
+        return [
+            'item' => ['id' => $item->id],
+            'labels' => [],
+            'barcode' => '1',
+            'qty' => 1,
+            'storno' => 0,
+            'sum' => 1000,
+            'sumWD' => 1000,
+            'totalSum' => 1000,
+        ];
     }
 
-    public function test_request_with_invalid_token_is_rejected(): void
+    public function test_request_without_valid_token_is_rejected(): void
     {
-        Pos::factory()->create();
+        $this->postJson('/api/receipts', $this->payload())
+            ->assertStatus(401)
+            ->assertJson(['message' => 'Invalid or missing API token.']);
 
-        $response = $this
-            ->withHeader('Authorization', 'Bearer not-a-real-token')
-            ->postJson('/api/receipts', $this->payload());
-
-        $response->assertStatus(401);
+        $this->withToken('wrong')->postJson('/api/receipts', $this->payload())->assertStatus(401);
     }
 
-    public function test_valid_token_ingests_a_receipt_with_positions_and_payments(): void
+    public function test_missing_pos_is_created_with_default_name(): void
+    {
+        $shop = Shop::factory()->create();
+        $item = Item::factory()->create();
+
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $this->payload([
+            'shop' => $shop->id,
+            'pos' => 7,
+            'positions' => [$this->position($item)],
+        ]))->assertStatus(202);
+
+        $this->assertDatabaseHas('pos', ['id' => 7, 'name' => 'kassa 7', 'shop_id' => $shop->id]);
+        $this->assertDatabaseHas('receipts', ['pos_id' => 7, 'shop_id' => $shop->id]);
+    }
+
+    public function test_existing_pos_is_reused_and_not_renamed(): void
+    {
+        $pos = Pos::factory()->create(['name' => 'Main till']);
+        $item = Item::factory()->create();
+
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $this->payload([
+            'pos' => $pos->id,
+            'positions' => [$this->position($item)],
+        ]))->assertStatus(202);
+
+        $this->assertSame(1, Pos::count());
+        $this->assertSame('Main till', $pos->fresh()->name);
+    }
+
+    public function test_unknown_shop_id_is_rejected(): void
+    {
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $this->payload(['shop' => 999]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['shop']);
+    }
+
+    public function test_pos_is_required(): void
+    {
+        $payload = $this->payload();
+        unset($payload['pos']);
+
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['pos']);
+    }
+
+    public function test_ingests_a_receipt_with_positions_and_payments(): void
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
-        $token = $pos->issueApiToken();
         $item = Item::factory()->create();
 
         $payload = $this->payload([
@@ -106,9 +155,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $response = $this
-            ->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/receipts', $payload);
+        $response = $this->withToken('test-pos-token')->postJson('/api/receipts', $payload);
 
         $response->assertStatus(202);
 
@@ -169,7 +216,6 @@ class ReceiptIngestionTest extends TestCase
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
-        $token = $pos->issueApiToken();
         $item = Item::factory()->create();
 
         $payload = $this->payload([
@@ -188,7 +234,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $payload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)->assertStatus(202);
 
         $receipt = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->firstOrFail();
 
@@ -201,7 +247,6 @@ class ReceiptIngestionTest extends TestCase
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
-        $token = $pos->issueApiToken();
         $itemOne = Item::factory()->create();
         $itemTwo = Item::factory()->create();
 
@@ -230,7 +275,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $payload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)->assertStatus(202);
 
         $receipt = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->firstOrFail();
 
@@ -252,7 +297,6 @@ class ReceiptIngestionTest extends TestCase
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
-        $token = $pos->issueApiToken();
         $itemOne = Item::factory()->create();
         $itemTwo = Item::factory()->create();
 
@@ -273,7 +317,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $firstPayload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $firstPayload)->assertStatus(202);
 
         $this->assertSame(1, Receipt::count());
         $receiptId = Receipt::query()->where('pos_id', $pos->id)->where('number', 'A-1024')->value('id');
@@ -298,7 +342,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$token)->postJson('/api/receipts', $secondPayload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $secondPayload)->assertStatus(202);
 
         $this->assertSame(1, Receipt::count());
 
@@ -322,8 +366,6 @@ class ReceiptIngestionTest extends TestCase
     {
         $posOne = Pos::factory()->create();
         $posTwo = Pos::factory()->create();
-        $tokenOne = $posOne->issueApiToken();
-        $tokenTwo = $posTwo->issueApiToken();
         $item = Item::factory()->create();
 
         $payload = $this->payload([
@@ -341,8 +383,8 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this->withHeader('Authorization', 'Bearer '.$tokenOne)->postJson('/api/receipts', $payload)->assertStatus(202);
-        $this->withHeader('Authorization', 'Bearer '.$tokenTwo)->postJson('/api/receipts', $payload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', array_merge($payload, ['pos' => $posOne->id]))->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', array_merge($payload, ['pos' => $posTwo->id]))->assertStatus(202);
 
         $this->assertSame(2, Receipt::where('number', 'A-1024')->count());
     }
@@ -350,11 +392,8 @@ class ReceiptIngestionTest extends TestCase
     public function test_validation_failure_returns_json(): void
     {
         $pos = Pos::factory()->create();
-        $token = $pos->issueApiToken();
 
-        $response = $this
-            ->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/receipts', ['number' => 'A-1']);
+        $response = $this->withToken('test-pos-token')->postJson('/api/receipts', ['number' => 'A-1']);
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['total', 'positions', 'openDate', 'openTime']);
@@ -368,14 +407,13 @@ class ReceiptIngestionTest extends TestCase
         // validation failure instead of receiving a JSON error. Use a raw
         // post() with a manually-encoded JSON body and no Accept header.
         $pos = Pos::factory()->create();
-        $token = $pos->issueApiToken();
 
         // Note: withHeader() only affects Laravel's postJson()/getJson()
         // helpers, not the raw call() below — the Authorization header has
         // to be passed directly in the $server array here.
         $response = $this->call('POST', '/api/receipts', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
-            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+            'HTTP_AUTHORIZATION' => 'Bearer test-pos-token',
         ], json_encode(['number' => 'A-1']));
 
         $response->assertStatus(422);
@@ -387,7 +425,6 @@ class ReceiptIngestionTest extends TestCase
     {
         $shop = Shop::factory()->create();
         $pos = Pos::factory()->for($shop)->create();
-        $token = $pos->issueApiToken();
         $item = Item::factory()->create();
 
         Stock::query()->create(['item_id' => $item->id, 'shop_id' => $shop->id, 'qty' => 50]);
@@ -407,9 +444,7 @@ class ReceiptIngestionTest extends TestCase
             ],
         ]);
 
-        $this
-            ->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/receipts', $payload)
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)
             ->assertStatus(202);
 
         $this->assertDatabaseHas('stocks', ['item_id' => $item->id, 'shop_id' => $shop->id, 'qty' => '50.000']);

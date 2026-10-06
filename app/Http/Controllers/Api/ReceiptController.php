@@ -11,9 +11,9 @@ class ReceiptController extends Controller
 {
     public function store(ReceiptRequest $request): JsonResponse
     {
-        $pos = $request->attributes->get('pos');
+        $data = $request->validated();
 
-        ProcessReceiptIngestion::dispatch($request->validated(), $pos->id);
+        ProcessReceiptIngestion::dispatch($data, (int) $data['pos']);
 
         return response()->json(null, 202);
     }

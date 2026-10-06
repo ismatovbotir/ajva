@@ -18,7 +18,6 @@
                             <p class="text-sm text-slate-500">{{ $pos->shop?->name ?? __('No shop') }}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <x-ui.button variant="secondary" wire:click="generateToken({{ $pos->id }})" wire:confirm="{{ __('Generating a new token immediately invalidates the previous one. Continue?') }}">{{ __('Generate token') }}</x-ui.button>
                             <x-ui.button variant="secondary" wire:click="edit({{ $pos->id }})">{{ __('Edit') }}</x-ui.button>
                             <x-ui.button variant="danger" wire:click="delete({{ $pos->id }})" wire:confirm="{{ __('Are you sure you want to delete this?') }}">{{ __('Delete') }}</x-ui.button>
                         </div>
@@ -45,7 +44,6 @@
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $pos->name }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $pos->shop?->name ?? __('No shop') }}</td>
                             <td class="px-4 py-3 text-right text-sm">
-                                <x-ui.button variant="secondary" wire:click="generateToken({{ $pos->id }})" wire:confirm="{{ __('Generating a new token immediately invalidates the previous one. Continue?') }}">{{ __('Generate token') }}</x-ui.button>
                                 <x-ui.button variant="secondary" wire:click="edit({{ $pos->id }})">{{ __('Edit') }}</x-ui.button>
                                 <x-ui.button variant="danger" wire:click="delete({{ $pos->id }})" wire:confirm="{{ __('Are you sure you want to delete this?') }}">{{ __('Delete') }}</x-ui.button>
                             </td>
@@ -74,29 +72,5 @@
                 <x-ui.button type="submit">{{ __('Save') }}</x-ui.button>
             </div>
         </form>
-    </x-ui.modal>
-
-    <x-ui.modal :show="$showTokenModal" :title="__('API token')" close="closeTokenModal">
-        <div class="space-y-4">
-            <p class="text-sm text-slate-600">
-                {{ __('This is the only time this token will be shown. Copy it into the :pos POS terminal now — it cannot be retrieved again afterwards.', ['pos' => $generatedTokenPosName]) }}
-            </p>
-
-            <div>
-                <x-ui.label for="generated-token">{{ __('Token') }}</x-ui.label>
-                <input
-                    id="generated-token"
-                    type="text"
-                    readonly
-                    onclick="this.select()"
-                    value="{{ $generatedToken }}"
-                    class="block w-full rounded-lg border-slate-300 font-mono text-sm shadow-sm focus:border-brand-600 focus:ring-brand-600"
-                />
-            </div>
-
-            <div class="flex justify-end">
-                <x-ui.button type="button" wire:click="closeTokenModal">{{ __('Done') }}</x-ui.button>
-            </div>
-        </div>
     </x-ui.modal>
 </div>

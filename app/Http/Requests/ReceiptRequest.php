@@ -31,8 +31,8 @@ class ReceiptRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'shop' => ['nullable', 'integer'],
-            'pos' => ['nullable', 'integer'],
+            'shop' => ['required', 'integer', 'exists:shops,id'],
+            'pos' => ['required', 'integer', 'min:1'],
             'barcode' => ['nullable', 'string', 'max:255'],
             'card' => ['nullable', 'string', 'max:255'],
             'openDate' => ['required', 'string'],

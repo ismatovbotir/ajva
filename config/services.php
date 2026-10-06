@@ -21,6 +21,10 @@ return [
         'scheme' => 'https',
     ],
 
+    'pos' => [
+        'token' => env('POS_API_TOKEN'),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
