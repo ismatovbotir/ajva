@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Users;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -25,6 +26,17 @@ class Index extends Component
 
     public string $password = '';
 
+    public string $role = 'operator';
+
+    /**
+     * Runs on every request, including Livewire updates, which skip the route
+     * middleware - so a demoted admin can't keep using an already-open page.
+     */
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+    }
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -44,6 +56,7 @@ class Index extends Component
         $this->userId = $user->id;
         $this->name = $user->name;
         $this->email = $user->email;
+        $this->role = $user->role->value;
         $this->showModal = true;
     }
 
@@ -53,6 +66,7 @@ class Index extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
             'password' => [$this->userId ? 'nullable' : 'required', 'string', 'min:8'],
+            'role' => ['required', Rule::enum(UserRole::class)],
         ]);
 
         if (($data['password'] ?? '') === '') {
@@ -61,7 +75,25 @@ class Index extends Component
 
         // The model's 'hashed' cast hashes the password; never hash here.
         if ($this->userId) {
-            User::query()->findOrFail($this->userId)->update($data);
+            $user = User::query()->findOrFail($this->userId);
+
+            // Nobody changes their own role (easy way to lock yourself out),
+            // and the last admin can never be demoted.
+            if ($user->role->value !== $data['role']) {
+                if ($user->id === auth()->id()) {
+                    $this->addError('role', __('You cannot change your own role.'));
+
+                    return;
+                }
+
+                if ($user->isAdmin() && User::query()->where('role', UserRole::Admin->value)->count() <= 1) {
+                    $this->addError('role', __('At least one admin is required.'));
+
+                    return;
+                }
+            }
+
+            $user->update($data);
         } else {
             User::query()->create($data);
         }
@@ -83,7 +115,14 @@ class Index extends Component
             return;
         }
 
-        User::query()->whereKey($id)->delete();
+        $target = User::query()->findOrFail($id);
+        if ($target->isAdmin() && User::query()->where('role', UserRole::Admin->value)->count() <= 1) {
+            $this->addError('delete', __('You cannot delete the last admin.'));
+
+            return;
+        }
+
+        $target->delete();
     }
 
     public function closeModal(): void
@@ -98,12 +137,13 @@ class Index extends Component
             'name' => __('Name'),
             'email' => __('Email'),
             'password' => __('Password'),
+            'role' => __('Role'),
         ];
     }
 
     private function resetForm(): void
     {
-        $this->reset(['userId', 'name', 'email', 'password']);
+        $this->reset(['userId', 'name', 'email', 'password', 'role']);
         $this->resetErrorBag();
     }
 
@@ -119,6 +159,6 @@ class Index extends Component
             ->orderBy('name')
             ->paginate(20);
 
-        return view('livewire.users.index', ['users' => $users]);
+        return view('livewire.users.index', ['users' => $users, 'roles' => UserRole::cases()]);
     }
 }

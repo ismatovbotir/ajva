@@ -7,6 +7,7 @@ use App\Livewire\Dashboard;
 use App\Livewire\Groups\Index as GroupsIndex;
 use App\Livewire\Items\Index as ItemsIndex;
 use App\Livewire\Items\Show as ItemsShow;
+use App\Livewire\Monitor;
 use App\Livewire\Pos\Index as PosIndex;
 use App\Livewire\Prices\Index as PricesIndex;
 use App\Livewire\Receipts\Index as ReceiptsIndex;
@@ -41,19 +42,28 @@ Route::post('/logout', function () {
 })->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/', Dashboard::class)->name('dashboard');
+    // Roles: admin = everything, operator = everything except settings,
+    // monitor = the monitor screen only (see App\Enums\UserRole).
+    Route::get('/monitor', Monitor::class)->name('monitor')->middleware('role:admin,operator,monitor');
 
-    Route::get('/shops', ShopsIndex::class)->name('shops.index');
-    Route::get('/shops/{shop}', ShopsShow::class)->name('shops.show');
-    Route::get('/pos', PosIndex::class)->name('pos.index');
-    Route::get('/groups', GroupsIndex::class)->name('groups.index');
-    Route::get('/categories', CategoriesIndex::class)->name('categories.index');
-    Route::get('/prices', PricesIndex::class)->name('prices.index');
-    Route::get('/items', ItemsIndex::class)->name('items.index');
-    Route::get('/items/{item}', ItemsShow::class)->name('items.show');
-    Route::get('/receipts', ReceiptsIndex::class)->name('receipts.index');
-    Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
-    Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
-    Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
-    Route::get('/settings/users', UsersIndex::class)->name('users.index');
+    Route::middleware('role:admin,operator')->group(function () {
+        Route::get('/', Dashboard::class)->name('dashboard');
+
+        Route::get('/shops', ShopsIndex::class)->name('shops.index');
+        Route::get('/shops/{shop}', ShopsShow::class)->name('shops.show');
+        Route::get('/pos', PosIndex::class)->name('pos.index');
+        Route::get('/groups', GroupsIndex::class)->name('groups.index');
+        Route::get('/categories', CategoriesIndex::class)->name('categories.index');
+        Route::get('/prices', PricesIndex::class)->name('prices.index');
+        Route::get('/items', ItemsIndex::class)->name('items.index');
+        Route::get('/items/{item}', ItemsShow::class)->name('items.show');
+        Route::get('/receipts', ReceiptsIndex::class)->name('receipts.index');
+        Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
+        Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
+    });
+
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
+        Route::get('/settings/users', UsersIndex::class)->name('users.index');
+    });
 });

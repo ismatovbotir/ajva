@@ -61,6 +61,7 @@ class Kernel extends HttpKernel
         'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
         'local.only' => \App\Http\Middleware\EnsureRequestIsLocal::class,
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
+        'role' => \App\Http\Middleware\EnsureUserHasRole::class,
         'pos.token' => \App\Http\Middleware\EnsurePosTokenIsValid::class,
         'mcp.token' => \App\Http\Middleware\EnsureMcpTokenIsValid::class,
         'precognitive' => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,

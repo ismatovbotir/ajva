@@ -160,6 +160,8 @@ class ProcessReceiptIngestion implements ShouldQueue
         // Drop the dashboard sales board's cached numbers so its next
         // 1-minute poll reflects this receipt instead of a stale copy.
         Cache::forget('dashboard.sales-board.'.now()->toDateString());
+        // Same for the wall-display Monitor page.
+        Cache::forget('dashboard.monitor.'.now()->toDateString());
     }
 
     protected function parseDateTime(string $date, string $time): Carbon

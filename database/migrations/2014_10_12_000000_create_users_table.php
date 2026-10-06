@@ -17,6 +17,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            // admin = everything, operator = everything except settings, monitor = monitor screen only
+            $table->string('role', 20)->default('operator');
             $table->rememberToken();
             $table->timestamps();
         });

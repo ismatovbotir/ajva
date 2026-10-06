@@ -29,6 +29,7 @@
                                 @endif
                             </p>
                             <p class="truncate text-sm text-slate-500">{{ $user->email }}</p>
+                            <x-ui.badge :variant="$user->role->badgeVariant()" class="mt-1">{{ $user->role->label() }}</x-ui.badge>
                         </div>
                         <div class="flex items-center gap-2">
                             <x-ui.button variant="secondary" wire:click="edit({{ $user->id }})">{{ __('Edit') }}</x-ui.button>
@@ -48,6 +49,7 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Name') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Email') }}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Role') }}</th>
                         <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
@@ -61,6 +63,7 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $user->email }}</td>
+                            <td class="px-4 py-3 text-sm"><x-ui.badge :variant="$user->role->badgeVariant()">{{ $user->role->label() }}</x-ui.badge></td>
                             <td class="px-4 py-3 text-right text-sm">
                                 <x-ui.button variant="secondary" wire:click="edit({{ $user->id }})">{{ __('Edit') }}</x-ui.button>
                                 @if($user->id !== auth()->id())
@@ -85,6 +88,19 @@
                 @if($userId)
                     <p class="mt-1 text-xs text-slate-500">{{ __('Leave blank to keep the current password.') }}</p>
                 @endif
+            </div>
+
+            <div>
+                <x-ui.select name="role" :label="__('Role')" wire:model="role">
+                    @foreach($roles as $roleOption)
+                        <option value="{{ $roleOption->value }}">{{ $roleOption->label() }}</option>
+                    @endforeach
+                </x-ui.select>
+                <ul class="mt-2 space-y-0.5 text-xs text-slate-500">
+                    @foreach($roles as $roleOption)
+                        <li><span class="font-medium text-slate-700">{{ $roleOption->label() }}</span> — {{ $roleOption->description() }}</li>
+                    @endforeach
+                </ul>
             </div>
 
             <div class="flex justify-end gap-2">

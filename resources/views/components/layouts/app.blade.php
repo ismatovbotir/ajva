@@ -1,12 +1,16 @@
 @props(['title' => null])
 @php
     // Single source of truth for navigation. Items whose route is not
-    // registered (yet) are dropped, so a group never links to a missing route.
+    // registered (yet) are dropped, so a group never links to a missing route,
+    // and items are hidden from roles that cannot open them (default: admin +
+    // operator; the Settings group is admin-only; the monitor is open to all).
+    $currentRole = auth()->user()?->role?->value;
     $navGroups = collect([
         ['label' => 'Dashboard', 'items' => [
             ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'home'],
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
+            ['label' => 'Monitor', 'route' => 'monitor', 'icon' => 'monitor', 'roles' => ['admin', 'operator', 'monitor']],
         ]],
         ['label' => 'Entities', 'items' => [
             ['label' => 'Shops', 'route' => 'shops.index', 'icon' => 'shop'],
@@ -16,12 +20,17 @@
             ['label' => 'Categories', 'route' => 'categories.index', 'icon' => 'category'],
             ['label' => 'Prices', 'route' => 'prices.index', 'icon' => 'currency'],
         ]],
-        ['label' => 'Settings', 'items' => [
+        ['label' => 'Settings', 'roles' => ['admin'], 'items' => [
             ['label' => 'MCP server', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
             ['label' => 'Users', 'route' => 'users.index', 'icon' => 'users'],
         ]],
-    ])->map(function ($group) {
-        $group['items'] = array_values(array_filter($group['items'], fn ($i) => Route::has($i['route'])));
+    ])->map(function ($group) use ($currentRole) {
+        $groupRoles = $group['roles'] ?? ['admin', 'operator'];
+        $group['items'] = array_values(array_filter(
+            $group['items'],
+            fn ($i) => Route::has($i['route'])
+                && in_array($currentRole, $i['roles'] ?? $groupRoles, true)
+        ));
 
         return $group;
     })->filter(fn ($g) => count($g['items']) > 0)->values()->all();

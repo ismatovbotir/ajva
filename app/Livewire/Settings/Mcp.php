@@ -13,6 +13,15 @@ class Mcp extends Component
     /** The just-generated token; shown once, never stored in plaintext. */
     public ?string $newToken = null;
 
+    /**
+     * Runs on every request, including Livewire updates, which skip the route
+     * middleware - so a demoted admin can't keep using an already-open page.
+     */
+    public function boot(): void
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+    }
+
     public function toggleEnabled(McpSettings $settings): void
     {
         $settings->setEnabled(! $settings->enabled());
