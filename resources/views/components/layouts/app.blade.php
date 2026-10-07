@@ -3,14 +3,15 @@
     // Single source of truth for navigation. Items whose route is not
     // registered (yet) are dropped, so a group never links to a missing route,
     // and items are hidden from roles that cannot open them (default: admin +
-    // operator; the Settings group is admin-only; the monitor is open to all).
+    // operator; the Settings group is admin-only). The /monitor screen has no menu item:
+    // admins open the public link from Settings > Public monitor, and monitor-only
+    // accounts land on it after signing in.
     $currentRole = auth()->user()?->role?->value;
     $navGroups = collect([
         ['label' => 'Dashboard', 'items' => [
             ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'home'],
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
-            ['label' => 'Monitor', 'route' => 'monitor', 'icon' => 'monitor', 'roles' => ['admin', 'operator', 'monitor']],
         ]],
         ['label' => 'Entities', 'items' => [
             ['label' => 'Shops', 'route' => 'shops.index', 'icon' => 'shop'],

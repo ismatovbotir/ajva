@@ -119,8 +119,11 @@ class MonitorTest extends TestCase
         $this->assertFalse(Cache::has(Monitor::cacheKey()));
     }
 
-    public function test_navigation_lists_the_monitor(): void
+    public function test_the_admin_menu_has_no_monitor_item(): void
     {
-        $this->actingAs(User::factory()->create())->get('/')->assertOk()->assertSee(route('monitor'));
+        // The screen is reached from Settings > Public monitor (or directly by monitor-only accounts).
+        $this->actingAs(User::factory()->create())->get('/')->assertOk()
+            ->assertDontSee('href="'.route('monitor').'"', false)
+            ->assertSee(route('settings.monitor'), false);
     }
 }

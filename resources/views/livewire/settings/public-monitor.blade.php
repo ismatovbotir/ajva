@@ -44,6 +44,11 @@
                     <button type="button" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
                             @click="navigator.clipboard.writeText(@js($link)); copied = true; setTimeout(() => copied = false, 1500)"
                             x-text="copied ? @js(__('Copied')) : @js(__('Copy'))"></button>
+                    {{-- noreferrer: the secret link must not leak through the Referer header --}}
+                    <a href="{{ $link }}" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600">
+                        <x-icon name="monitor" class="h-4 w-4" />{{ __('Open in new window') }}
+                    </a>
                 </div>
                 <p class="mt-1 text-xs text-slate-500">{{ __('Generated') }} {{ $tokenCreatedAt }}</p>
             @else

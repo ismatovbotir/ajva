@@ -339,5 +339,6 @@
     "Select all": "Barchasini tanlash",
     "Clear": "Tozalash",
     "The operator sees data of the selected shops only.": "Operator faqat tanlangan doʻkonlar maʼlumotlarini koʻradi.",
-    "Admins and monitor accounts see all shops.": "Administrator va monitor hisoblari barcha doʻkonlarni koʻradi."
+    "Admins and monitor accounts see all shops.": "Administrator va monitor hisoblari barcha doʻkonlarni koʻradi.",
+    "Open in new window": "Yangi oynada ochish"
 }

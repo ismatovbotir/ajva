@@ -171,6 +171,22 @@ class PublicMonitorTest extends TestCase
         $this->assertFalse($settings->accepts($settings->token()));
     }
 
+    public function test_the_settings_page_has_a_button_that_opens_the_link_in_a_new_window(): void
+    {
+        $admin = User::factory()->create();
+        $settings = app(MonitorSettings::class);
+        $settings->generateToken();
+        $link = rtrim((string) config('app.url'), '/').'/monitor/'.$settings->token();
+
+        $html = Livewire::actingAs($admin)->test(PublicMonitor::class)->html();
+
+        $this->assertMatchesRegularExpression(
+            '~<a href="'.preg_quote($link, '~').'"[^>]*target="_blank"[^>]*rel="noopener noreferrer"~s',
+            $html
+        );
+        $this->assertStringContainsString(__('Open in new window'), $html);
+    }
+
     public function test_the_link_is_built_from_app_url_and_warns_when_it_is_local(): void
     {
         $admin = User::factory()->create();
