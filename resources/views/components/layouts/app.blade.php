@@ -63,12 +63,12 @@
             sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
         }"
         x-init="$watch('sidebarCollapsed', value => localStorage.setItem('sidebarCollapsed', value))"
-        class="min-h-screen md:flex"
+        class="min-h-screen md:flex md:h-screen md:overflow-hidden"
     >
         {{-- Desktop sidebar --}}
         <aside
             :class="sidebarCollapsed ? 'md:w-20' : 'md:w-64'"
-            class="hidden md:flex md:flex-shrink-0 md:flex-col md:bg-brand-700 md:transition-all md:duration-200"
+            class="hidden md:flex md:h-full md:flex-shrink-0 md:flex-col md:bg-brand-700 md:transition-all md:duration-200"
         >
             <div class="flex h-16 items-center justify-between border-b border-brand-600 px-4">
                 <span x-show="!sidebarCollapsed" x-cloak class="truncate text-lg font-semibold text-white">{{ config('app.name') }}</span>
@@ -100,7 +100,9 @@
             </div>
         </aside>
 
-        <div class="flex flex-1 flex-col">
+        {{-- On desktop the window is exactly one screen tall: the sidebar and top bar stay put and
+             only <main> scrolls. On mobile the page scrolls normally (top bar + bottom tab bar). --}}
+        <div class="flex min-w-0 flex-1 flex-col md:h-full md:min-h-0">
             {{-- Mobile top bar --}}
             <header class="flex items-center justify-between bg-brand-700 px-4 py-3 md:hidden">
                 <span class="text-lg font-semibold text-white">{{ config('app.name') }}</span>
@@ -115,7 +117,7 @@
                 <h2 class="text-lg font-semibold text-slate-900">{{ $title ?? __('Dashboard') }}</h2>
             </header>
 
-            <main class="flex-1 bg-sand-50 px-4 py-6 pb-24 md:px-8 md:py-8 md:pb-8">
+            <main class="flex-1 bg-sand-50 px-4 py-6 pb-24 md:min-h-0 md:overflow-y-auto md:px-8 md:py-8 md:pb-8">
                 {{ $slot }}
             </main>
 

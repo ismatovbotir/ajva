@@ -40,6 +40,11 @@ class UserFactory extends Factory
         return $this->state(fn () => ['role' => UserRole::Operator]);
     }
 
+    public function withProfit(): static
+    {
+        return $this->state(fn () => ['can_see_profit' => true]);
+    }
+
     public function monitor(): static
     {
         return $this->state(fn () => ['role' => UserRole::Monitor]);

@@ -19,6 +19,8 @@ return new class extends Migration
             $table->string('password');
             // admin = everything, operator = everything except settings, monitor = monitor screen only
             $table->string('role', 20)->default('operator');
+            // Profit, cost prices and margins are hidden unless granted (admins always see them).
+            $table->boolean('can_see_profit')->default(false);
             $table->rememberToken();
             $table->timestamps();
         });

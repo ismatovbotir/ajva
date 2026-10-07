@@ -344,5 +344,13 @@
     "The address is built from APP_URL in the server .env:": "Manzil serverdagi .env faylidagi APP_URL asosida yaratiladi:",
     "APP_URL points to localhost, so this address will not work from other computers. Set APP_URL to the public address of this server in .env and clear the config cache.": "APP_URL localhost manziliga ishora qilmoqda, shuning uchun bu manzil boshqa kompyuterlardan ishlamaydi. .env faylida APP_URL ni serverning ochiq manziliga oʻzgartiring va config keshini tozalang.",
     "Generating report…": "Hisobot tayyorlanmoqda…",
-    "Calculating sales and stock for every shop. This can take a few seconds.": "Barcha doʻkonlar boʻyicha savdo va qoldiq hisoblanmoqda. Bu bir necha soniya olishi mumkin."
+    "Calculating sales and stock for every shop. This can take a few seconds.": "Barcha doʻkonlar boʻyicha savdo va qoldiq hisoblanmoqda. Bu bir necha soniya olishi mumkin.",
+    "Stock date": "Qoldiq sanasi",
+    "Stock is the latest snapshot on or before the selected date.": "Qoldiq — tanlangan sanada yoki undan oldingi eng soʻnggi holat.",
+    "Can see profit": "Foydani koʻra oladi",
+    "Profit, cost prices and margins are hidden from users without this permission.": "Foyda, tannarx va marja bu ruxsati yoʻq foydalanuvchilardan yashirilgan.",
+    "Admins always see profit.": "Administratorlar foydani doim koʻradi.",
+    "Sales per day.": "Kunlik savdo.",
+    "Sales and stock health across all shops.": "Barcha doʻkonlar boʻyicha savdo va qoldiq holati.",
+    "On-hand stock from the latest 1C sync.": "1C ning oxirgi sinxronizatsiyasidagi mavjud qoldiq."
 }

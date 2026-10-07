@@ -25,9 +25,10 @@ class SalesMetrics
 
     /**
      * @param  array<int, int>|null  $shopIds  restrict to these shops (null = all, see ShopAccess)
+     * @param  bool  $withProfit  false skips every cost/profit query and leaves the profit keys out (see ProfitAccess)
      * @return array<string, mixed>
      */
-    public function board(Carbon $now, ?array $shopIds = null): array
+    public function board(Carbon $now, ?array $shopIds = null, bool $withProfit = true): array
     {
         $todayStart = $now->copy()->startOfDay();
         $yesterdayStart = $todayStart->copy()->subDay();
@@ -73,18 +74,23 @@ class SalesMetrics
         $totals['y_avg'] = $totals['y_count'] > 0 ? $totals['y_sum'] / $totals['y_count'] : 0.0;
         $totals['avg_delta'] = $this->delta($totals['avg'], $totals['y_avg']);
 
-        return [
+        $board = [
             'asOf' => $now->format('H:i'),
             'table' => $table,
             'totals' => $totals,
             'legend' => array_map(fn ($r) => ['name' => $r['name'], 'color' => $r['color']], $table),
             'charts' => $this->hourly($todayStart, $yesterdayStart, $shops, $colors, $shopIds),
-            'topItems' => $this->topItems($todayStart, $now, $shops, $colors, $shopIds),
-            'profit' => $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors, $shopIds),
+            'topItems' => $this->topItems($todayStart, $now, $shops, $colors, $shopIds, $withProfit),
             'payments' => $this->paymentMix($todayStart, $now, $shopIds),
             'refunds' => $this->refunds($todayStart, $now, $shopIds),
-            'trend' => $this->trend($todayStart, $shopIds),
+            'trend' => $this->trend($todayStart, $shopIds, $withProfit),
         ];
+
+        if ($withProfit) {
+            $board['profit'] = $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors, $shopIds);
+        }
+
+        return $board;
     }
 
     /**
@@ -178,24 +184,24 @@ class SalesMetrics
      *
      * @return array{all: array, shops: array}
      */
-    public function topItems(Carbon $from, Carbon $to, array $shops, array $colors, ?array $shopIds = null): array
+    public function topItems(Carbon $from, Carbon $to, array $shops, array $colors, ?array $shopIds = null, bool $withProfit = true): array
     {
         $rows = ShopAccess::restrictTo(DB::table('receipt_items')
             ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
-            ->tap(fn ($q) => $this->joinCost($q))
+            ->when($withProfit, fn ($q) => $this->joinCost($q))
             ->where('receipt_items.storno', false)
             ->whereBetween('receipts.created_at', [$from, $to])
             ->groupBy('receipts.shop_id', 'receipt_items.item_id')
-            ->selectRaw('receipts.shop_id, receipt_items.item_id, SUM(receipt_items.qty) as q, SUM(receipt_items.total) as s, '.$this->profitSql().' as p')
+            ->selectRaw('receipts.shop_id, receipt_items.item_id, SUM(receipt_items.qty) as q, SUM(receipt_items.total) as s'.($withProfit ? ', '.$this->profitSql().' as p' : ''))
             ->get();
 
         $overall = [];
         $perShop = [];
         foreach ($rows as $r) {
             $o = &$overall[$r->item_id];
-            $p = $r->p === null ? null : (float) $r->p;
+            $p = ! $withProfit || $r->p === null ? null : (float) $r->p;
             $o = [
                 'qty' => ($o['qty'] ?? 0) + (float) $r->q,
                 'sum' => ($o['sum'] ?? 0) + (float) $r->s,
@@ -220,13 +226,20 @@ class SalesMetrics
         }
         $names = DB::table('items')->whereIn('id', array_unique($ids))->pluck('name', 'id');
 
-        $format = fn (array $items) => array_values(array_map(fn ($id, $v) => [
-            'name' => $names[$id] ?? '#'.$id,
-            'qty' => rtrim(rtrim(number_format($v['qty'], 3, '.', ' '), '0'), '.'),
-            'sum' => number_format($v['sum'], 0, '.', ' '),
-            'profit' => $v['profit'] === null ? null : number_format($v['profit'], 0, '.', ' '),
-            'profit_negative' => $v['profit'] !== null && $v['profit'] < 0,
-        ], array_keys($items), $items));
+        $format = fn (array $items) => array_values(array_map(function ($id, $v) use ($names, $withProfit) {
+            $row = [
+                'name' => $names[$id] ?? '#'.$id,
+                'qty' => rtrim(rtrim(number_format($v['qty'], 3, '.', ' '), '0'), '.'),
+                'sum' => number_format($v['sum'], 0, '.', ' '),
+            ];
+
+            if ($withProfit) {
+                $row['profit'] = $v['profit'] === null ? null : number_format($v['profit'], 0, '.', ' ');
+                $row['profit_negative'] = $v['profit'] !== null && $v['profit'] < 0;
+            }
+
+            return $row;
+        }, array_keys($items), $items));
 
         $shopTabs = [];
         foreach ($colors as $shopId => $color) {
@@ -383,7 +396,7 @@ class SalesMetrics
      *
      * @return array<int, array<string, mixed>>
      */
-    public function trend(Carbon $todayStart, ?array $shopIds = null): array
+    public function trend(Carbon $todayStart, ?array $shopIds = null, bool $withProfit = true): array
     {
         $from = $todayStart->copy()->subDays(6);
         $to = $todayStart->copy()->endOfDay();
@@ -397,7 +410,7 @@ class SalesMetrics
             ->get()
             ->keyBy('d');
 
-        $profit = ShopAccess::restrictTo(DB::table('receipt_items')
+        $profit = ! $withProfit ? collect() : ShopAccess::restrictTo(DB::table('receipt_items')
             ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id'), 'receipts.shop_id', $shopIds)
             ->tap(fn ($q) => $this->joinCost($q))
             ->where('receipts.active', true)
@@ -417,14 +430,18 @@ class SalesMetrics
             $r = (float) ($rev[$key]->s ?? 0);
             $p = (float) ($profit[$key]->p ?? 0);
             $max = max($max, $r, $p);
-            $days[] = ['label' => $day->format('d.m'), 'revenue' => $r, 'profit' => $p, 'count' => (int) ($rev[$key]->c ?? 0)];
+            $days[] = ['label' => $day->format('d.m'), 'revenue' => $r, 'count' => (int) ($rev[$key]->c ?? 0)]
+                + ($withProfit ? ['profit' => $p] : []);
         }
 
         foreach ($days as &$d) {
             $d['revenue_h'] = $max > 0 ? max($d['revenue'], 0) / $max * 100 : 0;
-            $d['profit_h'] = $max > 0 ? max($d['profit'], 0) / $max * 100 : 0;
             $d['revenue_label'] = number_format($d['revenue'], 0, '.', ' ');
-            $d['profit_label'] = number_format($d['profit'], 0, '.', ' ');
+
+            if ($withProfit) {
+                $d['profit_h'] = $max > 0 ? max($d['profit'], 0) / $max * 100 : 0;
+                $d['profit_label'] = number_format($d['profit'], 0, '.', ' ');
+            }
         }
         unset($d);
 

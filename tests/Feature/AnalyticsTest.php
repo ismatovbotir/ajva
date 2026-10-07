@@ -114,7 +114,7 @@ class AnalyticsTest extends TestCase
     public function test_the_generating_modal_is_wired_to_the_generate_action(): void
     {
         Livewire::actingAs(User::factory()->create())->test(Index::class)
-            ->assertSeeHtml('wire:target="generate"')
+            ->assertSeeHtml('wire:target="generate" style="display: none;"')   // hidden until Generate runs
             ->assertSee(__('Generating report…'))
             ->assertSeeHtml('indeterminate-bar');
     }

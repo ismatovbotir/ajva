@@ -10,7 +10,11 @@
     [$sumDeltaText, $sumDeltaClass] = $deltaBadge($totals['sum_delta']);
     [$countDeltaText, $countDeltaClass] = $deltaBadge($totals['count_delta']);
     [$avgDeltaText, $avgDeltaClass] = $deltaBadge($totals['avg_delta']);
-    [$profitDeltaText, $profitDeltaClass] = $deltaBadge($profit['delta']);
+    // The profit payload is only present for users who may see it (see ProfitAccess).
+    $hasProfit = isset($profit);
+    if ($hasProfit) {
+        [$profitDeltaText, $profitDeltaClass] = $deltaBadge($profit['delta']);
+    }
 @endphp
 <div wire:poll.120s class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-2">
@@ -22,7 +26,7 @@
     </div>
 
     {{-- KPI cards --}}
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 {{ $hasProfit ? 'xl:grid-cols-4' : 'xl:grid-cols-3' }}">
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Sales total') }}</p>
             <p class="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{{ $money($totals['sum']) }}</p>
@@ -31,6 +35,7 @@
                 <span class="ml-2 font-medium {{ $sumDeltaClass }}">{{ $sumDeltaText }}</span>
             </p>
         </x-ui.card>
+        @if($hasProfit)
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</p>
             <p class="mt-2 text-3xl font-semibold tabular-nums {{ $profit['total'] < 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $money($profit['total']) }}</p>
@@ -45,6 +50,7 @@
                 </p>
             @endif
         </x-ui.card>
+        @endif
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Receipts') }}</p>
             <p class="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{{ $totals['count'] }}</p>
@@ -94,17 +100,17 @@
 
         <x-ui.card class="lg:col-span-3">
             <h3 class="text-base font-semibold text-slate-900">{{ __('Last 7 days') }}</h3>
-            <p class="mb-4 text-sm text-slate-500">{{ __('Sales and profit per day (profit over items with a cost price).') }}</p>
+            <p class="mb-4 text-sm text-slate-500">{{ $hasProfit ? __('Sales and profit per day (profit over items with a cost price).') : __('Sales per day.') }}</p>
             <ul class="mb-3 flex gap-4 text-xs text-slate-500">
                 <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #2a78d6"></span>{{ __('Sales total') }}</li>
-                <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #1baf7a"></span>{{ __('Profit') }}</li>
+                @if($hasProfit)<li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm" style="background-color: #1baf7a"></span>{{ __('Profit') }}</li>@endif
             </ul>
             <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                 <div class="flex h-48 min-w-[20rem] items-end gap-2">
                     @foreach($trend as $day)
-                        <div class="flex h-full flex-1 items-end justify-center gap-1" title="{{ $day['label'] }} — {{ __('Sales total') }}: {{ $day['revenue_label'] }} · {{ __('Profit') }}: {{ $day['profit_label'] }} · {{ __('Receipts') }}: {{ $day['count'] }}">
+                        <div class="flex h-full flex-1 items-end justify-center gap-1" title="{{ $day['label'] }} — {{ __('Sales total') }}: {{ $day['revenue_label'] }}@if($hasProfit) · {{ __('Profit') }}: {{ $day['profit_label'] }}@endif · {{ __('Receipts') }}: {{ $day['count'] }}">
                             <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['revenue_h'] }}%; background-color: #2a78d6;"></div>
-                            <div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['profit_h'] }}%; background-color: #1baf7a;"></div>
+                            @if($hasProfit)<div class="w-full max-w-[1.25rem] rounded-t-[3px]" style="height: {{ $day['profit_h'] }}%; background-color: #1baf7a;"></div>@endif
                         </div>
                     @endforeach
                 </div>
@@ -233,6 +239,7 @@
     </x-ui.card>
 
     {{-- Profit by shop --}}
+    @if($hasProfit)
     <x-ui.card>
         <h3 class="text-base font-semibold text-slate-900">{{ __('Profit by shop') }}</h3>
         <p class="mb-4 text-sm text-slate-500">{{ __('Profit over items with a cost price; yesterday is counted up to the same time of day.') }}</p>
@@ -269,6 +276,7 @@
             @endif
         @endif
     </x-ui.card>
+    @endif
 
     {{-- Top 20 items --}}
     <x-ui.card>
@@ -303,7 +311,7 @@
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Item') }}</th>
                                     <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Qty') }}</th>
                                     <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total') }}</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</th>
+                                    @if($hasProfit)<th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Profit') }}</th>@endif
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -313,7 +321,7 @@
                                         <td class="px-4 py-2.5 text-sm font-medium text-slate-900">{{ $item['name'] }}</td>
                                         <td class="px-4 py-2.5 text-right text-sm tabular-nums text-slate-700">{{ $item['qty'] }}</td>
                                         <td class="px-4 py-2.5 text-right text-sm tabular-nums text-slate-500">{{ $item['sum'] }}</td>
-                                        <td class="px-4 py-2.5 text-right text-sm font-medium tabular-nums {{ $item['profit'] === null ? 'text-slate-400' : ($item['profit_negative'] ? 'text-red-700' : 'text-slate-700') }}" @if($item['profit'] === null) title="{{ __('No cost price') }}" @endif>{{ $item['profit'] ?? '—' }}</td>
+                                        @if($hasProfit)<td class="px-4 py-2.5 text-right text-sm font-medium tabular-nums {{ $item['profit'] === null ? 'text-slate-400' : ($item['profit_negative'] ? 'text-red-700' : 'text-slate-700') }}" @if($item['profit'] === null) title="{{ __('No cost price') }}" @endif>{{ $item['profit'] ?? '—' }}</td>@endif
                                     </tr>
                                 @endforeach
                             </tbody>

@@ -37,7 +37,7 @@
         </div>
 
         <div wire:loading.class="opacity-60" wire:target="selectShop,sort" class="transition-opacity duration-150">
-        <p class="mb-3 hidden text-sm text-slate-500 md:block">{{ __('Click a column header to sort.') }}</p>
+        <p class="mb-3 hidden text-sm text-slate-500 md:block">{{ __('Click a column header to sort.') }} {{ __('Stock is the latest snapshot on or before the selected date.') }}</p>
         <div class="mb-3 flex flex-wrap gap-1.5 md:hidden">
             @foreach([['item', 'Item'], ['stock', 'Stock'], ['sold', 'Net sold'], ['remaining', 'Remaining']] as [$col, $label])
                 <button type="button" wire:click="sort('{{ $col }}')"
@@ -57,6 +57,7 @@
                     <p class="font-medium text-slate-900">{{ $row['item'] }}</p>
                     <dl class="mt-2 grid grid-cols-3 gap-2 text-sm">
                         <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ $fmt($row['stock']) }}</dd></div>
+                        <div><dt class="text-xs text-slate-500">{{ __('Stock date') }}</dt><dd class="tabular-nums">{{ $row['stock_date'] ? \Illuminate\Support\Carbon::parse($row['stock_date'])->format('d.m.Y') : '—' }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd><button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium tabular-nums text-brand-700 underline decoration-dotted underline-offset-2">{{ $fmt($row['sold']) }}</button></dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Remaining') }}</dt><dd class="font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : '' }}">{{ $fmt($row['remaining']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Min') }}</dt><dd class="tabular-nums">{{ $fmt($row['min']) }}</dd></div>
@@ -80,6 +81,7 @@
                                 </button>
                             </th>
                         @endforeach
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Stock date') }}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Min') }}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Max') }}</th>
                     </tr>
@@ -94,6 +96,7 @@
                                 <button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium text-brand-700 underline decoration-dotted underline-offset-2 hover:text-brand-700">{{ $fmt($row['sold']) }}</button>
                             </td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ $fmt($row['remaining']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $row['stock_date'] ? \Illuminate\Support\Carbon::parse($row['stock_date'])->format('d.m.Y') : '—' }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['min']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['max']) }}</td>
                         </tr>
@@ -140,8 +143,10 @@
         @endif
     </x-ui.modal>
 
-    {{-- Shown while Generate builds every shop's table; closes by itself when the report is ready. --}}
-    <div wire:loading.flex.delay.shorter wire:target="generate"
+    {{-- Shown only while Generate builds every shop's table; closes by itself when the report is ready.
+         Livewire's stylesheet only hides a few exact wire:loading forms, not combined modifiers like
+         .flex.delay.shorter, so it must be hidden explicitly or it would cover the page on load. --}}
+    <div wire:loading.flex.delay.shorter wire:target="generate" style="display: none;"
          class="fixed inset-0 z-50 items-center justify-center px-4 py-6"
          role="alertdialog" aria-modal="true" aria-labelledby="generating-title" aria-describedby="generating-text">
         <div class="modal-backdrop fixed inset-0 bg-slate-900/50"></div>

@@ -45,6 +45,7 @@
                             </p>
                             <p class="truncate text-sm text-slate-500">{{ $user->email }}</p>
                             <x-ui.badge :variant="$user->role->badgeVariant()" class="mt-1">{{ $user->role->label() }}</x-ui.badge>
+                            @if($user->canSeeProfit())<x-ui.badge variant="success" class="mt-1">{{ __('Profit') }}</x-ui.badge>@endif
                             <p class="mt-1 truncate text-xs text-slate-500" title="{{ $user->shops->pluck('name')->implode(', ') }}">{{ $shopSummary($user) }}</p>
                         </div>
                         <div class="flex items-center gap-2">
@@ -80,7 +81,7 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $user->email }}</td>
-                            <td class="px-4 py-3 text-sm"><x-ui.badge :variant="$user->role->badgeVariant()">{{ $user->role->label() }}</x-ui.badge></td>
+                            <td class="px-4 py-3 text-sm"><x-ui.badge :variant="$user->role->badgeVariant()">{{ $user->role->label() }}</x-ui.badge>@if($user->canSeeProfit()) <x-ui.badge variant="success">{{ __('Profit') }}</x-ui.badge>@endif</td>
                             <td class="max-w-xs truncate px-4 py-3 text-sm text-slate-500" title="{{ $user->shops->pluck('name')->implode(', ') }}">{{ $shopSummary($user) }}</td>
                             <td class="px-4 py-3 text-right text-sm">
                                 <x-ui.button variant="secondary" wire:click="edit({{ $user->id }})">{{ __('Edit') }}</x-ui.button>
@@ -109,7 +110,7 @@
             </div>
 
             <div>
-                <x-ui.select name="role" :label="__('Role')" wire:model="role">
+                <x-ui.select name="role" :label="__('Role')" wire:model.live="role">
                     @foreach($roles as $roleOption)
                         <option value="{{ $roleOption->value }}">{{ $roleOption->label() }}</option>
                     @endforeach
@@ -119,6 +120,23 @@
                         <li><span class="font-medium text-slate-700">{{ $roleOption->label() }}</span> — {{ $roleOption->description() }}</li>
                     @endforeach
                 </ul>
+            </div>
+
+            <div>
+                <label class="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-300 px-3 py-2.5">
+                    <span class="text-sm font-medium text-slate-800">{{ __('Can see profit') }}</span>
+                    <span class="relative inline-flex items-center">
+                        @if($role === 'admin')
+                            <input type="checkbox" class="peer sr-only" checked disabled />
+                        @else
+                            <input type="checkbox" class="peer sr-only" wire:model="canSeeProfit" />
+                        @endif
+                        <span class="h-6 w-11 rounded-full bg-slate-300 transition peer-checked:bg-brand-700 peer-disabled:opacity-60 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-600"></span>
+                        <span class="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span>
+                    </span>
+                </label>
+                <p class="mt-1 text-xs text-slate-500">{{ $role === 'admin' ? __('Admins always see profit.') : __('Profit, cost prices and margins are hidden from users without this permission.') }}</p>
+                @error('canSeeProfit')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
             </div>
 
             @if($role === App\Enums\UserRole::Operator->value)

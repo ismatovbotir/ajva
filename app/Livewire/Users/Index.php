@@ -29,6 +29,8 @@ class Index extends Component
 
     public string $role = 'operator';
 
+    public bool $canSeeProfit = false;
+
     /** @var array<int, int|string> Shops an operator may see (ignored for other roles). */
     public array $shopIds = [];
 
@@ -61,6 +63,7 @@ class Index extends Component
         $this->name = $user->name;
         $this->email = $user->email;
         $this->role = $user->role->value;
+        $this->canSeeProfit = (bool) $user->can_see_profit;
         $this->shopIds = $user->shops()->pluck('shops.id')->map(fn ($id) => (string) $id)->all();
         $this->showModal = true;
     }
@@ -72,6 +75,7 @@ class Index extends Component
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
             'password' => [$this->userId ? 'nullable' : 'required', 'string', 'min:8'],
             'role' => ['required', Rule::enum(UserRole::class)],
+            'canSeeProfit' => ['boolean'],
             'shopIds' => ['array'],
             'shopIds.*' => ['integer', 'exists:shops,id'],
         ]);
@@ -81,6 +85,12 @@ class Index extends Component
             ? array_values(array_unique(array_map('intval', $data['shopIds'] ?? [])))
             : [];
         unset($data['shopIds']);
+
+        // Admins always see profit, so their flag is neither editable nor stored from the form.
+        if ($data['role'] !== UserRole::Admin->value) {
+            $data['can_see_profit'] = (bool) $data['canSeeProfit'];
+        }
+        unset($data['canSeeProfit']);
 
         if (($data['password'] ?? '') === '') {
             unset($data['password']);
@@ -164,12 +174,13 @@ class Index extends Component
             'password' => __('Password'),
             'role' => __('Role'),
             'shopIds' => __('Shops'),
+            'canSeeProfit' => __('Can see profit'),
         ];
     }
 
     private function resetForm(): void
     {
-        $this->reset(['userId', 'name', 'email', 'password', 'role', 'shopIds']);
+        $this->reset(['userId', 'name', 'email', 'password', 'role', 'shopIds', 'canSeeProfit']);
         $this->resetErrorBag();
     }
 

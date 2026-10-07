@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'can_see_profit',
     ];
 
     /**
@@ -45,11 +46,18 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'role' => UserRole::class,
+        'can_see_profit' => 'boolean',
     ];
 
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
+    }
+
+    /** Admins always see profit/cost data; everyone else needs the can_see_profit flag. */
+    public function canSeeProfit(): bool
+    {
+        return $this->isAdmin() || (bool) $this->can_see_profit;
     }
 
     /** Admins and operators use the whole panel except the settings pages. */

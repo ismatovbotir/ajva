@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Stock;
+use App\Support\ProfitAccess;
 use App\Support\ShopAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -50,9 +51,13 @@ class Dashboard extends Component
     /** Shop ids the current user may see (null = all); set at the start of every render. */
     private ?array $scope = null;
 
+    /** Whether the viewer may see profit/cost data; when false none of it is queried or sent to the view. */
+    private bool $canProfit = false;
+
     public function render()
     {
         $this->scope = ShopAccess::ids();
+        $this->canProfit = ProfitAccess::allowed();
 
         $byShop = $this->stockByShop();
         $byGroup = $this->stockByGroup();
@@ -76,6 +81,7 @@ class Dashboard extends Component
 
         return view('livewire.dashboard', [
             'noShops' => $this->scope === [],
+            'canProfit' => $this->canProfit,
             'shopRows' => $shopRows,
             'shopMax' => $shopMax,
             'donut' => $this->buildDonut($byShop),
@@ -86,8 +92,8 @@ class Dashboard extends Component
             'barColor' => self::CATEGORY_COLORS[0],
             'exceptions' => $this->cached('exceptions', true, fn () => $this->reorderExceptions()),
             'coverage' => $this->cached('coverage', true, fn () => $this->ruleCoverage()),
-            'margins' => $this->cached('margins', false, fn () => $this->itemMargins()),
-            'belowCost' => $this->cached('below-cost', false, fn () => $this->belowCostPrices()),
+            'margins' => $this->canProfit ? $this->cached('margins', false, fn () => $this->itemMargins()) : null,
+            'belowCost' => $this->canProfit ? $this->cached('below-cost', false, fn () => $this->belowCostPrices()) : null,
             'health' => $this->cached('stock-health', true, fn () => $this->stockHealth()),
         ]);
     }
@@ -103,7 +109,8 @@ class Dashboard extends Component
     private function cached(string $key, bool $shopBound, \Closure $callback): array
     {
         // Shop-bound results are cached per scope so operators never share numbers.
-        $suffix = $shopBound ? '.'.ShopAccess::scopeKey($this->scope) : '';
+        // The profit permission is part of the key of every payload that can differ by it.
+        $suffix = ($shopBound ? '.'.ShopAccess::scopeKey($this->scope) : '').($key === 'stock-health' ? '.'.ProfitAccess::profitKey($this->canProfit) : '');
 
         return Cache::remember('dashboard.'.$key.$suffix, self::CACHE_TTL, $callback);
     }
@@ -118,6 +125,20 @@ class Dashboard extends Component
      */
     private function stockHealth(): array
     {
+        $outOfStock = (int) $this->shopScoped(DB::table('stocks'))
+            ->join('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
+            })
+            ->where('stocks.qty', '<=', 0)
+            ->where('item_order_rules.min', '>', 0)
+            ->count();
+
+        // Without the profit permission only the cost-free figure is computed.
+        if (! $this->canProfit) {
+            return ['out_of_stock' => $outOfStock];
+        }
+
         $costId = (int) config('inventory.cost_price_id');
 
         $base = fn () => $this->shopScoped(DB::table('stocks'))
@@ -151,15 +172,6 @@ class Dashboard extends Component
             ->where(fn ($q) => $q->whereNull('cost.value')->orWhere('cost.value', '<=', 0))
             ->distinct()
             ->count('stocks.item_id');
-
-        $outOfStock = (int) $this->shopScoped(DB::table('stocks'))
-            ->join('item_order_rules', function ($join) {
-                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
-                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
-            })
-            ->where('stocks.qty', '<=', 0)
-            ->where('item_order_rules.min', '>', 0)
-            ->count();
 
         return [
             'value' => $totalValue,

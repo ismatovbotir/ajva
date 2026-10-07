@@ -25,6 +25,7 @@ class StockLevels extends BaseTool
             'type' => 'object',
             'properties' => [
                 'shop_id' => self::SHOP_SCHEMA,
+                'date' => ['type' => 'string', 'pattern' => '^\\d{4}-\\d{2}-\\d{2}$', 'description' => 'Stock as of this day (YYYY-MM-DD): the latest snapshot on or before it. Defaults to the current stock.'],
                 'search' => ['type' => 'string', 'maxLength' => 100, 'description' => 'Filter by part of the item name.'],
                 'only_below_min' => ['type' => 'boolean', 'description' => 'Only rows where stock is under the min rule.'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'description' => 'Max rows (default 50).'],
@@ -41,7 +42,12 @@ class StockLevels extends BaseTool
             throw new InvalidArguments('search must be a string of at most 100 characters.');
         }
 
-        $rows = Stock::applyCurrent(DB::table('stocks'))
+        // With a date: the latest snapshot on or before that day; without: the current stock.
+        $asOf = isset($arguments['date']) ? $this->dayRange($arguments)[0]->toDateString() : null;
+        $stocks = DB::table('stocks');
+        $stocks = $asOf !== null ? Stock::applyAsOf($stocks, $asOf) : Stock::applyCurrent($stocks);
+
+        $rows = $stocks
             ->join('items', 'items.id', '=', 'stocks.item_id')
             ->join('shops', 'shops.id', '=', 'stocks.shop_id')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
@@ -57,10 +63,11 @@ class StockLevels extends BaseTool
             ->limit($limit)
             ->get([
                 'stocks.shop_id', 'shops.name as shop', 'stocks.item_id', 'items.name as item',
-                'groups.name as group', 'stocks.qty', 'item_order_rules.min', 'item_order_rules.max',
+                'groups.name as group', 'stocks.qty', 'stocks.stock_date', 'item_order_rules.min', 'item_order_rules.max',
             ]);
 
         return [
+            'as_of' => $asOf,
             'rows' => $rows->map(fn ($r) => [
                 'shop_id' => (int) $r->shop_id,
                 'shop' => $r->shop,
@@ -68,6 +75,7 @@ class StockLevels extends BaseTool
                 'item' => $r->item,
                 'group' => $r->group,
                 'qty' => round((float) $r->qty, 3),
+                'stock_date' => $r->stock_date,
                 'min' => $r->min === null ? null : round((float) $r->min, 3),
                 'max' => $r->max === null ? null : round((float) $r->max, 3),
                 'below_min' => $r->min !== null && (float) $r->qty < (float) $r->min,

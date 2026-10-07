@@ -50,6 +50,24 @@ class Stock extends Model
         );
     }
 
+    /**
+     * Stock "as of" a day, for reports with a date picker: for each (item, shop)
+     * the row with the greatest stock_date on or before $date (carry-forward, same
+     * as applyCurrent but capped at the chosen day). A pair with no snapshot yet by
+     * that day matches no row, so the report shows it as having no stock.
+     *
+     * Works on Eloquent, DB::table() and join-clause builders.
+     */
+    public static function applyAsOf($query, string $date, string $table = 'stocks')
+    {
+        return $query->whereRaw(
+            "{$table}.stock_date = (select max(s_asof.stock_date) from stocks as s_asof "
+            ."where s_asof.item_id = {$table}.item_id and s_asof.shop_id = {$table}.shop_id "
+            .'and s_asof.stock_date <= ?)',
+            [$date]
+        );
+    }
+
     public function scopeCurrent($query)
     {
         return static::applyCurrent($query, $this->getTable());

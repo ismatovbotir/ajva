@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Stock;
 use App\Services\SalesMetrics;
 use App\Support\MonitorSettings;
+use App\Support\ProfitAccess;
 use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -26,10 +27,10 @@ class Monitor extends Component
 
     private const TICKER_ROWS = 8;
 
-    /** Varies by day, shop scope and the sales version (bumped on receipt ingestion). */
-    public static function cacheKey(?Carbon $at = null, ?array $ids = null): string
+    /** Varies by day, shop scope, profit visibility and the sales version (bumped on receipt ingestion). */
+    public static function cacheKey(?Carbon $at = null, ?array $ids = null, ?bool $withProfit = null): string
     {
-        return ShopAccess::salesKey('dashboard.monitor', ($at ?? now())->toDateString(), $ids);
+        return ShopAccess::salesKey('dashboard.monitor', ($at ?? now())->toDateString().'.'.ProfitAccess::profitKey($withProfit), $ids);
     }
 
     /**
@@ -72,21 +73,18 @@ class Monitor extends Component
 
         $now = now();
         $public = $this->publicToken !== null;
-        $showProfit = ! $public || app(MonitorSettings::class)->showProfit();
+        // Public screen: its own switch. Signed-in screen: the user's profit permission.
+        $showProfit = $public ? app(MonitorSettings::class)->showProfit() : ProfitAccess::allowed();
         // The public (no-login) screen is global by design; the authenticated one follows the user's shops.
         $ids = $public ? null : ShopAccess::ids();
 
         $data = Cache::remember(
-            self::cacheKey($now, $ids),
+            self::cacheKey($now, $ids, $showProfit),
             self::CACHE_TTL,
-            fn () => app(SalesMetrics::class)->board($now->copy(), $ids) + [
+            fn () => app(SalesMetrics::class)->board($now->copy(), $ids, $showProfit) + [
                 'latest' => $this->latestReceipts($now->copy()->startOfDay(), $now, $ids),
             ],
         );
-
-        if (! $showProfit) {
-            $data = $this->withoutProfit($data);
-        }
 
         // The layout gets `public` so only the no-login link carries the light/dark option.
         return view('livewire.monitor', $data + [
@@ -99,40 +97,6 @@ class Monitor extends Component
             'currentHour' => (int) $now->format('G'),
             'dateLabel' => $now->format('d.m.Y'),
         ])->layout('components.layouts.monitor', ['title' => 'Monitor', 'public' => $public]);
-    }
-
-    /**
-     * Drops every profit/cost/margin figure, so none of it reaches the public
-     * view (or the browser) when the profit switch is off.
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
-    private function withoutProfit(array $data): array
-    {
-        unset($data['profit']);
-
-        $data['trend'] = array_map(function (array $day) {
-            unset($day['profit'], $day['profit_h'], $day['profit_label']);
-
-            return $day;
-        }, $data['trend']);
-
-        $strip = function (array $items) {
-            return array_map(function (array $item) {
-                unset($item['profit'], $item['profit_negative']);
-
-                return $item;
-            }, $items);
-        };
-        $data['topItems']['all'] = $strip($data['topItems']['all']);
-        $data['topItems']['shops'] = array_map(function (array $tab) use ($strip) {
-            $tab['items'] = $strip($tab['items']);
-
-            return $tab;
-        }, $data['topItems']['shops']);
-
-        return $data;
     }
 
     /**

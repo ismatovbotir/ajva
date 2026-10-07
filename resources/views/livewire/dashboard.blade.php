@@ -1,5 +1,5 @@
 <div>
-    <x-ui.page-header :title="__('Dashboard')" :subtitle="__('Sales, profit and stock health across all shops.')" />
+    <x-ui.page-header :title="__('Dashboard')" :subtitle="$canProfit ? __('Sales, profit and stock health across all shops.') : __('Sales and stock health across all shops.')" />
 
     @if($noShops)
         <div class="mb-6"><x-ui.no-shops /></div>
@@ -12,10 +12,11 @@
         <section class="space-y-4" aria-labelledby="sec-stock-health">
             <div>
                 <h2 id="sec-stock-health" class="text-lg font-semibold text-slate-900">{{ __('Stock health') }}</h2>
-                <p class="text-sm text-slate-500">{{ __('On-hand stock from the latest 1C sync, valued at cost price.') }}</p>
+                <p class="text-sm text-slate-500">{{ $canProfit ? __('On-hand stock from the latest 1C sync, valued at cost price.') : __('On-hand stock from the latest 1C sync.') }}</p>
             </div>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 {{ $canProfit ? 'xl:grid-cols-4' : 'xl:grid-cols-3' }}">
+                @if($canProfit)
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Stock value at cost') }}</p>
                     <p class="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{{ $health['value_label'] }}</p>
@@ -26,6 +27,7 @@
                         </p>
                     @endif
                 </x-ui.card>
+                @endif
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Below minimum') }}</p>
                     <p class="mt-2 text-3xl font-semibold tabular-nums {{ $exceptions['total'] > 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $exceptions['total'] }}</p>
@@ -47,6 +49,7 @@
             </div>
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                @if($canProfit)
                 <x-ui.card class="lg:col-span-1">
                     <h3 class="text-base font-semibold text-slate-900">{{ __('Stock value by shop') }}</h3>
                     <p class="mb-4 text-sm text-slate-500">{{ __('At cost price; items without a cost are not valued.') }}</p>
@@ -66,7 +69,8 @@
                         </ul>
                     @endif
                 </x-ui.card>
-                <div class="lg:col-span-2">
+                @endif
+                <div class="{{ $canProfit ? 'lg:col-span-2' : 'lg:col-span-3' }}">
             <x-ui.card class="h-full">
                 <div class="mb-4">
                     <h2 class="text-base font-semibold text-slate-900">{{ __('Reorder risk') }}</h2>
@@ -115,7 +119,8 @@
             </div>
         </section>
 
-        {{-- Section: Pricing health --}}
+        {{-- Section: Pricing health (cost vs sell prices: profit permission only) --}}
+        @if($canProfit)
         <section class="space-y-4" aria-labelledby="sec-pricing">
             <div>
                 <h2 id="sec-pricing" class="text-lg font-semibold text-slate-900">{{ __('Pricing health') }}</h2>
@@ -249,6 +254,7 @@
             </div>
         </x-ui.card>
         </section>
+        @endif
 
         {{-- Section: Stock distribution --}}
         <section class="space-y-4" aria-labelledby="sec-distribution">

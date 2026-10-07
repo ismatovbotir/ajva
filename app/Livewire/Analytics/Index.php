@@ -203,9 +203,10 @@ class Index extends Component
 
         return DB::table('items')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
-            ->leftJoin('stocks', function ($join) use ($shopId) {
+            ->leftJoin('stocks', function ($join) use ($shopId, $from) {
                 $join->on('stocks.item_id', '=', 'items.id')->where('stocks.shop_id', '=', $shopId);
-                Stock::applyCurrent($join);
+                // The report has a date picker: stock is the latest snapshot on or before that day.
+                Stock::applyAsOf($join, $from->toDateString());
             })
             ->leftJoin('item_order_rules', function ($join) use ($shopId) {
                 $join->on('item_order_rules.item_id', '=', 'items.id')->where('item_order_rules.shop_id', '=', $shopId);
@@ -215,6 +216,7 @@ class Index extends Component
                 'items.name as item_name',
                 'groups.name as group_name',
                 'stocks.qty as stock_qty',
+                'stocks.stock_date as stock_date',
                 'item_order_rules.min as rule_min',
                 'item_order_rules.max as rule_max',
             ])
@@ -227,6 +229,7 @@ class Index extends Component
                     'group' => $row->group_name,
                     'item' => $row->item_name,
                     'stock' => $stock,
+                    'stock_date' => $row->stock_date,
                     'sold' => $net,
                     'remaining' => $stock - $net,
                     'min' => $row->rule_min === null ? null : (float) $row->rule_min,
