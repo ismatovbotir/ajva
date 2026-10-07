@@ -4,6 +4,7 @@ namespace App\Livewire\Settings;
 
 use App\Mcp\McpSettings;
 use App\Mcp\Tool;
+use App\Support\PublicUrl;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -47,7 +48,9 @@ class Mcp extends Component
             'hasStoredToken' => $settings->hasStoredToken(),
             'hasEnvToken' => $settings->hasEnvToken(),
             'tokenCreatedAt' => $settings->tokenCreatedAt(),
-            'endpoint' => url('/api/mcp'),
+            'endpoint' => PublicUrl::to('/api/mcp'),
+            'appUrl' => PublicUrl::base(),
+            'appUrlLooksLocal' => PublicUrl::looksLocal(),
             'tools' => collect($this->tools())->map(fn (Tool $t) => [
                 'name' => $t->name(),
                 'description' => $t->description(),

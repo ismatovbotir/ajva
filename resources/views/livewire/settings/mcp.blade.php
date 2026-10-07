@@ -32,6 +32,10 @@
         <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class="min-w-0">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Endpoint') }}</dt>
+                <p class="mb-1 text-xs text-slate-500">{{ __('The address is built from APP_URL in the server .env:') }} <code>{{ $appUrl }}</code></p>
+                @if($appUrlLooksLocal)
+                    <p class="mb-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{{ __('APP_URL points to localhost, so this address will not work from other computers. Set APP_URL to the public address of this server in .env and clear the config cache.') }}</p>
+                @endif
                 <dd class="mt-1 flex items-center gap-2" x-data="{ copied: false }">
                     <code class="min-w-0 flex-1 truncate rounded bg-sand-50 px-2 py-1 text-sm text-slate-800">{{ $endpoint }}</code>
                     <button type="button" class="shrink-0 text-xs font-medium text-brand-700 hover:underline"

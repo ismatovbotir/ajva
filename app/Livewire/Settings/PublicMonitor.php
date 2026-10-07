@@ -3,6 +3,7 @@
 namespace App\Livewire\Settings;
 
 use App\Support\MonitorSettings;
+use App\Support\PublicUrl;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -43,9 +44,9 @@ class PublicMonitor extends Component
             'hasToken' => $token !== null,
             // Built from APP_URL, not from the host of the current request, so the
             // link is the same address the TV should use (e.g. behind a proxy).
-            'link' => $token ? rtrim((string) config('app.url'), '/').route('monitor.public', ['token' => $token], false) : null,
-            'appUrl' => rtrim((string) config('app.url'), '/'),
-            'appUrlLooksLocal' => (bool) preg_match('~^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)~i', (string) config('app.url')),
+            'link' => $token ? PublicUrl::to(route('monitor.public', ['token' => $token], false)) : null,
+            'appUrl' => PublicUrl::base(),
+            'appUrlLooksLocal' => PublicUrl::looksLocal(),
             'tokenCreatedAt' => $settings->tokenCreatedAt(),
         ]);
     }
