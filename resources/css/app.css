@@ -73,3 +73,21 @@ html.monitor-root[data-monitor-theme="light"] .bg-brand-600 {
     color: #fff;
 }
 
+
+
+/* "Generating report" modal (analytics): entrance + indeterminate progress + spinner. */
+@keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-panel-in { from { opacity: 0; transform: translateY(0.75rem) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes indeterminate-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes spinner-turn { to { transform: rotate(360deg); } }
+
+.modal-backdrop { animation: modal-backdrop-in 0.18s ease-out both; }
+.modal-panel { animation: modal-panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.indeterminate-bar { animation: indeterminate-slide 1.3s ease-in-out infinite; }
+.spinner { animation: spinner-turn 0.9s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-backdrop, .modal-panel { animation: none; }
+    .indeterminate-bar { animation: none; width: 100%; opacity: 0.6; }
+    .spinner { animation-duration: 3s; }
+}

@@ -16,8 +16,11 @@ return new class extends Migration
             $table->foreignId('item_id')->constrained();
             $table->foreignId('shop_id')->constrained();
             $table->decimal('qty', 10, 3)->default(0);
-            // $table->timestamps();
-            $table->unique(['item_id', 'shop_id']);
+            // Daily history: one row per (item, shop, sync day). "Current" stock is the
+            // row with the greatest stock_date per (item, shop) - see Stock::scopeCurrent().
+            $table->date('stock_date');
+            $table->unique(['item_id', 'shop_id', 'stock_date']);
+            $table->index(['shop_id', 'stock_date']);
         });
     }
 

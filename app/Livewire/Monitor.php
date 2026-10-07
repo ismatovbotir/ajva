@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Stock;
 use App\Services\SalesMetrics;
 use App\Support\MonitorSettings;
 use App\Support\ShopAccess;
@@ -172,7 +173,7 @@ class Monitor extends Component
      */
     private function stockAlerts(?array $ids = null): array
     {
-        $pairs = fn () => ShopAccess::restrictTo(DB::table('stocks'), 'stocks.shop_id', $ids)->join('item_order_rules', function ($join) {
+        $pairs = fn () => Stock::applyCurrent(ShopAccess::restrictTo(DB::table('stocks'), 'stocks.shop_id', $ids))->join('item_order_rules', function ($join) {
             $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                 ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
         });

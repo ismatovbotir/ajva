@@ -36,6 +36,7 @@
             </nav>
         </div>
 
+        <div wire:loading.class="opacity-60" wire:target="selectShop,sort" class="transition-opacity duration-150">
         <p class="mb-3 hidden text-sm text-slate-500 md:block">{{ __('Click a column header to sort.') }}</p>
         <div class="mb-3 flex flex-wrap gap-1.5 md:hidden">
             @foreach([['item', 'Item'], ['stock', 'Stock'], ['sold', 'Net sold'], ['remaining', 'Remaining']] as [$col, $label])
@@ -101,6 +102,7 @@
             </table>
             </div>
         </x-ui.card>
+        </div>
     @endif
 
     <x-ui.modal :show="$modalReceipts !== null" :title="__('Receipts').' — '.$modalItemName" class="max-w-3xl" wire:keydown.escape.window="closeModal">
@@ -137,4 +139,22 @@
             <x-ui.empty-state :title="__('No receipts for this day')" />
         @endif
     </x-ui.modal>
+
+    {{-- Shown while Generate builds every shop's table; closes by itself when the report is ready. --}}
+    <div wire:loading.flex.delay.shorter wire:target="generate"
+         class="fixed inset-0 z-50 items-center justify-center px-4 py-6"
+         role="alertdialog" aria-modal="true" aria-labelledby="generating-title" aria-describedby="generating-text">
+        <div class="modal-backdrop fixed inset-0 bg-slate-900/50"></div>
+        <div class="modal-panel relative w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-xl">
+            <svg class="spinner mx-auto h-12 w-12 text-brand-700" viewBox="0 0 50 50" fill="none" aria-hidden="true">
+                <circle cx="25" cy="25" r="20" stroke="currentColor" stroke-opacity="0.2" stroke-width="5"></circle>
+                <path d="M45 25a20 20 0 0 0-20-20" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path>
+            </svg>
+            <h2 id="generating-title" class="mt-4 text-lg font-semibold text-slate-900">{{ __('Generating report…') }}</h2>
+            <p id="generating-text" class="mt-1 text-sm text-slate-500">{{ __('Calculating sales and stock for every shop. This can take a few seconds.') }}</p>
+            <div class="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+                <div class="indeterminate-bar h-full w-1/3 rounded-full bg-brand-600"></div>
+            </div>
+        </div>
+    </div>
 </div>

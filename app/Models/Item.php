@@ -40,6 +40,12 @@ class Item extends Model
         return $this->hasMany(Stock::class);
     }
 
+    /** Current stock only (latest stock_date per shop), see Stock::scopeCurrent(). */
+    public function currentStocks(): HasMany
+    {
+        return $this->hasMany(Stock::class)->current();
+    }
+
     public function barcodes(): HasMany
     {
         return $this->hasMany(Barcode::class);

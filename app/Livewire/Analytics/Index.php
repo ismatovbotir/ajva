@@ -3,6 +3,7 @@
 namespace App\Livewire\Analytics;
 
 use App\Models\Receipt;
+use App\Models\Stock;
 use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -13,7 +14,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app', ['title' => 'Analytics'])]
 class Index extends Component
 {
-    private const CACHE_TTL = 300;
+    /** A generated report stays readable (tab switches, sorting) for an hour. */
+    private const CACHE_TTL = 3600;
 
     /** Row keys the column headers can sort by. */
     private const SORTABLE = ['item', 'stock', 'sold', 'remaining'];
@@ -53,6 +55,13 @@ class Index extends Component
         $this->generated = true;
         $this->runKey = bin2hex(random_bytes(4));
         $this->modalItemId = null;
+
+        // Build every shop's table up front (the "Generating report" modal covers this
+        // wait), so switching tabs or sorting afterwards only reads the cached result
+        // and never recomputes anything.
+        foreach ($this->tabs() as $tab) {
+            $this->cached('rows.'.$tab['id'], fn () => $this->buildRows($tab['id']));
+        }
     }
 
     public function selectShop(int $shopId): void
@@ -120,8 +129,8 @@ class Index extends Component
             $this->shopId = $tabs->first()['id'];
         }
 
-        // Only the active shop's rows are built, and they're reused across
-        // tab switches / modal open-close until Generate is pressed again.
+        // The rows were all built by generate(); this normally just reads the cache
+        // (and only recomputes if the cached report has expired).
         $rows = $this->generated && $this->shopId !== null && $tabs->isNotEmpty()
             ? $this->cached('rows.'.$this->shopId, fn () => $this->buildRows($this->shopId))
             : collect();
@@ -196,6 +205,7 @@ class Index extends Component
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
             ->leftJoin('stocks', function ($join) use ($shopId) {
                 $join->on('stocks.item_id', '=', 'items.id')->where('stocks.shop_id', '=', $shopId);
+                Stock::applyCurrent($join);
             })
             ->leftJoin('item_order_rules', function ($join) use ($shopId) {
                 $join->on('item_order_rules.item_id', '=', 'items.id')->where('item_order_rules.shop_id', '=', $shopId);

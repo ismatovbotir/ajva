@@ -17,6 +17,7 @@ class StockFactory extends Factory
             'item_id' => Item::factory(),
             'shop_id' => Shop::factory(),
             'qty' => fake()->randomFloat(3, 0, 100),
+            'stock_date' => now()->toDateString(),
         ];
     }
 }

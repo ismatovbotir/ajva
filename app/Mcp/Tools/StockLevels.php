@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\BaseTool;
 use App\Mcp\InvalidArguments;
+use App\Models\Stock;
 use Illuminate\Support\Facades\DB;
 
 class StockLevels extends BaseTool
@@ -40,7 +41,7 @@ class StockLevels extends BaseTool
             throw new InvalidArguments('search must be a string of at most 100 characters.');
         }
 
-        $rows = DB::table('stocks')
+        $rows = Stock::applyCurrent(DB::table('stocks'))
             ->join('items', 'items.id', '=', 'stocks.item_id')
             ->join('shops', 'shops.id', '=', 'stocks.shop_id')
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')

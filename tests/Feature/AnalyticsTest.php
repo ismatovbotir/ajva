@@ -11,6 +11,7 @@ use App\Models\Shop;
 use App\Models\Stock;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -82,5 +83,39 @@ class AnalyticsTest extends TestCase
         $component->assertSee($sale->number)->call('closeModal');
         $this->assertNull($component->viewData('modalReceipts'));
         $this->assertSame(10.0, Stock::where('item_id', $a->id)->first()->qty + 0.0); // stock untouched
+    }
+
+    public function test_generate_prebuilds_every_shops_table_so_tab_switches_never_recompute(): void
+    {
+        $user = User::factory()->create();
+        $a = Shop::factory()->create();
+        $b = Shop::factory()->create();
+        $item = Item::factory()->create(['name' => 'Item X']);
+        foreach ([$a, $b] as $shop) {
+            $receipt = Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'created_at' => now()]);
+            ReceiptItem::factory()->create(['receipt_id' => $receipt->id, 'item_id' => $item->id, 'qty' => 2, 'storno' => false]);
+        }
+
+        $component = Livewire::actingAs($user)->test(Index::class)->call('generate');
+
+        // After Generate, switching tabs and sorting must be served from the cached report.
+        DB::enableQueryLog();
+        $component->call('selectShop', $b->id)->call('sort', 'item')->call('selectShop', $a->id);
+        $queries = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        $this->assertFalse(
+            $queries->contains(fn ($q) => str_contains($q, 'receipt_items')),
+            'Tab switches/sorting must not re-run the sales aggregate'
+        );
+        $this->assertEquals(2, $component->viewData('rows')->firstWhere('item', 'Item X')['sold']);
+    }
+
+    public function test_the_generating_modal_is_wired_to_the_generate_action(): void
+    {
+        Livewire::actingAs(User::factory()->create())->test(Index::class)
+            ->assertSeeHtml('wire:target="generate"')
+            ->assertSee(__('Generating report…'))
+            ->assertSeeHtml('indeterminate-bar');
     }
 }

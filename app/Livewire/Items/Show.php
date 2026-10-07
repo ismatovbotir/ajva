@@ -23,7 +23,7 @@ class Show extends Component
             'barcodes' => $this->item->barcodes()->orderBy('id')->get(),
             'itemPrices' => $this->item->itemPrices()->with('price')->orderBy('id')->get(),
             'orderRules' => ShopAccess::restrict($this->item->orderRules(), 'item_order_rules.shop_id')->with('shop')->orderBy('id')->get(),
-            'stocks' => ShopAccess::restrict($this->item->stocks(), 'stocks.shop_id')->with('shop')->orderBy('id')->get(),
+            'stocks' => ShopAccess::restrict($this->item->currentStocks(), 'stocks.shop_id')->with('shop')->orderBy('id')->get(),
         ]);
     }
 }

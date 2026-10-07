@@ -72,7 +72,7 @@ class DemoSalesSeeder extends Seeder
             }
             foreach ($items as $entry) {
                 Stock::query()->updateOrCreate(
-                    ['shop_id' => $shop->id, 'item_id' => $entry['model']->id],
+                    ['shop_id' => $shop->id, 'item_id' => $entry['model']->id, 'stock_date' => now()->toDateString()],
                     ['qty' => mt_rand(20, 200)]
                 );
                 if (mt_rand(1, 10) <= 8) {

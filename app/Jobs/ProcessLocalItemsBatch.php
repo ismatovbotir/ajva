@@ -183,6 +183,7 @@ class ProcessLocalItemsBatch implements ShouldQueue
     protected function upsertStocks(): void
     {
         $rows = [];
+        $today = now()->toDateString();
 
         foreach ($this->items as $item) {
             foreach (($item['qty'] ?? []) as $qty) {
@@ -193,12 +194,13 @@ class ProcessLocalItemsBatch implements ShouldQueue
                     'item_id' => $item['id'],
                     'shop_id' => $shopId,
                     'qty' => $qty['value'],
+                    'stock_date' => $today,
                 ];
             }
         }
 
         if ($rows !== []) {
-            Stock::upsert(array_values($rows), ['item_id', 'shop_id'], ['qty']);
+            Stock::upsert(array_values($rows), ['item_id', 'shop_id', 'stock_date'], ['qty']);
         }
     }
 

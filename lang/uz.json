@@ -342,5 +342,7 @@
     "Admins and monitor accounts see all shops.": "Administrator va monitor hisoblari barcha doʻkonlarni koʻradi.",
     "Open in new window": "Yangi oynada ochish",
     "The address is built from APP_URL in the server .env:": "Manzil serverdagi .env faylidagi APP_URL asosida yaratiladi:",
-    "APP_URL points to localhost, so this address will not work from other computers. Set APP_URL to the public address of this server in .env and clear the config cache.": "APP_URL localhost manziliga ishora qilmoqda, shuning uchun bu manzil boshqa kompyuterlardan ishlamaydi. .env faylida APP_URL ni serverning ochiq manziliga oʻzgartiring va config keshini tozalang."
+    "APP_URL points to localhost, so this address will not work from other computers. Set APP_URL to the public address of this server in .env and clear the config cache.": "APP_URL localhost manziliga ishora qilmoqda, shuning uchun bu manzil boshqa kompyuterlardan ishlamaydi. .env faylida APP_URL ni serverning ochiq manziliga oʻzgartiring va config keshini tozalang.",
+    "Generating report…": "Hisobot tayyorlanmoqda…",
+    "Calculating sales and stock for every shop. This can take a few seconds.": "Barcha doʻkonlar boʻyicha savdo va qoldiq hisoblanmoqda. Bu bir necha soniya olishi mumkin."
 }

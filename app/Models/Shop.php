@@ -27,6 +27,12 @@ class Shop extends Model
         return $this->hasMany(Stock::class);
     }
 
+    /** Current stock only (latest stock_date per item), see Stock::scopeCurrent(). */
+    public function currentStocks(): HasMany
+    {
+        return $this->hasMany(Stock::class)->current();
+    }
+
     public function orderRules(): HasMany
     {
         return $this->hasMany(ItemOrderRule::class);

@@ -27,7 +27,7 @@ class Show extends Component
     public function render()
     {
         return view('livewire.shops.show', [
-            'stocks' => $this->shop->stocks()->with('item')->orderByDesc('qty')->get(),
+            'stocks' => $this->shop->currentStocks()->with('item')->orderByDesc('qty')->get(),
         ]);
     }
 }

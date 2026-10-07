@@ -40,7 +40,7 @@ class ThemeTest extends TestCase
         $html = $this->get('/monitor/'.$token)->assertOk()->getContent();
 
         $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
-        $this->assertStringContainsString("data-monitor-theme", $html);
+        $this->assertStringContainsString('data-monitor-theme', $html);
         $this->assertLessThan(strpos($html, '<body'), strpos($html, "localStorage.getItem('monitorTheme')"));
         $this->assertStringContainsString(':aria-pressed="light.toString()"', $html);
         $this->assertStringContainsString('aria-label="'.__('Light theme').'"', $html);

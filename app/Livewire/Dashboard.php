@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Stock;
 use App\Support\ShopAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -94,7 +95,8 @@ class Dashboard extends Component
     /** Limits a query on `stocks` to the shops the current user may see. */
     private function shopScoped($query)
     {
-        return ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope);
+        // Always current stock only (history rows would double count).
+        return Stock::applyCurrent(ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope));
     }
 
     /** Heavy catalogue-wide aggregates change only on 1C sync, so a short shared cache is enough. */
