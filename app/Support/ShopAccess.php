@@ -70,6 +70,23 @@ class ShopAccess
         return $ids === null ? $query : $query->whereIn($column, $ids);
     }
 
+    /**
+     * Intersection of two scopes (null = every shop): used to narrow a monitor's
+     * shop selection to what the viewer may see.
+     *
+     * @param  array<int, int>|null  $a
+     * @param  array<int, int>|null  $b
+     * @return array<int, int>|null
+     */
+    public static function intersect(?array $a, ?array $b): ?array
+    {
+        if ($a === null) {
+            return $b;
+        }
+
+        return $b === null ? $a : array_values(array_intersect($a, $b));
+    }
+
     /** Cache-key fragment: 'all' or a hash of the sorted ids, so scopes never share entries. */
     public static function scopeKey(?array $ids): string
     {

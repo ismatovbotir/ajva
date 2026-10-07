@@ -4,7 +4,7 @@
     // registered (yet) are dropped, so a group never links to a missing route,
     // and items are hidden from roles that cannot open them (default: admin +
     // operator; the Settings group is admin-only). The /monitor screen has no menu item:
-    // admins open the public link from Settings > Public monitor, and monitor-only
+    // admins manage them in Settings > Monitors, and monitor-only
     // accounts land on it after signing in.
     $currentRole = auth()->user()?->role?->value;
     $navGroups = collect([
@@ -12,6 +12,7 @@
             ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'home'],
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
+            ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard'],
         ]],
         ['label' => 'Entities', 'items' => [
             ['label' => 'Shops', 'route' => 'shops.index', 'icon' => 'shop'],
@@ -23,7 +24,8 @@
         ]],
         ['label' => 'Settings', 'roles' => ['admin'], 'items' => [
             ['label' => 'MCP server', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
-            ['label' => 'Public monitor', 'route' => 'settings.monitor', 'icon' => 'monitor'],
+            ['label' => 'Monitors', 'route' => 'settings.monitors', 'icon' => 'monitor'],
+            ['label' => 'Warehouse', 'route' => 'settings.warehouse', 'icon' => 'box'],
             ['label' => 'Users', 'route' => 'users.index', 'icon' => 'users'],
         ]],
     ])->map(function ($group) use ($currentRole) {

@@ -6,28 +6,30 @@ use App\Jobs\ProcessReceiptIngestion;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\Dashboard;
 use App\Livewire\Items\Show as ItemsShow;
-use App\Livewire\Monitor;
+use App\Livewire\MonitorScreen;
 use App\Livewire\Pos\Index as PosIndex;
 use App\Livewire\Receipts\Index as ReceiptsIndex;
 use App\Livewire\SalesBoard;
 use App\Livewire\Users\Index as UsersIndex;
 use App\Models\Item;
 use App\Models\ItemOrderRule;
+use App\Models\Monitor;
 use App\Models\Pos;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\Shop;
 use App\Models\Stock;
 use App\Models\User;
-use App\Support\MonitorSettings;
 use App\Support\ShopAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
+use Tests\Concerns\InteractsWithMonitors;
 use Tests\TestCase;
 
 class ShopAccessTest extends TestCase
 {
+    use InteractsWithMonitors;
     use RefreshDatabase;
 
     private Shop $a;
@@ -156,14 +158,14 @@ class ShopAccessTest extends TestCase
     {
         $op = $this->operator($this->a);
 
-        foreach ([SalesBoard::class, Monitor::class] as $class) {
-            $this->assertEquals(100, Livewire::actingAs($op)->test($class)->viewData('totals')['sum'], $class);
-            $this->assertEquals(1000, Livewire::actingAs(User::factory()->create())->test($class)->viewData('totals')['sum'], $class);
+        foreach ([SalesBoard::class, MonitorScreen::class] as $class) {
+            $this->assertEquals(100, $this->screen($class, $op)->viewData('totals')['sum'], $class);
+            $this->assertEquals(1000, $this->screen($class, User::factory()->create())->viewData('totals')['sum'], $class);
             // The monitor role is unrestricted.
-            $this->assertEquals(1000, Livewire::actingAs(User::factory()->monitor()->create())->test($class)->viewData('totals')['sum'], $class);
+            $this->assertEquals(1000, $this->screen($class, User::factory()->monitor()->create())->viewData('totals')['sum'], $class);
         }
 
-        $monitor = Livewire::actingAs($op)->test(Monitor::class);
+        $monitor = $this->screen(MonitorScreen::class, $op);
         $this->assertSame([$this->receiptA->id], array_column($monitor->viewData('latest'), 'id'));
         $this->assertSame(1, $monitor->viewData('alerts')['below_min']);
     }
@@ -175,7 +177,7 @@ class ShopAccessTest extends TestCase
 
         $this->actingAs($op)->get('/shops')->assertOk()->assertDontSee('Shop Alpha')->assertSee($hint);
         $this->actingAs($op)->get('/')->assertOk()->assertSee($hint);
-        $this->actingAs($op)->get('/monitor')->assertOk()->assertSee($hint);
+        $this->actingAs($op)->get('/monitors/'.$this->executiveMonitor()->id)->assertOk()->assertSee($hint);
         $this->actingAs($op)->get('/receipts')->assertOk()->assertSee($hint);
         $this->actingAs($op)->get('/analytics')->assertOk()->assertSee($hint);
         $this->actingAs($op)->get('/pos')->assertOk()->assertSee($hint);
@@ -217,12 +219,12 @@ class ShopAccessTest extends TestCase
         $opB = $this->operator($this->b);
         $admin = User::factory()->create();
 
-        foreach ([SalesBoard::class, Monitor::class] as $class) {
+        foreach ([SalesBoard::class, MonitorScreen::class] as $class) {
             // Same day, same cache store: each scope keeps its own entry.
-            $this->assertEquals(100, Livewire::actingAs($opA)->test($class)->viewData('totals')['sum']);
-            $this->assertEquals(900, Livewire::actingAs($opB)->test($class)->viewData('totals')['sum']);
-            $this->assertEquals(1000, Livewire::actingAs($admin)->test($class)->viewData('totals')['sum']);
-            $this->assertEquals(100, Livewire::actingAs($opA)->test($class)->viewData('totals')['sum']);
+            $this->assertEquals(100, $this->screen($class, $opA)->viewData('totals')['sum']);
+            $this->assertEquals(900, $this->screen($class, $opB)->viewData('totals')['sum']);
+            $this->assertEquals(1000, $this->screen($class, $admin)->viewData('totals')['sum']);
+            $this->assertEquals(100, $this->screen($class, $opA)->viewData('totals')['sum']);
         }
 
         $pos = Pos::factory()->create(['shop_id' => $this->a->id]);
@@ -235,19 +237,19 @@ class ShopAccessTest extends TestCase
             'positions' => [['item' => ['id' => $this->item->id], 'qty' => 1, 'totalSum' => 5]],
         ], $pos->id);
 
-        foreach ([SalesBoard::class, Monitor::class] as $class) {
-            $this->assertEquals(105, Livewire::actingAs($opA)->test($class)->viewData('totals')['sum']);
-            $this->assertEquals(900, Livewire::actingAs($opB)->test($class)->viewData('totals')['sum']);
-            $this->assertEquals(1005, Livewire::actingAs($admin)->test($class)->viewData('totals')['sum']);
+        foreach ([SalesBoard::class, MonitorScreen::class] as $class) {
+            $this->assertEquals(105, $this->screen($class, $opA)->viewData('totals')['sum']);
+            $this->assertEquals(900, $this->screen($class, $opB)->viewData('totals')['sum']);
+            $this->assertEquals(1005, $this->screen($class, $admin)->viewData('totals')['sum']);
         }
     }
 
     public function test_public_monitor_stays_global_even_for_a_signed_in_operator(): void
     {
-        $token = app(MonitorSettings::class)->generateToken();
+        $token = Monitor::factory()->withLink()->create()->token;
 
         $this->actingAs($this->operator($this->a));
-        $component = Livewire::test(Monitor::class, ['token' => $token]);
+        $component = Livewire::test(MonitorScreen::class, ['token' => $token]);
 
         $this->assertEquals(1000, $component->viewData('totals')['sum']);
     }

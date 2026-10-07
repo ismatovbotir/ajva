@@ -2,23 +2,25 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Monitor;
-use App\Livewire\Settings\PublicMonitor;
+use App\Enums\MonitorType;
+use App\Livewire\MonitorScreen;
 use App\Models\Item;
 use App\Models\ItemPrice;
+use App\Models\Monitor;
 use App\Models\Price;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\Shop;
 use App\Models\User;
-use App\Support\MonitorSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
+use Tests\Concerns\InteractsWithMonitors;
 use Tests\TestCase;
 
 class PublicMonitorTest extends TestCase
 {
+    use InteractsWithMonitors;
     use RefreshDatabase;
 
     protected function tearDown(): void
@@ -27,13 +29,9 @@ class PublicMonitorTest extends TestCase
         parent::tearDown();
     }
 
-    private function enable(bool $profit = false): string
+    private function publicMonitor(array $attributes = []): Monitor
     {
-        $settings = app(MonitorSettings::class);
-        $token = $settings->generateToken();
-        $settings->setShowProfit($profit);
-
-        return $token;
+        return Monitor::factory()->withLink()->create($attributes);
     }
 
     private function seedSale(): void
@@ -49,14 +47,16 @@ class PublicMonitorTest extends TestCase
 
     public function test_guest_sees_the_public_monitor_with_a_valid_token_and_headers_are_set(): void
     {
-        $token = $this->enable();
+        $monitor = $this->publicMonitor();
 
-        $response = $this->get('/monitor/'.$token)
+        $response = $this->get('/monitor/'.$monitor->token)
             ->assertOk()
-            ->assertSeeLivewire(Monitor::class)
+            ->assertSeeLivewire(MonitorScreen::class)
             ->assertSee('wire:poll.30s', false)
+            ->assertSee($monitor->name)
             ->assertDontSee('/logout', false)
             ->assertDontSee('href="'.route('dashboard').'"', false)
+            ->assertDontSee('href="'.route('monitor').'"', false)
             ->assertHeader('Referrer-Policy', 'no-referrer')
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex')
             ->assertSee('<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">', false);
@@ -65,24 +65,36 @@ class PublicMonitorTest extends TestCase
         $this->assertStringContainsString('private', $response->headers->get('Cache-Control'));
     }
 
+    public function test_every_type_renders_publicly_with_its_own_view(): void
+    {
+        foreach ([MonitorType::Receipts, MonitorType::Warehouse] as $type) {
+            $monitor = $this->publicMonitor(['type' => $type]);
+            $this->get('/monitor/'.$monitor->token)->assertOk()->assertDontSee(__('This screen is being prepared'))->assertSee($type->label());
+        }
+
+        $executive = $this->publicMonitor();
+        $this->get('/monitor/'.$executive->token)->assertOk()->assertDontSee(__('This screen is being prepared'));
+    }
+
     public function test_wrong_unknown_or_disabled_tokens_are_a_plain_404(): void
     {
         $this->get('/monitor/anything')->assertNotFound();   // nothing configured
 
-        $token = $this->enable();
-        $this->get('/monitor/'.str_replace('a', 'b', $token).'x')->assertNotFound();
+        $monitor = $this->publicMonitor();
+        $this->get('/monitor/'.str_replace('a', 'b', $monitor->token).'x')->assertNotFound();
 
-        app(MonitorSettings::class)->setEnabled(false);
-        $this->get('/monitor/'.$token)->assertNotFound();
+        $monitor->update(['enabled' => false]);
+        $this->get('/monitor/'.$monitor->token)->assertNotFound();
     }
 
     public function test_regenerating_invalidates_the_old_link_including_livewire_updates(): void
     {
-        $old = $this->enable();
-        $component = Livewire::test(Monitor::class, ['token' => $old]);
+        $monitor = $this->publicMonitor();
+        $old = $monitor->token;
+        $component = Livewire::test(MonitorScreen::class, ['token' => $old]);
         $component->call('$refresh')->assertOk();   // still fine
 
-        $new = app(MonitorSettings::class)->generateToken();
+        $new = $monitor->regenerateToken();
         $this->assertNotSame($old, $new);
 
         $this->get('/monitor/'.$old)->assertNotFound();
@@ -91,27 +103,60 @@ class PublicMonitorTest extends TestCase
         $component->call('$refresh')->assertNotFound();   // the open screen's next poll
     }
 
-    public function test_disabling_stops_an_open_screens_polling(): void
+    public function test_disabling_or_deleting_stops_an_open_screens_polling(): void
     {
-        $token = $this->enable();
-        $component = Livewire::test(Monitor::class, ['token' => $token]);
-        app(MonitorSettings::class)->setEnabled(false);
+        $monitor = $this->publicMonitor();
+        $component = Livewire::test(MonitorScreen::class, ['token' => $monitor->token]);
+        $monitor->update(['enabled' => false]);
+        $component->call('$refresh')->assertNotFound();
 
+        $other = $this->publicMonitor();
+        $component = Livewire::test(MonitorScreen::class, ['token' => $other->token]);
+        $other->delete();
         $component->call('$refresh')->assertNotFound();
     }
 
-    public function test_the_token_cannot_be_changed_from_the_browser(): void
+    public function test_the_token_and_monitor_cannot_be_changed_from_the_browser(): void
     {
-        $token = $this->enable();
+        $monitor = $this->publicMonitor();
+        $component = Livewire::test(MonitorScreen::class, ['token' => $monitor->token]);
 
         $this->expectException(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
-        Livewire::test(Monitor::class, ['token' => $token])->set('publicToken', 'other');
+        $component->set('publicToken', 'other');
+    }
+
+    public function test_the_signed_in_monitor_id_is_locked_too(): void
+    {
+        $component = $this->screen(MonitorScreen::class, User::factory()->create());
+
+        $this->expectException(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+        $component->set('monitorId', 999);
+    }
+
+    public function test_the_public_screen_uses_its_own_monitors_shops_and_profit_switch(): void
+    {
+        $this->seedSale();
+        $other = Shop::factory()->create(['name' => 'Elsewhere']);
+        $item = Item::query()->first();
+        $receipt = Receipt::factory()->create(['shop_id' => $other->id, 'active' => true, 'sell' => true, 'total' => 900, 'created_at' => '2026-10-06 10:00:00']);
+        ReceiptItem::factory()->create(['receipt_id' => $receipt->id, 'item_id' => $item->id, 'qty' => 1, 'total' => 900, 'storno' => false]);
+
+        $monitor = $this->publicMonitor();
+        $monitor->shops()->sync([Shop::query()->where('name', 'Chilonzor')->value('id')]);
+
+        $component = Livewire::test(MonitorScreen::class, ['token' => $monitor->token]);
+        $this->assertEquals(100, $component->viewData('totals')['sum']);
+
+        // Signed in as an operator with other shops: the public screen stays on its own selection.
+        $this->actingAs(User::factory()->operator()->create());
+        $this->assertEquals(100, Livewire::test(MonitorScreen::class, ['token' => $monitor->token])->viewData('totals')['sum']);
     }
 
     public function test_profit_is_hidden_on_the_public_screen_by_default_and_shown_when_switched_on(): void
     {
         $this->seedSale();
-        $token = $this->enable(false);
+        $monitor = $this->publicMonitor(['show_profit' => false]);
+        $token = $monitor->token;
 
         $hidden = $this->get('/monitor/'.$token)->assertOk()->getContent();
         foreach ([__('Profit'), __('Margin'), 'Cost missing', __('Cost missing for :count items — :percent% of revenue is not covered.', ['count' => 0, 'percent' => 0])] as $label) {
@@ -120,96 +165,35 @@ class PublicMonitorTest extends TestCase
         $this->assertStringContainsString(__('Peak hour'), $hidden);
         $this->assertStringContainsString('Cola', $hidden);
 
-        $component = Livewire::test(Monitor::class, ['token' => $token]);
+        $component = Livewire::test(MonitorScreen::class, ['token' => $token]);
         $this->assertArrayNotHasKey('profit', $component->viewData('trend')[0]);
         $this->assertArrayNotHasKey('profit', $component->viewData('topItems')['all'][0]);
 
-        app(MonitorSettings::class)->setShowProfit(true);
+        $monitor->update(['show_profit' => true]);
         $shown = $this->get('/monitor/'.$token)->assertOk()->getContent();
         $this->assertStringContainsString(__('Profit'), $shown);
         $this->assertStringContainsString(__('Margin'), $shown);
         $this->assertStringNotContainsString(__('Peak hour'), $shown);
     }
 
-    public function test_authenticated_monitor_still_works_redirects_guests_and_always_shows_profit(): void
+    public function test_signed_in_monitor_follows_the_users_profit_permission_not_the_monitors_switch(): void
     {
-        $this->get('/monitor')->assertRedirect('/login');
+        $this->seedSale();
+        $monitor = $this->executiveMonitor([], ['show_profit' => false]);
 
-        $this->actingAs(User::factory()->create())->get('/monitor')
+        $this->actingAs(User::factory()->create())->get('/monitors/'.$monitor->id)
             ->assertOk()
             ->assertSee(__('Profit'))
             ->assertSee('href="'.route('dashboard').'"', false);
 
-        $this->actingAs(User::factory()->operator()->create())->get('/monitor')->assertOk();
-        $this->actingAs(User::factory()->monitor()->create())->get('/monitor')->assertOk();
-    }
-
-    public function test_settings_page_is_admin_only_and_manages_the_link(): void
-    {
-        $this->get('/settings/monitor')->assertRedirect('/login');
-        $this->actingAs(User::factory()->operator()->create())->get('/settings/monitor')->assertForbidden();
-
-        $admin = User::factory()->create();
-        $this->actingAs($admin)->get('/settings/monitor')->assertOk()->assertSee(__('Generate link'));
-
-        $settings = app(MonitorSettings::class);
-        Livewire::actingAs($admin)->test(PublicMonitor::class)->call('generateToken');
-        $first = $settings->token();
-        $this->assertNotNull($first);
-        $this->assertTrue($settings->enabled());          // first link switches it on
-        $this->assertFalse($settings->showProfit());      // profit off by default
-
-        Livewire::actingAs($admin)->test(PublicMonitor::class)
-            ->assertSee(route('monitor.public', $first))
-            ->call('generateToken')
-            ->call('toggleProfit')
-            ->call('toggleEnabled');
-
-        $this->assertNotSame($first, $settings->token());
-        $this->assertTrue($settings->showProfit());
-        $this->assertFalse($settings->enabled());
-        $this->assertFalse($settings->accepts($settings->token()));
-    }
-
-    public function test_the_settings_page_has_a_button_that_opens_the_link_in_a_new_window(): void
-    {
-        $admin = User::factory()->create();
-        $settings = app(MonitorSettings::class);
-        $settings->generateToken();
-        $link = rtrim((string) config('app.url'), '/').'/monitor/'.$settings->token();
-
-        $html = Livewire::actingAs($admin)->test(PublicMonitor::class)->html();
-
-        $this->assertMatchesRegularExpression(
-            '~<a href="'.preg_quote($link, '~').'"[^>]*target="_blank"[^>]*rel="noopener noreferrer"~s',
-            $html
-        );
-        $this->assertStringContainsString(__('Open in new window'), $html);
-    }
-
-    public function test_the_link_is_built_from_app_url_and_warns_when_it_is_local(): void
-    {
-        $admin = User::factory()->create();
-        $settings = app(MonitorSettings::class);
-        $settings->generateToken();
-        $token = $settings->token();
-
-        // A real public APP_URL (with a trailing slash) gives exactly APP_URL + /monitor/{token}.
-        config(['app.url' => 'https://crm.example.uz/']);
-        Livewire::actingAs($admin)->test(PublicMonitor::class)
-            ->assertSee('https://crm.example.uz/monitor/'.$token)
-            ->assertDontSee(__('APP_URL points to localhost, so this link will not work on the TV. Set APP_URL to the public address of this server in .env and clear the config cache.'));
-
-        // A localhost APP_URL still builds the link from it, plus a visible warning.
-        config(['app.url' => 'http://localhost']);
-        Livewire::actingAs($admin)->test(PublicMonitor::class)
-            ->assertSee('http://localhost/monitor/'.$token)
-            ->assertSee(__('APP_URL points to localhost, so this link will not work on the TV. Set APP_URL to the public address of this server in .env and clear the config cache.'));
+        $this->actingAs(User::factory()->operator()->create())->get('/monitors/'.$monitor->id)->assertOk()->assertDontSee(__('Margin'));
+        $this->actingAs(User::factory()->monitor()->create())->get('/monitors/'.$monitor->id)->assertOk();
     }
 
     public function test_monitor_shows_each_shops_share_of_sales_as_a_pie(): void
     {
         $user = User::factory()->create();
+        $monitor = $this->executiveMonitor();
         $a = Shop::factory()->create(['name' => 'Shop Alpha']);
         $b = Shop::factory()->create(['name' => 'Shop Beta']);
         foreach ([[$a, 300], [$b, 100]] as [$shop, $total]) {
@@ -219,7 +203,7 @@ class PublicMonitorTest extends TestCase
         Receipt::factory()->create(['shop_id' => $b->id, 'active' => true, 'sell' => false, 'total' => 5000, 'created_at' => now()->subMinute()]);
         Receipt::factory()->create(['shop_id' => $b->id, 'active' => false, 'sell' => true, 'total' => 5000, 'created_at' => now()->subMinute()]);
 
-        $html = $this->actingAs($user)->get('/monitor')->assertOk()
+        $html = $this->actingAs($user)->get('/monitors/'.$monitor->id)->assertOk()
             ->assertSee(__('Shops: share of sales'))
             ->getContent();
 

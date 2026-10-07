@@ -4,29 +4,31 @@ namespace Tests\Feature;
 
 use App\Livewire\Dashboard;
 use App\Livewire\Items\Show as ItemsShow;
-use App\Livewire\Monitor;
+use App\Livewire\MonitorScreen;
 use App\Livewire\Prices\Index as PricesIndex;
 use App\Livewire\SalesBoard;
 use App\Livewire\Users\Index as UsersIndex;
 use App\Models\Item;
 use App\Models\ItemPrice;
+use App\Models\Monitor;
 use App\Models\Price;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\Shop;
 use App\Models\Stock;
 use App\Models\User;
-use App\Support\MonitorSettings;
 use App\Support\ProfitAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Tests\Concerns\InteractsWithMonitors;
 use Tests\TestCase;
 
 class ProfitAccessTest extends TestCase
 {
+    use InteractsWithMonitors;
     use RefreshDatabase;
 
     private Item $item;
@@ -123,10 +125,10 @@ class ProfitAccessTest extends TestCase
 
     public function test_sales_board_and_monitor_payloads_omit_profit_and_skip_cost_queries(): void
     {
-        foreach ([SalesBoard::class, Monitor::class] as $class) {
+        foreach ([SalesBoard::class, MonitorScreen::class] as $class) {
             DB::flushQueryLog();
             DB::enableQueryLog();
-            $component = Livewire::actingAs($this->operator())->test($class);
+            $component = $this->screen($class, $this->operator());
             $queries = collect(DB::getQueryLog())->pluck('query')->implode("\n");
             DB::disableQueryLog();
 
@@ -139,7 +141,7 @@ class ProfitAccessTest extends TestCase
 
             Cache::flush();
             foreach ([$this->operator(true), User::factory()->create()] as $allowed) {
-                $full = Livewire::actingAs($allowed)->test($class);
+                $full = $this->screen($class, $allowed);
                 $this->assertEquals(80, $this->profitOf($full)['total'], $class);
                 $this->assertArrayHasKey('profit', $full->viewData('topItems')['all'][0], $class);
             }
@@ -148,12 +150,12 @@ class ProfitAccessTest extends TestCase
 
     public function test_monitor_role_follows_the_flag_on_the_signed_in_monitor(): void
     {
-        $without = Livewire::actingAs(User::factory()->monitor()->create())->test(Monitor::class);
+        $without = $this->screen(MonitorScreen::class, User::factory()->monitor()->create());
         $this->assertNull($this->profitOf($without));
         $this->assertFalse($without->viewData('showProfit'));
         $without->assertSee(__('Peak hour'));
 
-        $with = Livewire::actingAs(User::factory()->monitor()->withProfit()->create())->test(Monitor::class);
+        $with = $this->screen(MonitorScreen::class, User::factory()->monitor()->withProfit()->create());
         $this->assertTrue($with->viewData('showProfit'));
         $this->assertEquals(80, $this->profitOf($with)['total']);
     }
@@ -163,12 +165,12 @@ class ProfitAccessTest extends TestCase
         $plain = $this->operator();
         $rich = $this->operator(true);
 
-        foreach ([SalesBoard::class, Monitor::class] as $class) {
+        foreach ([SalesBoard::class, MonitorScreen::class] as $class) {
             // Both orders, same cache store, same day.
             foreach ([[$rich, $plain], [$plain, $rich]] as $order) {
                 Cache::flush();
                 foreach ($order as $user) {
-                    $component = Livewire::actingAs($user)->test($class);
+                    $component = $this->screen($class, $user);
                     $this->assertSame($user->is($rich), $this->profitOf($component) !== null, $class);
                 }
             }
@@ -197,14 +199,13 @@ class ProfitAccessTest extends TestCase
 
     public function test_public_monitor_keeps_its_own_switch(): void
     {
-        $settings = app(MonitorSettings::class);
-        $token = $settings->generateToken();
+        $monitor = Monitor::factory()->withLink()->create(['show_profit' => false]);
+        $token = $monitor->token;
 
-        $settings->setShowProfit(false);
-        $this->assertNull($this->profitOf(Livewire::test(Monitor::class, ['token' => $token])));
+        $this->assertNull($this->profitOf(Livewire::test(MonitorScreen::class, ['token' => $token])));
 
-        $settings->setShowProfit(true);
-        $this->assertEquals(80, $this->profitOf(Livewire::test(Monitor::class, ['token' => $token]))['total']);
+        $monitor->update(['show_profit' => true]);
+        $this->assertEquals(80, $this->profitOf(Livewire::test(MonitorScreen::class, ['token' => $token]))['total']);
     }
 
     public function test_users_modal_saves_and_loads_the_switch(): void

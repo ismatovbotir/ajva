@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\Dashboard;
 use App\Livewire\Items\Show as ItemShow;
-use App\Livewire\Monitor;
+use App\Livewire\MonitorScreen;
 use App\Livewire\Shops\Index as ShopsIndex;
 use App\Models\Item;
 use App\Models\ItemOrderRule;
@@ -15,10 +15,12 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
+use Tests\Concerns\InteractsWithMonitors;
 use Tests\TestCase;
 
 class StockHistoryTest extends TestCase
 {
+    use InteractsWithMonitors;
     use RefreshDatabase;
 
     protected function tearDown(): void
@@ -139,7 +141,7 @@ class StockHistoryTest extends TestCase
     {
         $this->pairWithHistory();
 
-        $alerts = Livewire::actingAs(User::factory()->create())->test(Monitor::class)->viewData('alerts');
+        $alerts = $this->screen(MonitorScreen::class, User::factory()->create())->viewData('alerts');
         $this->assertSame(1, $alerts['below_min']);
     }
 

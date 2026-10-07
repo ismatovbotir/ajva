@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Monitor;
 use App\Models\User;
 use App\Services\SalesMetrics;
-use App\Support\MonitorSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -36,7 +36,7 @@ class ThemeTest extends TestCase
 
     public function test_public_monitor_has_the_no_flash_script_and_toggle(): void
     {
-        $token = app(MonitorSettings::class)->generateToken();
+        $token = Monitor::factory()->withLink()->create()->token;
         $html = $this->get('/monitor/'.$token)->assertOk()->getContent();
 
         $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
@@ -49,7 +49,8 @@ class ThemeTest extends TestCase
 
     public function test_authenticated_monitor_stays_dark_without_a_toggle(): void
     {
-        $html = $this->actingAs(User::factory()->create())->get('/monitor')->assertOk()->getContent();
+        $monitor = Monitor::factory()->create();
+        $html = $this->actingAs(User::factory()->create())->get('/monitors/'.$monitor->id)->assertOk()->getContent();
 
         $this->assertStringContainsString('monitor-root', $html);
         $this->assertStringNotContainsString('monitorTheme', $html);
