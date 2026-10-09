@@ -116,7 +116,10 @@ class Index extends Component
             $hour = (int) substr((string) $r->created_at, 11, 2);
             $hourly[$hour][$r->shop_id] = ($hourly[$hour][$r->shop_id] ?? 0) + $amount;
             $shopTotals[$r->shop_id] = ($shopTotals[$r->shop_id] ?? 0) + $amount;
-            $dots[] = $r;
+            // Receipt points: successful sale receipts only (active is already filtered above).
+            if ($r->sell) {
+                $dots[] = $r;
+            }
             $count++;
         }
 
@@ -199,9 +202,11 @@ class Index extends Component
             $lines[] = ['color' => $color, 'points' => implode(' ', $points), 'dots' => $dots];
         }
 
-        // One point per receipt at its real time (x) and amount (y); refunds are squares.
+        // One point per successful sale receipt at its real time (x) and total (y).
         $receiptDots = [];
-        foreach ($receipts as $r) {
+        $shopPath = [];
+        $sorted = collect($receipts)->sortBy(fn ($r) => (string) $r->created_at)->values();
+        foreach ($sorted as $r) {
             $time = (string) $r->created_at;
             $hours = (int) substr($time, 11, 2) + (int) substr($time, 14, 2) / 60 + (int) substr($time, 17, 2) / 3600;
             $amount = abs((float) $r->total);
@@ -209,9 +214,19 @@ class Index extends Component
                 'x' => $x($hours),
                 'y' => $y($amount),
                 'color' => $colors[$r->shop_id] ?? self::COLOR_OTHER,
-                'refund' => ! $r->sell,
-                'tip' => ($shops[$r->shop_id] ?? '#'.$r->shop_id).' · '.substr($time, 11, 8).' · #'.$r->number.' — '.($r->sell ? '' : '−').number_format($amount, 0, '.', ' '),
+                'tip' => ($shops[$r->shop_id] ?? '#'.$r->shop_id).' · '.substr($time, 11, 8).' · #'.$r->number.' — '.number_format($amount, 0, '.', ' '),
             ];
+        }
+
+        // Per-shop line through its sale receipts in time order.
+        foreach ($receiptDots as $dot) {
+            $shopPath[$dot['color']][] = $dot['x'].','.$dot['y'];
+        }
+        $receiptLines = [];
+        foreach ($shopPath as $color => $pts) {
+            if (count($pts) > 1) {
+                $receiptLines[] = ['color' => $color, 'points' => implode(' ', $pts)];
+            }
         }
 
         $ticks = [];
@@ -232,6 +247,7 @@ class Index extends Component
             'baseline' => $top + $plotH,
             'lines' => $lines,
             'receiptDots' => $receiptDots,
+            'receiptLines' => $receiptLines,
             'ticks' => $ticks,
             'xLabels' => $xLabels,
         ];

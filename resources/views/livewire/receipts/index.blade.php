@@ -66,7 +66,7 @@
         {{-- Shop sales by hour --}}
         <x-ui.card>
             <h2 class="text-base font-semibold text-slate-900">{{ __('Sales by hour') }}</h2>
-            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per hour, split by shop.') }} {{ __('Small points are single receipts (squares are refunds).') }}</p>
+            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per hour, split by shop.') }} {{ __('Each point is a receipt, joined by a line per shop (successful sales only).') }}</p>
 
             @if($summary['count'] === 0)
                 <x-ui.empty-state :title="__('No sales for this day')" :description="__('Pick another date to see its sales.')" />
@@ -80,6 +80,11 @@
                     @endforeach
                 </ul>
 
+                <div x-data="{ mode: 'receipt' }">
+                <div class="mb-3 inline-flex rounded-lg border border-slate-300 p-0.5 text-xs">
+                    <button type="button" @click="mode = 'receipt'" :class="mode === 'receipt' ? 'bg-brand-700 text-white' : 'text-slate-600'" class="rounded-md px-3 py-1 font-medium">{{ __('Per receipt') }}</button>
+                    <button type="button" @click="mode = 'hour'" :class="mode === 'hour' ? 'bg-brand-700 text-white' : 'text-slate-600'" class="rounded-md px-3 py-1 font-medium">{{ __('Per hour') }}</button>
+                </div>
                 <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                     <svg viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}" class="h-auto min-w-[34rem] w-full" role="img"
                          aria-label="{{ __('Sales by hour') }}">
@@ -94,16 +99,18 @@
                             <text x="{{ $label['x'] }}" y="{{ $chart['baseline'] + 18 }}" text-anchor="middle" font-size="11" fill="#52514e">{{ $label['label'] }}</text>
                         @endforeach
 
-                        {{-- One point per receipt at its real time and amount --}}
-                        @foreach($chart['receiptDots'] as $dot)
-                            @if($dot['refund'])
-                                <rect x="{{ $dot['x'] - 2.5 }}" y="{{ $dot['y'] - 2.5 }}" width="5" height="5" fill="{{ $dot['color'] }}" fill-opacity="0.55"><title>{{ $dot['tip'] }}</title></rect>
-                            @else
-                                <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="2.5" fill="{{ $dot['color'] }}" fill-opacity="0.55"><title>{{ $dot['tip'] }}</title></circle>
-                            @endif
+                        {{-- Per receipt: a line through each shop's receipts, with one point per receipt --}}
+                        <g x-show="mode === 'receipt'">
+                        @foreach($chart['receiptLines'] as $line)
+                            <polyline points="{{ $line['points'] }}" fill="none" stroke="{{ $line['color'] }}" stroke-width="1.5" stroke-opacity="0.75" stroke-linejoin="round" stroke-linecap="round" />
                         @endforeach
+                        @foreach($chart['receiptDots'] as $dot)
+                            <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="2.5" fill="{{ $dot['color'] }}" fill-opacity="0.55"><title>{{ $dot['tip'] }}</title></circle>
+                        @endforeach
+                        </g>
 
-                        {{-- One line per shop --}}
+                        {{-- Per hour: one line per shop --}}
+                        <g x-show="mode === 'hour'" x-cloak>
                         @foreach($chart['lines'] as $line)
                             <polyline points="{{ $line['points'] }}" fill="none" stroke="{{ $line['color'] }}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
                             @foreach($line['dots'] as $dot)
@@ -112,7 +119,9 @@
                                 </circle>
                             @endforeach
                         @endforeach
+                        </g>
                     </svg>
+                </div>
                 </div>
             @endif
         </x-ui.card>

@@ -497,5 +497,7 @@
     "B → A": "B → A",
     "Lift": "Lift",
     "The period can not be longer than :days days.": "Davr :days kundan oshmasligi kerak.",
-    "Small points are single receipts (squares are refunds).": "Kichik nuqtalar — alohida cheklar (kvadratlar — qaytarishlar)."
+    "Per receipt": "Chek boʻyicha",
+    "Per hour": "Soat boʻyicha",
+    "Each point is a receipt, joined by a line per shop (successful sales only).": "Har bir nuqta — chek, doʻkon boʻyicha chiziq bilan tutashtirilgan (faqat muvaffaqiyatli savdolar)."
 }
