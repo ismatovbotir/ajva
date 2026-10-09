@@ -62,6 +62,22 @@ class LocalAdvisor
             }
         }
 
+        $cu = $report['customers'] ?? null;
+        if ($cu && $k['sale_count'] >= 20) {
+            if ($cu['with']['share'] < 20) {
+                $notes[] = ['level' => 'info', 'text' => __('Only :p % of sale receipts have a customer / loyalty card. Ask cashiers to offer the card at every sale; it is the only way to know who buys.', ['p' => self::fmt($cu['with']['share'])])];
+            }
+            if ($cu['with']['count'] >= 10 && $cu['without']['avg_check'] > 0 && $cu['with']['avg_check'] >= $cu['without']['avg_check'] * 1.2) {
+                $notes[] = ['level' => 'info', 'text' => __('Customers with a card spend :p % more per receipt than anonymous buyers. Growing the card base is worth it.', ['p' => self::fmt(($cu['with']['avg_check'] / $cu['without']['avg_check'] - 1) * 100, 0)])];
+            }
+        }
+
+        $flagged = array_values(array_filter($report['cashiers'] ?? [], fn ($c) => ! empty($c['flags'])));
+        if ($flagged !== []) {
+            $names = implode(', ', array_map(fn ($c) => ($c['cashier'] ?? __('Unknown')).' ('.$c['shop'].')', array_slice($flagged, 0, 3)));
+            $notes[] = ['level' => 'warn', 'text' => __(':n cashiers have refund, cancel or discount rates at least twice the chain average: :names. Review their receipts before drawing conclusions.', ['n' => count($flagged), 'names' => $names])];
+        }
+
         $big = $report['big'] ?? [];
         if (($big['cut'] ?? null) !== null && $big['revenue_share'] >= 30) {
             $notes[] = ['level' => 'info', 'text' => __('The biggest 5 % of receipts bring :p % of revenue. Keep the items typical for them always in stock.', ['p' => self::fmt($big['revenue_share'])])];

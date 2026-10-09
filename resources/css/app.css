@@ -86,8 +86,21 @@ html.monitor-root[data-monitor-theme="light"] .bg-brand-600 {
 .indeterminate-bar { animation: indeterminate-slide 1.3s ease-in-out infinite; }
 .spinner { animation: spinner-turn 0.9s linear infinite; }
 
+/* AjvaAI page: soft entrance and a slowly drifting gradient. */
+@keyframes ajva-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes ajva-aurora {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+.ajva-rise { animation: ajva-rise 0.4s ease-out both; }
+.ajva-aurora { background-size: 220% 220%; animation: ajva-aurora 14s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
     .modal-backdrop, .modal-panel { animation: none; }
+    .ajva-rise, .ajva-aurora { animation: none; }
     .indeterminate-bar { animation: none; width: 100%; opacity: 0.6; }
     .spinner { animation-duration: 3s; }
 }

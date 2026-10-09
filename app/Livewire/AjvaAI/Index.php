@@ -84,8 +84,16 @@ class Index extends Component
         $this->runStartedAt = now()->timestamp;
         $userId = (int) auth()->id();
 
-        Cache::put(RunAjvaQuestion::key($userId, $this->runId), ['status' => 'pending'], now()->addMinutes(15));
-        RunAjvaQuestion::dispatch($userId, $this->runId, $contents);
+        try {
+            Cache::put(RunAjvaQuestion::key($userId, $this->runId), ['status' => 'pending'], now()->addMinutes(15));
+            RunAjvaQuestion::dispatch($userId, $this->runId, $contents);
+        } catch (\Throwable $e) {
+            // e.g. the queue table is missing or the cache store is down.
+            $this->runId = '';
+            $this->fail(__('Could not start the AI request.'), get_class($e).': '.$e->getMessage());
+
+            return;
+        }
 
         $this->checkRun(); // the sync queue has already finished; a real queue answers on the next poll
     }
@@ -103,17 +111,26 @@ class Index extends Component
             $this->contents = $this->trim($state['contents']);
             $this->messages[] = $state['message'];
         } elseif ($state['status'] === 'failed') {
-            $this->error = $state['error'];
-            $this->errorDetails = $state['details'] ?? null;
-            $this->showErrorDetails = $this->errorDetails !== null; // open the full text at once
+            $this->fail($state['error'], $state['details'] ?? null);
         } elseif (now()->timestamp - $this->runStartedAt > self::RUN_GIVE_UP_SECONDS) {
-            $this->error = __('No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.');
+            $this->fail(
+                __('No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.'),
+                'Queue connection: '.config('queue.default')."\nWaited: ".(now()->timestamp - $this->runStartedAt).' s'."\nRun: ".$this->runId
+            );
         } else {
             return; // still working
         }
 
         Cache::forget(RunAjvaQuestion::key((int) auth()->id(), $this->runId));
         $this->runId = '';
+    }
+
+    /** Every failure shows its message and opens the full-text modal (the message itself when nothing more is known). */
+    private function fail(string $message, ?string $details): void
+    {
+        $this->error = $message;
+        $this->errorDetails = $details ?: $message;
+        $this->showErrorDetails = true;
     }
 
     public function openErrorDetails(): void

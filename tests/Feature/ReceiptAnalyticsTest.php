@@ -75,6 +75,58 @@ class ReceiptAnalyticsTest extends TestCase
         $this->assertSame(30, $report['relations']['pairs'][0]['together']);
     }
 
+    public function test_customers_with_and_without_loyalty_data_and_the_cashier_report(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create(['name' => 'Main']);
+        $mk = fn (float $total, ?array $aos, string $cashier, array $o = []) => Receipt::factory()->create(array_merge([
+            'shop_id' => $shop->id, 'active' => true, 'sell' => true, 'total' => $total, 'discount' => 0,
+            'aos' => $aos, 'cashier' => $cashier, 'created_at' => now(),
+        ], $o));
+
+        // Anna: 25 sales, 10 with a customer (aos filled), the rest anonymous (null / empty).
+        for ($i = 0; $i < 10; $i++) {
+            $mk(200, ['card' => '777'], 'Anna');
+        }
+        for ($i = 0; $i < 10; $i++) {
+            $mk(100, null, 'Anna');
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $mk(100, [], 'Anna');
+        }
+        // Bob: 25 sales plus 10 refunds and 5 cancelled (far above the chain average).
+        for ($i = 0; $i < 25; $i++) {
+            $mk(100, null, 'Bob');
+        }
+        for ($i = 0; $i < 10; $i++) {
+            $mk(100, null, 'Bob', ['sell' => false]);
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $mk(0, null, 'Bob', ['active' => false]);
+        }
+        // Cancelled receipt with no cashier name at all must not break grouping.
+        $mk(0, null, '', ['active' => false]);
+
+        $report = Livewire::actingAs($user)->test(Index::class)->call('generate')->viewData('report');
+
+        $cu = $report['customers'];
+        $this->assertSame(10, $cu['with']['count']);
+        $this->assertSame(40, $cu['without']['count']);
+        $this->assertEquals(20.0, $cu['with']['share']);
+        $this->assertEquals(200.0, $cu['with']['avg_check']);
+        $this->assertEquals(100.0, $cu['without']['avg_check']);
+        $this->assertSame(10, $cu['by_shop'][0]['with_customer']);
+
+        $cashiers = collect($report['cashiers'])->keyBy(fn ($c) => $c['cashier'] ?? '');
+        $this->assertSame(25, $cashiers['Anna']['receipts']);
+        $this->assertEquals(40.0, $cashiers['Anna']['customer_share']);
+        $this->assertSame(10, $cashiers['Bob']['refunds']);
+        $this->assertSame(5, $cashiers['Bob']['cancelled']);
+        $this->assertSame([], $cashiers['Anna']['flags']);
+        $this->assertContains('refunds', $cashiers['Bob']['flags']);
+        $this->assertTrue($cashiers->has(''), 'a receipt without a cashier name still appears as Unknown');
+    }
+
     public function test_receipt_links_open_the_receipt_in_a_modal_and_respect_shop_access(): void
     {
         $user = User::factory()->create();

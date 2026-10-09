@@ -173,6 +173,63 @@ class AjvaAITest extends TestCase
         $component->set('question', 'again')->call('ask')->assertSet('errorDetails', null)->assertSet('error', null);
     }
 
+    public function test_a_follow_up_resends_empty_tool_arguments_as_an_object_not_a_list(): void
+    {
+        config(['services.gemini.key' => 'test-key']);
+        Shop::factory()->create();
+
+        Http::fakeSequence()
+            ->push(['candidates' => [['content' => ['role' => 'model', 'parts' => [['functionCall' => ['name' => 'list_shops', 'args' => new \stdClass]]]], 'finishReason' => 'STOP']]])
+            ->push(['candidates' => [['content' => ['role' => 'model', 'parts' => [['text' => 'ok']]], 'finishReason' => 'STOP']]]);
+
+        Livewire::actingAs($this->admin())->test(Index::class)
+            ->set('question', 'list the shops')->call('ask')
+            ->set('question', 'and now?')->call('ask')
+            ->assertSet('error', null);
+
+        // PHP decodes {} to [], but Gemini rejects "args": [] with a 400 on the next turn.
+        $this->assertStringContainsString('"args":{}', Http::recorded()[1][0]->body());
+    }
+
+    public function test_every_unusable_gemini_response_opens_the_error_modal_with_the_full_response(): void
+    {
+        config(['services.gemini.key' => 'test-key']);
+
+        $cases = [
+            'malformed call' => [['candidates' => [['finishReason' => 'MALFORMED_FUNCTION_CALL', 'finishMessage' => 'Malformed function call: print(x)']]], 'MALFORMED_FUNCTION_CALL'],
+            'prompt blocked' => [['promptFeedback' => ['blockReason' => 'SAFETY']], 'SAFETY'],
+            'no candidates' => [['usageMetadata' => ['promptTokenCount' => 12]], 'promptTokenCount'],
+            'cut off with no parts' => [['candidates' => [['content' => ['role' => 'model'], 'finishReason' => 'MAX_TOKENS']]], 'MAX_TOKENS'],
+        ];
+
+        $sequence = Http::fakeSequence();
+        foreach ($cases as [$body]) {
+            $sequence->push($body, 200);
+        }
+
+        foreach ($cases as $name => [$body, $expected]) {
+
+            $component = Livewire::actingAs($this->admin())->test(Index::class)
+                ->set('question', 'hello')->call('ask')
+                ->assertSet('showErrorDetails', true)
+                ->assertSee(__('Full error from the AI service'));
+
+            $this->assertStringContainsString($expected, (string) $component->get('errorDetails'), $name);
+        }
+    }
+
+    public function test_a_failure_to_start_the_request_is_shown_in_the_modal_too(): void
+    {
+        config(['services.gemini.key' => 'test-key']);
+        config(['queue.default' => 'database']); // the test database has no jobs table
+
+        Livewire::actingAs($this->admin())->test(Index::class)
+            ->set('question', 'hi')->call('ask')
+            ->assertSet('runId', '')
+            ->assertSet('showErrorDetails', true)
+            ->assertSee('jobs');
+    }
+
     public function test_rate_limit_is_reported_in_plain_words(): void
     {
         config(['services.gemini.key' => 'test-key']);

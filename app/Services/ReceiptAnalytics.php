@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
  * valid (cancelled ones often are), so receipt counts always come from
  * `receipts`, never from `receipt_items`. Discount of a receipt =
  * receipts.discount (gross - total); discount rate = discount / (total + discount).
+ * Customer = a receipt whose `aos` (loyalty / customer data) is not empty.
  * "Big" receipt = sale receipt at or above the 95th percentile of sale totals
  * in the selected range and shops (a data-driven cut, not a magic number).
  */
@@ -48,6 +49,8 @@ class ReceiptAnalytics
             'discountBuckets' => $this->discountBuckets($from, $to, $shopIds),
             'discountByShop' => $this->discountByShop($from, $to, $shopIds),
             'discountItems' => $this->discountItems($from, $to, $shopIds),
+            'customers' => $this->customers($from, $to, $shopIds),
+            'cashiers' => $this->cashiers($from, $to, $shopIds, $kpi),
             'big' => $big,
             'bigItems' => $big['cut'] === null ? [] : $this->bigReceiptItems($from, $to, $shopIds, $big['cut']),
             'relations' => $this->relations($from, $to, $shopIds),
@@ -178,6 +181,141 @@ class ReceiptAnalytics
                     'rate' => $gross > 0 ? (float) $r->discount / $gross * 100 : 0.0,
                 ];
             })->all();
+    }
+
+    /** SQL: the receipt carries customer / loyalty data in `aos` (null, [] and {} mean no customer). */
+    private const CUSTOMER = "(receipts.aos IS NOT NULL AND receipts.aos NOT IN ('[]', '{}', 'null', ''))";
+
+    /**
+     * Sale receipts with vs without customer (loyalty) data: share, revenue,
+     * average check, discount and basket size for each group, plus the share per shop.
+     */
+    private function customers(Carbon $from, Carbon $to, array $shopIds): array
+    {
+        $flag = 'CASE WHEN '.self::CUSTOMER.' THEN 1 ELSE 0 END';
+
+        $groups = $this->sales($from, $to, $shopIds)
+            ->selectRaw("{$flag} as c, COUNT(*) as cnt, COALESCE(SUM(receipts.total), 0) as revenue, COALESCE(SUM(receipts.discount), 0) as discount")
+            ->groupBy('c')->get()->keyBy('c');
+
+        $lines = $this->sales($from, $to, $shopIds)
+            ->join('receipt_items', 'receipt_items.receipt_id', '=', 'receipts.id')
+            ->where('receipt_items.storno', false)
+            ->selectRaw("{$flag} as c, COUNT(receipt_items.id) as lines")
+            ->groupBy('c')->pluck('lines', 'c');
+
+        $total = (int) $groups->sum('cnt');
+        $totalRevenue = (float) $groups->sum('revenue');
+
+        $make = function (int $key) use ($groups, $lines, $total, $totalRevenue) {
+            $cnt = (int) ($groups[$key]->cnt ?? 0);
+            $revenue = (float) ($groups[$key]->revenue ?? 0);
+            $discount = (float) ($groups[$key]->discount ?? 0);
+
+            return [
+                'count' => $cnt,
+                'share' => $total ? $cnt / $total * 100 : 0.0,
+                'revenue' => $revenue,
+                'revenue_share' => $totalRevenue > 0 ? $revenue / $totalRevenue * 100 : 0.0,
+                'avg_check' => $cnt ? $revenue / $cnt : 0.0,
+                'basket' => $cnt ? (int) ($lines[$key] ?? 0) / $cnt : 0.0,
+                'discount' => $discount,
+                'discount_rate' => $revenue + $discount > 0 ? $discount / ($revenue + $discount) * 100 : 0.0,
+            ];
+        };
+
+        $byShop = $this->sales($from, $to, $shopIds)
+            ->join('shops', 'shops.id', '=', 'receipts.shop_id')
+            ->groupBy('shops.id', 'shops.name')
+            ->selectRaw("shops.name as shop, COUNT(*) as cnt, SUM({$flag}) as with_c")
+            ->orderBy('shops.name')
+            ->get()
+            ->map(fn ($r) => [
+                'shop' => $r->shop,
+                'receipts' => (int) $r->cnt,
+                'with_customer' => (int) $r->with_c,
+                'share' => $r->cnt ? (int) $r->with_c / (int) $r->cnt * 100 : 0.0,
+            ])->all();
+
+        return ['with' => $make(1), 'without' => $make(0), 'by_shop' => $byShop];
+    }
+
+    /**
+     * Report by cashier (per shop): sales, average check, basket, discount,
+     * refunds, cancelled receipts and customer share. Rates are judged only
+     * above a minimum number of receipts and flagged against the chain's own
+     * average, as signals to review, never as proof of anything.
+     */
+    private function cashiers(Carbon $from, Carbon $to, array $shopIds, array $kpi): array
+    {
+        $customerFlag = 'CASE WHEN '.self::CUSTOMER.' THEN 1 ELSE 0 END';
+
+        $rows = $this->receipts($from, $to, $shopIds)
+            ->join('shops', 'shops.id', '=', 'receipts.shop_id')
+            ->groupBy('receipts.shop_id', 'shops.name', 'receipts.cashier')
+            ->selectRaw("receipts.shop_id, shops.name as shop, receipts.cashier,
+                SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 1 THEN 1 ELSE 0 END) as sale_count,
+                COALESCE(SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 1 THEN receipts.total ELSE 0 END), 0) as sale_sum,
+                COALESCE(SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 1 THEN receipts.discount ELSE 0 END), 0) as discount_sum,
+                SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 0 THEN 1 ELSE 0 END) as refund_count,
+                COALESCE(SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 0 THEN ABS(receipts.total) ELSE 0 END), 0) as refund_sum,
+                SUM(CASE WHEN receipts.active = 0 THEN 1 ELSE 0 END) as cancelled_count,
+                COUNT(*) as all_count,
+                SUM(CASE WHEN receipts.active = 1 AND receipts.sell = 1 AND {$customerFlag} = 1 THEN 1 ELSE 0 END) as customer_count")
+            ->orderByDesc('sale_sum')
+            ->limit(60)
+            ->get();
+
+        $lines = $this->sales($from, $to, $shopIds)
+            ->join('receipt_items', 'receipt_items.receipt_id', '=', 'receipts.id')
+            ->where('receipt_items.storno', false)
+            ->groupBy('receipts.shop_id', 'receipts.cashier')
+            ->selectRaw('receipts.shop_id, receipts.cashier, COUNT(receipt_items.id) as lines')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->shop_id.'|'.$r->cashier => (int) $r->lines]);
+
+        $chainRefund = $kpi['sale_sum'] > 0 ? $kpi['refund_sum'] / $kpi['sale_sum'] * 100 : 0.0;
+        $chainCancel = $kpi['all_count'] > 0 ? $kpi['cancelled_count'] / $kpi['all_count'] * 100 : 0.0;
+        $chainDiscount = $kpi['discount_rate'];
+
+        return $rows->map(function ($r) use ($lines, $chainRefund, $chainCancel, $chainDiscount) {
+            $sales = (int) $r->sale_count;
+            $saleSum = (float) $r->sale_sum;
+            $discount = (float) $r->discount_sum;
+            $refundRate = $saleSum > 0 ? (float) $r->refund_sum / $saleSum * 100 : 0.0;
+            $cancelRate = $r->all_count ? (int) $r->cancelled_count / (int) $r->all_count * 100 : 0.0;
+            $discountRate = $saleSum + $discount > 0 ? $discount / ($saleSum + $discount) * 100 : 0.0;
+
+            // A signal needs a meaningful number of receipts and to be clearly above the chain.
+            $flags = [];
+            if ((int) $r->all_count >= 20) {
+                if ($refundRate >= 2 && $refundRate >= $chainRefund * 2) {
+                    $flags[] = 'refunds';
+                }
+                if ($cancelRate >= 2 && $cancelRate >= $chainCancel * 2) {
+                    $flags[] = 'cancels';
+                }
+                if ($discountRate >= 5 && $discountRate >= $chainDiscount * 2) {
+                    $flags[] = 'discounts';
+                }
+            }
+
+            return [
+                'cashier' => filled($r->cashier) ? $r->cashier : null,
+                'shop' => $r->shop,
+                'receipts' => $sales,
+                'sales' => $saleSum,
+                'avg_check' => $sales ? $saleSum / $sales : 0.0,
+                'basket' => $sales ? ($lines[$r->shop_id.'|'.$r->cashier] ?? 0) / $sales : 0.0,
+                'discount_rate' => $discountRate,
+                'refunds' => (int) $r->refund_count,
+                'refund_rate' => $refundRate,
+                'cancelled' => (int) $r->cancelled_count,
+                'cancel_rate' => $cancelRate,
+                'customer_share' => $sales ? (int) $r->customer_count / $sales * 100 : 0.0,
+                'flags' => $flags,
+            ];
+        })->all();
     }
 
     private function bigReceipts(Carbon $from, Carbon $to, array $shopIds, array $kpi): array

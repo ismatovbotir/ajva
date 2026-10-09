@@ -115,6 +115,79 @@
             </x-ui.card>
         @endif
 
+        {{-- Customers (loyalty) --}}
+        @php($cu = $report['customers'])
+        <h2 class="mb-2 text-base font-semibold text-slate-900">{{ __('Customers (loyalty)') }}</h2>
+        <p class="mb-3 text-sm text-slate-500">{{ __('A receipt has a customer when it carries loyalty / customer data. Sale receipts only.') }}</p>
+        <div class="mb-4 grid gap-4 lg:grid-cols-2">
+            <x-ui.card padding="p-0">
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200">
+                    <thead><tr><th class="{{ $th }} text-left"></th><th class="{{ $th }} text-right">{{ __('With customer') }}</th><th class="{{ $th }} text-right">{{ __('Without customer') }}</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                    @foreach([
+                        [__('Receipts'), fn ($g) => $g['count']],
+                        [__('Share of receipts'), fn ($g) => $pct($g['share'])],
+                        [__('Revenue'), fn ($g) => $money($g['revenue'])],
+                        [__('Share of revenue'), fn ($g) => $pct($g['revenue_share'])],
+                        [__('Average check'), fn ($g) => $money($g['avg_check'])],
+                        [__('Lines per receipt'), fn ($g) => $num($g['basket'])],
+                        [__('Discount rate'), fn ($g) => $pct($g['discount_rate'])],
+                    ] as [$label, $cell])
+                        <tr><td class="px-3 py-2 text-slate-600">{{ $label }}</td><td class="px-3 py-2 text-right font-medium tabular-nums">{{ $cell($cu['with']) }}</td><td class="px-3 py-2 text-right tabular-nums">{{ $cell($cu['without']) }}</td></tr>
+                    @endforeach
+                    </tbody></table></div>
+            </x-ui.card>
+            <x-ui.card padding="p-0">
+                <p class="px-4 pt-3 text-sm font-medium text-slate-700">{{ __('Customer share by shop') }}</p>
+                <div class="max-h-72 overflow-auto"><table class="min-w-full divide-y divide-slate-200">
+                    <thead><tr><th class="{{ $th }} text-left">{{ __('Shop') }}</th><th class="{{ $th }} text-right">{{ __('Receipts') }}</th><th class="{{ $th }} text-right">{{ __('With customer') }}</th><th class="{{ $th }} text-right">{{ __('Share') }}</th></tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                    @foreach($cu['by_shop'] as $s)
+                        <tr><td class="px-3 py-2">{{ $s['shop'] }}</td><td class="px-3 py-2 text-right tabular-nums">{{ $s['receipts'] }}</td><td class="px-3 py-2 text-right tabular-nums">{{ $s['with_customer'] }}</td><td class="px-3 py-2 text-right font-medium tabular-nums">{{ $pct($s['share']) }}</td></tr>
+                    @endforeach
+                    </tbody></table></div>
+            </x-ui.card>
+        </div>
+
+        {{-- Cashier report --}}
+        <h2 class="mb-2 mt-8 text-base font-semibold text-slate-900">{{ __('Cashier report') }}</h2>
+        <p class="mb-3 text-sm text-slate-500">{{ __('Per cashier and shop. A flag is a signal to review (rate at least twice the chain average, from 20 receipts), not proof of a problem.') }}</p>
+        @if(empty($report['cashiers']))
+            <p class="mb-8 text-sm text-slate-500">{{ __('No cashier data for this period.') }}</p>
+        @else
+            <x-ui.card padding="p-0" class="mb-8">
+                <div class="max-h-[32rem] overflow-auto"><table class="min-w-full divide-y divide-slate-200">
+                    <thead class="sticky top-0 bg-sand-50"><tr>
+                        <th class="{{ $th }} text-left">{{ __('Cashier') }}</th><th class="{{ $th }} text-left">{{ __('Shop') }}</th>
+                        <th class="{{ $th }} text-right">{{ __('Receipts') }}</th><th class="{{ $th }} text-right">{{ __('Sales') }}</th><th class="{{ $th }} text-right">{{ __('Average check') }}</th>
+                        <th class="{{ $th }} text-right">{{ __('Lines per receipt') }}</th><th class="{{ $th }} text-right">{{ __('Discount rate') }}</th>
+                        <th class="{{ $th }} text-right">{{ __('Refunds') }}</th><th class="{{ $th }} text-right">{{ __('Cancelled') }}</th>
+                        <th class="{{ $th }} text-right">{{ __('With customer') }}</th><th class="{{ $th }} text-left">{{ __('Signals') }}</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                    @foreach($report['cashiers'] as $c)
+                        <tr class="{{ $c['flags'] ? 'bg-amber-50/60' : '' }}">
+                            <td class="whitespace-nowrap px-3 py-2 font-medium">{{ $c['cashier'] ?? __('Unknown') }}</td>
+                            <td class="whitespace-nowrap px-3 py-2">{{ $c['shop'] }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $c['receipts'] }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $money($c['sales']) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $money($c['avg_check']) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $num($c['basket']) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $pct($c['discount_rate']) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $c['refunds'] }} <span class="text-xs text-slate-400">({{ $pct($c['refund_rate']) }})</span></td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $c['cancelled'] }} <span class="text-xs text-slate-400">({{ $pct($c['cancel_rate']) }})</span></td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ $pct($c['customer_share']) }}</td>
+                            <td class="px-3 py-2">
+                                @foreach($c['flags'] as $flag)
+                                    <x-ui.badge variant="warning">{{ ['refunds' => __('Refunds'), 'cancels' => __('Cancelled'), 'discounts' => __('Discounts')][$flag] }}</x-ui.badge>
+                                @endforeach
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody></table></div>
+            </x-ui.card>
+        @endif
+
         {{-- Big receipts --}}
         @php($big = $report['big'])
         <h2 class="mb-2 text-base font-semibold text-slate-900">{{ __('Big receipts') }}</h2>

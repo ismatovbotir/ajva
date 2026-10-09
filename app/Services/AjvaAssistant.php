@@ -26,6 +26,9 @@ class AjvaAssistant
     /** Tool calls executed for one question. */
     private const MAX_CALLS = 6;
 
+    /** finishReason values that mean the answer is not usable even if some parts came back. */
+    private const BAD_FINISH = ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL', 'LANGUAGE'];
+
     private const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent';
 
     public function configured(): bool
@@ -157,7 +160,7 @@ class AjvaAssistant
     {
         $body = [
             'systemInstruction' => ['parts' => [['text' => $this->systemPrompt()]]],
-            'contents' => $contents,
+            'contents' => $this->wireFormat($contents),
             'generationConfig' => ['temperature' => 0.2],
         ];
         if ($tools !== []) {
@@ -182,14 +185,67 @@ class AjvaAssistant
             }, $this->describe($response));
         }
 
-        $content = $response->json('candidates.0.content');
-        if (! is_array($content) || ($content['parts'] ?? []) === []) {
-            // e.g. a safety block: finishReason / promptFeedback explain why.
-            throw new AssistantException(__('The AI returned an empty answer. Rephrase the question and try again.'), $this->describe($response));
-        }
-        $content['role'] = 'model';
+        return $this->checkedContent($response);
+    }
 
-        return $content;
+    /**
+     * Response controller: a Gemini reply is only accepted when it is usable.
+     * Anything else (prompt blocked, no candidate, cut-off / malformed / safety
+     * finish, no parts) becomes an AssistantException carrying the full response,
+     * which the page shows in the error modal.
+     *
+     * @return array<string, mixed> the model's content ({role, parts})
+     */
+    private function checkedContent(\Illuminate\Http\Client\Response $response): array
+    {
+        $fail = fn (string $message) => new AssistantException($message, $this->describe($response));
+
+        $block = $response->json('promptFeedback.blockReason');
+        if ($block) {
+            throw $fail(__('The AI blocked this question (:reason). Rephrase it and try again.', ['reason' => $block]));
+        }
+
+        $candidate = $response->json('candidates.0');
+        if (! is_array($candidate)) {
+            throw $fail(__('The AI returned no answer. Rephrase the question and try again.'));
+        }
+
+        $content = $candidate['content'] ?? null;
+        $parts = is_array($content) ? array_values(array_filter($content['parts'] ?? [], 'is_array')) : [];
+        $finish = (string) ($candidate['finishReason'] ?? '');
+
+        if ($parts === [] || in_array($finish, self::BAD_FINISH, true)) {
+            $message = match (true) {
+                $finish === 'MALFORMED_FUNCTION_CALL' => __('The AI built an invalid report request. Rephrase the question and try again.'),
+                in_array($finish, ['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'], true) => __('The AI refused to answer this question (:reason).', ['reason' => $finish]),
+                $finish === 'MAX_TOKENS' => __('The AI answer was cut off. Ask a narrower question.'),
+                default => __('The AI returned an empty answer. Rephrase the question and try again.'),
+            };
+
+            throw $fail($message);
+        }
+
+        return ['role' => 'model', 'parts' => $parts];
+    }
+
+    /**
+     * Gemini needs functionCall.args to be a JSON object; PHP turns an empty
+     * object into [] when the history is decoded, which Gemini then rejects.
+     *
+     * @param  array<int, array<string, mixed>>  $contents
+     * @return array<int, array<string, mixed>>
+     */
+    private function wireFormat(array $contents): array
+    {
+        foreach ($contents as &$content) {
+            foreach ($content['parts'] ?? [] as $i => $part) {
+                if (isset($part['functionCall']) && empty($part['functionCall']['args'])) {
+                    $content['parts'][$i]['functionCall']['args'] = new \stdClass;
+                }
+            }
+        }
+
+        return $contents;
     }
 
     /** Full technical text of a Gemini response for the error modal (status + body, key removed). */
