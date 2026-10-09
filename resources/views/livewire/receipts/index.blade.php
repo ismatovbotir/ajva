@@ -88,11 +88,19 @@
                 <div class="overflow-x-auto rounded-lg border border-[#e1e0d9] bg-[#fcfcfb] p-4">
                     <svg viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}" class="h-auto min-w-[34rem] w-full" role="img"
                          aria-label="{{ __('Sales by hour') }}">
-                        {{-- Gridlines and y-axis labels --}}
+                        {{-- Gridlines and y-axis labels (own scale per view) --}}
+                        <g x-show="mode === 'receipt'">
+                        @foreach($chart['receiptTicks'] as $tick)
+                            <line x1="{{ $chart['left'] }}" x2="{{ $chart['right'] }}" y1="{{ $tick['y'] }}" y2="{{ $tick['y'] }}" stroke="#e1e0d9" stroke-width="1" />
+                            <text x="{{ $chart['left'] - 8 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end" font-size="11" fill="#52514e">{{ $tick['label'] }}</text>
+                        @endforeach
+                        </g>
+                        <g x-show="mode === 'hour'" x-cloak>
                         @foreach($chart['ticks'] as $tick)
                             <line x1="{{ $chart['left'] }}" x2="{{ $chart['right'] }}" y1="{{ $tick['y'] }}" y2="{{ $tick['y'] }}" stroke="#e1e0d9" stroke-width="1" />
                             <text x="{{ $chart['left'] - 8 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end" font-size="11" fill="#52514e">{{ $tick['label'] }}</text>
                         @endforeach
+                        </g>
 
                         {{-- x-axis hour labels --}}
                         @foreach($chart['xLabels'] as $label)

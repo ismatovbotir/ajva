@@ -161,6 +161,9 @@ class Index extends Component
      * @param  iterable<object>  $receipts  every active receipt of the day, drawn as one point at its real time
      * @return array<string, mixed>
      */
+    /** Extra y-axis room above the largest receipt in the per-receipt view. */
+    private const RECEIPT_HEADROOM = 50000;
+
     private function lineChart(array $hourly, array $colors, array $shops, iterable $receipts = []): array
     {
         $width = 960;
@@ -175,14 +178,20 @@ class Index extends Component
                 $max = max($max, (float) $value);
             }
         }
-        foreach ($receipts as $r) {
-            $max = max($max, abs((float) $r->total));
-        }
         $max = $this->niceCeiling($max);
+
+        // The per-receipt view has its own axis: the biggest receipt plus 50 000 of headroom.
+        $maxReceipt = 0.0;
+        foreach ($receipts as $r) {
+            $maxReceipt = max($maxReceipt, abs((float) $r->total));
+        }
+        $topReceipt = $maxReceipt + self::RECEIPT_HEADROOM;
 
         // 24 hour slots: hour h starts at x(h), so a 23:59 receipt still lands inside the plot.
         $x = fn (float $h) => round($left + $h * $plotW / 24, 1);
-        $y = fn (float $v) => round($top + $plotH * (1 - ($max > 0 ? max($v, 0) / $max : 0)), 1);
+        $yFor = fn (float $v, float $axisMax) => round($top + $plotH * (1 - ($axisMax > 0 ? min(max($v, 0), $axisMax) / $axisMax : 0)), 1);
+        $y = fn (float $v) => $yFor($v, $max);
+        $yReceipt = fn (float $v) => $yFor($v, $topReceipt);
 
         $lines = [];
         foreach ($colors as $shopId => $color) {
@@ -212,7 +221,7 @@ class Index extends Component
             $amount = abs((float) $r->total);
             $receiptDots[] = [
                 'x' => $x($hours),
-                'y' => $y($amount),
+                'y' => $yReceipt($amount),
                 'color' => $colors[$r->shop_id] ?? self::COLOR_OTHER,
                 'tip' => ($shops[$r->shop_id] ?? '#'.$r->shop_id).' · '.substr($time, 11, 8).' · #'.$r->number.' — '.number_format($amount, 0, '.', ' '),
             ];
@@ -234,6 +243,13 @@ class Index extends Component
             $ticks[] = ['y' => $y($max * $f), 'label' => number_format($max * $f, 0, '.', ' ')];
         }
 
+        // Receipt-axis ticks: round steps up to the top (not quarters of an odd number).
+        $step = $this->niceCeiling($topReceipt / 4);
+        $receiptTicks = [];
+        for ($v = 0.0; $v <= $topReceipt && $step > 0; $v += $step) {
+            $receiptTicks[] = ['y' => $yReceipt($v), 'label' => number_format($v, 0, '.', ' ')];
+        }
+
         $xLabels = [];
         for ($h = 0; $h < 24; $h++) {
             $xLabels[] = ['x' => $x($h), 'label' => sprintf('%02d', $h)];
@@ -249,6 +265,7 @@ class Index extends Component
             'receiptDots' => $receiptDots,
             'receiptLines' => $receiptLines,
             'ticks' => $ticks,
+            'receiptTicks' => $receiptTicks,
             'xLabels' => $xLabels,
         ];
     }
