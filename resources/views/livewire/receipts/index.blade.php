@@ -66,7 +66,7 @@
         {{-- Shop sales by hour --}}
         <x-ui.card>
             <h2 class="text-base font-semibold text-slate-900">{{ __('Sales by hour') }}</h2>
-            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per hour, split by shop.') }}</p>
+            <p class="mb-4 text-sm text-slate-500">{{ __('Net sales per hour, split by shop.') }} {{ __('Small points are single receipts (squares are refunds).') }}</p>
 
             @if($summary['count'] === 0)
                 <x-ui.empty-state :title="__('No sales for this day')" :description="__('Pick another date to see its sales.')" />
@@ -92,6 +92,15 @@
                         {{-- x-axis hour labels --}}
                         @foreach($chart['xLabels'] as $label)
                             <text x="{{ $label['x'] }}" y="{{ $chart['baseline'] + 18 }}" text-anchor="middle" font-size="11" fill="#52514e">{{ $label['label'] }}</text>
+                        @endforeach
+
+                        {{-- One point per receipt at its real time and amount --}}
+                        @foreach($chart['receiptDots'] as $dot)
+                            @if($dot['refund'])
+                                <rect x="{{ $dot['x'] - 2.5 }}" y="{{ $dot['y'] - 2.5 }}" width="5" height="5" fill="{{ $dot['color'] }}" fill-opacity="0.55"><title>{{ $dot['tip'] }}</title></rect>
+                            @else
+                                <circle cx="{{ $dot['x'] }}" cy="{{ $dot['y'] }}" r="2.5" fill="{{ $dot['color'] }}" fill-opacity="0.55"><title>{{ $dot['tip'] }}</title></circle>
+                            @endif
                         @endforeach
 
                         {{-- One line per shop --}}

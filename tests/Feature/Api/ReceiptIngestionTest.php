@@ -132,6 +132,21 @@ class ReceiptIngestionTest extends TestCase
             ->assertJsonValidationErrors(['pos']);
     }
 
+    public function test_a_cancelled_receipt_without_positions_is_accepted(): void
+    {
+        $shop = Shop::factory()->create();
+        Pos::factory()->for($shop)->create();
+
+        $payload = $this->payload(['shop' => $shop->id, 'status' => 'cancelled', 'total' => 0]);
+        unset($payload['positions']);
+
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)->assertStatus(202);
+
+        $receipt = \App\Models\Receipt::query()->where('number', $payload['number'])->firstOrFail();
+        $this->assertFalse((bool) $receipt->active);
+        $this->assertSame(0, $receipt->items()->count());
+    }
+
     public function test_ingests_a_receipt_with_positions_and_payments(): void
     {
         $shop = Shop::factory()->create();
@@ -396,7 +411,7 @@ class ReceiptIngestionTest extends TestCase
         $response = $this->withToken('test-pos-token')->postJson('/api/receipts', ['number' => 'A-1']);
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['total', 'positions', 'openDate', 'openTime']);
+        $response->assertJsonValidationErrors(['total', 'openDate', 'openTime']);
     }
 
     public function test_validation_failure_returns_json_even_without_an_accept_header(): void
@@ -418,7 +433,7 @@ class ReceiptIngestionTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertJsonValidationErrors(['total', 'positions']);
+        $response->assertJsonValidationErrors(['total']);
     }
 
     public function test_ingestion_does_not_touch_stocks(): void

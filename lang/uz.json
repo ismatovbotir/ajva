@@ -496,5 +496,6 @@
     "A → B": "A → B",
     "B → A": "B → A",
     "Lift": "Lift",
-    "The period can not be longer than :days days.": "Davr :days kundan oshmasligi kerak."
+    "The period can not be longer than :days days.": "Davr :days kundan oshmasligi kerak.",
+    "Small points are single receipts (squares are refunds).": "Kichik nuqtalar — alohida cheklar (kvadratlar — qaytarishlar)."
 }

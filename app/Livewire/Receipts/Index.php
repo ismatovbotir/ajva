@@ -104,17 +104,19 @@ class Index extends Component
         // Shop totals by hour — one pass over the day's receipts, no model hydration.
         $hourly = [];
         $shopTotals = [];
+        $dots = [];
         $count = 0;
         $receiptRows = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $ids)
             ->where('active', true)
             ->whereBetween('created_at', [$from, $to])
-            ->get(['shop_id', 'sell', 'total', 'created_at']);
+            ->get(['id', 'number', 'shop_id', 'sell', 'total', 'created_at']);
 
         foreach ($receiptRows as $r) {
             $amount = $sign($r->sell) * (float) $r->total;
             $hour = (int) substr((string) $r->created_at, 11, 2);
             $hourly[$hour][$r->shop_id] = ($hourly[$hour][$r->shop_id] ?? 0) + $amount;
             $shopTotals[$r->shop_id] = ($shopTotals[$r->shop_id] ?? 0) + $amount;
+            $dots[] = $r;
             $count++;
         }
 
@@ -136,7 +138,7 @@ class Index extends Component
             'paymentTable' => $paymentTable,
             'columnTotals' => $columnTotals,
             'grandTotal' => array_sum($columnTotals),
-            'chart' => $this->lineChart($hourly, $colors, $shops),
+            'chart' => $this->lineChart($hourly, $colors, $shops, $dots),
             'legend' => $legend,
             'summary' => [
                 'total' => array_sum($shopTotals),
@@ -153,9 +155,10 @@ class Index extends Component
      * @param  array<int, array<int, float>>  $hourly  hour => shop id => net amount
      * @param  array<int, string>  $colors  shop id => colour
      * @param  array<int, string>  $shops  shop id => name
+     * @param  iterable<object>  $receipts  every active receipt of the day, drawn as one point at its real time
      * @return array<string, mixed>
      */
-    private function lineChart(array $hourly, array $colors, array $shops): array
+    private function lineChart(array $hourly, array $colors, array $shops, iterable $receipts = []): array
     {
         $width = 960;
         $height = 280;
@@ -169,9 +172,13 @@ class Index extends Component
                 $max = max($max, (float) $value);
             }
         }
+        foreach ($receipts as $r) {
+            $max = max($max, abs((float) $r->total));
+        }
         $max = $this->niceCeiling($max);
 
-        $x = fn (int $h) => round($left + $h * $plotW / 23, 1);
+        // 24 hour slots: hour h starts at x(h), so a 23:59 receipt still lands inside the plot.
+        $x = fn (float $h) => round($left + $h * $plotW / 24, 1);
         $y = fn (float $v) => round($top + $plotH * (1 - ($max > 0 ? max($v, 0) / $max : 0)), 1);
 
         $lines = [];
@@ -192,6 +199,21 @@ class Index extends Component
             $lines[] = ['color' => $color, 'points' => implode(' ', $points), 'dots' => $dots];
         }
 
+        // One point per receipt at its real time (x) and amount (y); refunds are squares.
+        $receiptDots = [];
+        foreach ($receipts as $r) {
+            $time = (string) $r->created_at;
+            $hours = (int) substr($time, 11, 2) + (int) substr($time, 14, 2) / 60 + (int) substr($time, 17, 2) / 3600;
+            $amount = abs((float) $r->total);
+            $receiptDots[] = [
+                'x' => $x($hours),
+                'y' => $y($amount),
+                'color' => $colors[$r->shop_id] ?? self::COLOR_OTHER,
+                'refund' => ! $r->sell,
+                'tip' => ($shops[$r->shop_id] ?? '#'.$r->shop_id).' · '.substr($time, 11, 8).' · #'.$r->number.' — '.($r->sell ? '' : '−').number_format($amount, 0, '.', ' '),
+            ];
+        }
+
         $ticks = [];
         foreach ([0, 0.25, 0.5, 0.75, 1] as $f) {
             $ticks[] = ['y' => $y($max * $f), 'label' => number_format($max * $f, 0, '.', ' ')];
@@ -209,6 +231,7 @@ class Index extends Component
             'right' => $width - $right,
             'baseline' => $top + $plotH,
             'lines' => $lines,
+            'receiptDots' => $receiptDots,
             'ticks' => $ticks,
             'xLabels' => $xLabels,
         ];
