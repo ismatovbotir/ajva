@@ -201,8 +201,8 @@ class ReceiptAnalytics
         $lines = $this->sales($from, $to, $shopIds)
             ->join('receipt_items', 'receipt_items.receipt_id', '=', 'receipts.id')
             ->where('receipt_items.storno', false)
-            ->selectRaw("{$flag} as c, COUNT(receipt_items.id) as lines")
-            ->groupBy('c')->pluck('lines', 'c');
+            ->selectRaw("{$flag} as c, COUNT(receipt_items.id) as line_count")
+            ->groupBy('c')->pluck('line_count', 'c');
 
         $total = (int) $groups->sum('cnt');
         $totalRevenue = (float) $groups->sum('revenue');
@@ -270,9 +270,9 @@ class ReceiptAnalytics
             ->join('receipt_items', 'receipt_items.receipt_id', '=', 'receipts.id')
             ->where('receipt_items.storno', false)
             ->groupBy('receipts.shop_id', 'receipts.cashier')
-            ->selectRaw('receipts.shop_id, receipts.cashier, COUNT(receipt_items.id) as lines')
+            ->selectRaw('receipts.shop_id, receipts.cashier, COUNT(receipt_items.id) as line_count')
             ->get()
-            ->mapWithKeys(fn ($r) => [$r->shop_id.'|'.$r->cashier => (int) $r->lines]);
+            ->mapWithKeys(fn ($r) => [$r->shop_id.'|'.$r->cashier => (int) $r->line_count]);
 
         $chainRefund = $kpi['sale_sum'] > 0 ? $kpi['refund_sum'] / $kpi['sale_sum'] * 100 : 0.0;
         $chainCancel = $kpi['all_count'] > 0 ? $kpi['cancelled_count'] / $kpi['all_count'] * 100 : 0.0;
