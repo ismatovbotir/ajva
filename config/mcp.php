@@ -35,6 +35,8 @@ return [
         Tools\TopItems::class,
         Tools\StockLevels::class,
         Tools\GetReceipt::class,
+        Tools\ListPriceTypes::class,
+        Tools\ItemPrices::class,
     ],
 
 ];

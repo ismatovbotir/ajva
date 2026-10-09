@@ -95,7 +95,7 @@ class McpController extends Controller
             'protocolVersion' => in_array($requested, self::SUPPORTED_VERSIONS, true) ? $requested : self::SUPPORTED_VERSIONS[0],
             'capabilities' => ['tools' => ['listChanged' => false]],
             'serverInfo' => ['name' => config('app.name', 'Ajwa').' MCP', 'version' => '1.0.0'],
-            'instructions' => 'Read-only access to shop sales, stock and receipts. Start with list_shops, then sales_summary / hourly_sales / top_items / stock_levels. Dates are YYYY-MM-DD and default to today.',
+            'instructions' => 'Read-only access to shop sales, stock and receipts. Start with list_shops, then sales_summary / hourly_sales / top_items / stock_levels. Dates are YYYY-MM-DD and default to today. Prices: list_price_types / item_prices; price id '.(int) config('inventory.cost_price_id').' is the COST price, all other price ids are SELL prices.',
         ];
     }
 

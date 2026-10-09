@@ -53,13 +53,36 @@ class McpTest extends TestCase
 
         $names = collect($this->rpc('tools/list')->assertOk()->json('result.tools'))->pluck('name')->all();
         $this->assertEqualsCanonicalizing(
-            ['list_shops', 'sales_summary', 'hourly_sales', 'top_items', 'stock_levels', 'get_receipt'],
+            ['list_shops', 'sales_summary', 'hourly_sales', 'top_items', 'stock_levels', 'get_receipt', 'list_price_types', 'item_prices'],
             $names
         );
 
         // Notifications get an empty 202.
         $this->rpc('notifications/initialized', id: null)->assertStatus(202);
         $this->rpc('nope')->assertOk()->assertJsonPath('error.code', -32601);
+    }
+
+    public function test_price_tools_mark_id_1_as_cost_and_others_as_sell(): void
+    {
+        config(['inventory.cost_price_id' => 1]);
+        $cost = \App\Models\Price::factory()->create(['id' => 1, 'name' => 'Cost']);
+        $retail = \App\Models\Price::factory()->create(['id' => 2, 'name' => 'Retail']);
+        $item = Item::factory()->create(['name' => 'Rice']);
+        \App\Models\ItemPrice::factory()->create(['item_id' => $item->id, 'price_id' => $cost->id, 'value' => 80]);
+        \App\Models\ItemPrice::factory()->create(['item_id' => $item->id, 'price_id' => $retail->id, 'value' => 100]);
+
+        $types = $this->toolData($this->rpc('tools/call', ['name' => 'list_price_types']));
+        $this->assertSame(1, $types['cost_price_id']);
+        $this->assertSame(['cost', 'sell'], array_column($types['price_types'], 'kind'));
+
+        $data = $this->toolData($this->rpc('tools/call', ['name' => 'item_prices', 'arguments' => ['search' => 'Ric']]));
+        $prices = $data['items'][0]['prices'];
+        $this->assertSame(['cost', 'sell'], array_column($prices, 'kind'));
+        $this->assertNull($prices[0]['margin_percent']);
+        $this->assertEquals(20.0, $prices[1]['margin_percent']);
+
+        $only = $this->toolData($this->rpc('tools/call', ['name' => 'item_prices', 'arguments' => ['price_id' => 2]]));
+        $this->assertCount(1, $only['items'][0]['prices']);
     }
 
     public function test_sales_tools_report_successful_sales_only(): void
