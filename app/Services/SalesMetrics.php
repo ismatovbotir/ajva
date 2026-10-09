@@ -39,8 +39,10 @@ class SalesMetrics
         // Per shop: today so far vs. the previous day up to the same time.
         $today = $this->shopTotals($todayStart, $now, $shopIds);
         $yesterday = $this->shopTotals($yesterdayStart, $yesterdayCut, $shopIds);
+        // The whole previous day (yf_*), shown next to the same-time figure (y_*).
+        $yesterdayFull = $this->shopTotals($yesterdayStart, $yesterdayStart->copy()->endOfDay(), $shopIds);
 
-        $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday)));
+        $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday), array_keys($yesterdayFull)));
         usort($shopIds, fn ($a, $b) => ($today[$b]['sum'] ?? 0) <=> ($today[$a]['sum'] ?? 0));
 
         $colors = [];
@@ -49,7 +51,7 @@ class SalesMetrics
         }
 
         $table = [];
-        $totals = ['count' => 0, 'sum' => 0.0, 'y_count' => 0, 'y_sum' => 0.0];
+        $totals = ['count' => 0, 'sum' => 0.0, 'y_count' => 0, 'y_sum' => 0.0, 'yf_count' => 0, 'yf_sum' => 0.0];
         foreach ($shopIds as $id) {
             $row = [
                 'name' => $shops[$id] ?? '#'.$id,
@@ -58,6 +60,8 @@ class SalesMetrics
                 'sum' => $today[$id]['sum'] ?? 0.0,
                 'y_count' => $yesterday[$id]['count'] ?? 0,
                 'y_sum' => $yesterday[$id]['sum'] ?? 0.0,
+                'yf_count' => $yesterdayFull[$id]['count'] ?? 0,
+                'yf_sum' => $yesterdayFull[$id]['sum'] ?? 0.0,
             ];
             $row['count_delta'] = $this->delta($row['count'], $row['y_count']);
             $row['sum_delta'] = $this->delta($row['sum'], $row['y_sum']);
@@ -67,11 +71,14 @@ class SalesMetrics
             $totals['sum'] += $row['sum'];
             $totals['y_count'] += $row['y_count'];
             $totals['y_sum'] += $row['y_sum'];
+            $totals['yf_count'] += $row['yf_count'];
+            $totals['yf_sum'] += $row['yf_sum'];
         }
         $totals['count_delta'] = $this->delta($totals['count'], $totals['y_count']);
         $totals['sum_delta'] = $this->delta($totals['sum'], $totals['y_sum']);
         $totals['avg'] = $totals['count'] > 0 ? $totals['sum'] / $totals['count'] : 0.0;
         $totals['y_avg'] = $totals['y_count'] > 0 ? $totals['y_sum'] / $totals['y_count'] : 0.0;
+        $totals['yf_avg'] = $totals['yf_count'] > 0 ? $totals['yf_sum'] / $totals['yf_count'] : 0.0;
         $totals['avg_delta'] = $this->delta($totals['avg'], $totals['y_avg']);
 
         $board = [

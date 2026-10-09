@@ -34,6 +34,9 @@
                 {{ __('Yesterday') }}: <span class="tabular-nums">{{ $money($totals['y_sum']) }}</span>
                 <span class="ml-2 font-medium {{ $sumDeltaClass }}">{{ $sumDeltaText }}</span>
             </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $money($totals['yf_sum']) }}</span>
+            </p>
         </x-ui.card>
         @if($hasProfit)
         <x-ui.card>
@@ -58,6 +61,9 @@
                 {{ __('Yesterday') }}: <span class="tabular-nums">{{ $totals['y_count'] }}</span>
                 <span class="ml-2 font-medium {{ $countDeltaClass }}">{{ $countDeltaText }}</span>
             </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $totals['yf_count'] }}</span>
+            </p>
             @if($refunds['count'] > 0)
                 <p class="mt-1 text-sm text-red-700">{{ __('Refunds') }}: <span class="tabular-nums">{{ $refunds['count'] }} · {{ $money($refunds['sum']) }}</span></p>
             @endif
@@ -68,6 +74,9 @@
             <p class="mt-1 text-sm text-slate-500">
                 {{ __('Yesterday') }}: <span class="tabular-nums">{{ $money($totals['y_avg']) }}</span>
                 <span class="ml-2 font-medium {{ $avgDeltaClass }}">{{ $avgDeltaText }}</span>
+            </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $money($totals['yf_avg']) }}</span>
             </p>
         </x-ui.card>
     </div>
@@ -185,7 +194,7 @@
     {{-- Shops: today vs previous day --}}
     <x-ui.card>
         <h3 class="text-base font-semibold text-slate-900">{{ __('Shops: today vs yesterday') }}</h3>
-        <p class="mb-4 text-sm text-slate-500">{{ __('Yesterday is counted up to the same time of day.') }}</p>
+        <p class="mb-4 text-sm text-slate-500">{{ __('Yesterday is counted up to the same time of day; the last column is the whole previous day.') }}</p>
 
         @if(empty($table))
             <x-ui.empty-state :title="__('No sales yet today')" :description="__('Sales will appear here as POS terminals send receipts.')" />
@@ -201,6 +210,7 @@
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday, full day') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -219,6 +229,7 @@
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums text-slate-900">{{ $money($row['sum']) }}</td>
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['y_sum']) }}</td>
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $sC }}">{{ $sT }}</td>
+                                <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['yf_sum']) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -231,6 +242,7 @@
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['sum']) }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['y_sum']) }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $sumDeltaClass }}">{{ $sumDeltaText }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['yf_sum']) }}</td>
                         </tr>
                     </tfoot>
                 </table>

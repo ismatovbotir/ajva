@@ -70,6 +70,27 @@ class SalesBoardTest extends TestCase
         $this->assertCount(1, $top['shops']);
     }
 
+    public function test_board_shows_the_whole_previous_day_next_to_the_same_time_figure(): void
+    {
+        Carbon::setTestNow('2026-10-06 15:30:00');
+        $shop = Shop::factory()->create();
+        $mk = fn (string $at, float $total, array $o = []) => Receipt::factory()->create(array_merge(
+            ['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'total' => $total, 'created_at' => $at], $o
+        ));
+
+        $mk('2026-10-06 10:00:00', 300);               // today
+        $mk('2026-10-05 10:00:00', 100);               // yesterday, before the cut
+        $mk('2026-10-05 20:00:00', 400);               // yesterday, after the cut: full day only
+        $mk('2026-10-05 21:00:00', 999, ['active' => false]); // cancelled: never counted
+
+        $totals = app(\App\Services\SalesMetrics::class)->board(now(), null, false)['totals'];
+
+        $this->assertEquals(100.0, $totals['y_sum']);
+        $this->assertEquals(500.0, $totals['yf_sum']);
+        $this->assertSame(2, $totals['yf_count']);
+        $this->assertEquals(250.0, $totals['yf_avg']);
+    }
+
     public function test_ingesting_a_receipt_clears_the_boards_cache(): void
     {
         $shop = Shop::factory()->create();

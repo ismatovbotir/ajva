@@ -499,5 +499,7 @@
     "The period can not be longer than :days days.": "Davr :days kundan oshmasligi kerak.",
     "Per receipt": "Chek boʻyicha",
     "Per hour": "Soat boʻyicha",
-    "Each point is a receipt, joined by a line per shop (successful sales only).": "Har bir nuqta — chek, doʻkon boʻyicha chiziq bilan tutashtirilgan (faqat muvaffaqiyatli savdolar)."
+    "Each point is a receipt, joined by a line per shop (successful sales only).": "Har bir nuqta — chek, doʻkon boʻyicha chiziq bilan tutashtirilgan (faqat muvaffaqiyatli savdolar).",
+    "Yesterday, full day": "Kecha, butun kun",
+    "Yesterday is counted up to the same time of day; the last column is the whole previous day.": "Kecha shu vaqtgacha hisoblanadi; oxirgi ustun — kechagi butun kun."
 }
