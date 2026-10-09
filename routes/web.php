@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\AjvaAI\Index as AjvaAIIndex;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\ReceiptAnalytics\Index as ReceiptAnalyticsIndex;
 use App\Livewire\Ordering\Index as OrderingIndex;
@@ -82,6 +83,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('/ajva-ai', AjvaAIIndex::class)->name('ajva-ai.index');
         Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
         Route::get('/settings/monitors', MonitorsSettings::class)->name('settings.monitors');
         Route::redirect('/settings/monitor', '/settings/monitors')->name('settings.monitor');

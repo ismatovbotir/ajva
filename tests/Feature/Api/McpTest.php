@@ -53,7 +53,7 @@ class McpTest extends TestCase
 
         $names = collect($this->rpc('tools/list')->assertOk()->json('result.tools'))->pluck('name')->all();
         $this->assertEqualsCanonicalizing(
-            ['list_shops', 'sales_summary', 'hourly_sales', 'top_items', 'stock_levels', 'get_receipt', 'list_price_types', 'item_prices'],
+            ['list_shops', 'sales_summary', 'hourly_sales', 'top_items', 'stock_levels', 'get_receipt', 'list_price_types', 'item_prices', 'receipt_analytics'],
             $names
         );
 

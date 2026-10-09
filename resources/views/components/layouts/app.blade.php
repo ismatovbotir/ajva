@@ -14,6 +14,7 @@
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
             ['label' => 'Receipt analytics', 'route' => 'receipt-analytics.index', 'icon' => 'receipt'],
             ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard'],
+            ['label' => 'AjvaAI', 'route' => 'ajva-ai.index', 'icon' => 'sparkles', 'roles' => ['admin']],
         ]],
         ['label' => 'Entities', 'items' => [
             ['label' => 'Shops', 'route' => 'shops.index', 'icon' => 'shop'],

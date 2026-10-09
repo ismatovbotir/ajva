@@ -21,6 +21,12 @@ return [
         'scheme' => 'https',
     ],
 
+    // AjvaAI assistant (Google Gemini). Get a free key at https://aistudio.google.com/apikey
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+    ],
+
     'pos' => [
         'token' => env('POS_API_TOKEN'),
     ],

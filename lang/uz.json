@@ -501,5 +501,21 @@
     "Per hour": "Soat boʻyicha",
     "Each point is a receipt, joined by a line per shop (successful sales only).": "Har bir nuqta — chek, doʻkon boʻyicha chiziq bilan tutashtirilgan (faqat muvaffaqiyatli savdolar).",
     "Yesterday, full day": "Kecha, butun kun",
-    "Yesterday is counted up to the same time of day; the last column is the whole previous day.": "Kecha shu vaqtgacha hisoblanadi; oxirgi ustun — kechagi butun kun."
+    "Yesterday is counted up to the same time of day; the last column is the whole previous day.": "Kecha shu vaqtgacha hisoblanadi; oxirgi ustun — kechagi butun kun.",
+    "Ask about sales, receipts, discounts, stock and prices. AjvaAI reads this app's data and gives advice.": "Savdo, cheklar, chegirmalar, qoldiq va narxlar haqida soʻrang. AjvaAI shu ilovaning maʼlumotlarini oʻqib, maslahat beradi.",
+    "AjvaAI is not configured: set GEMINI_API_KEY in .env.": "AjvaAI sozlanmagan: .env faylida GEMINI_API_KEY ni kiriting.",
+    "Your question": "Savolingiz",
+    "Ask AjvaAI… (Enter to send, Shift+Enter for a new line)": "AjvaAI’dan soʻrang… (Enter — yuborish, Shift+Enter — yangi qator)",
+    "Send": "Yuborish",
+    "New chat": "Yangi suhbat",
+    "AjvaAI is analysing the data…": "AjvaAI maʼlumotlarni tahlil qilmoqda…",
+    "Try one of these:": "Mana bulardan birini sinab koʻring:",
+    "How were sales yesterday compared with the day before, and what should I do about it?": "Kechagi savdo undan oldingi kunga nisbatan qanday boʻldi va nima qilish kerak?",
+    "Which shops give the biggest discounts this week, and is it worth it?": "Bu hafta qaysi doʻkonlar eng koʻp chegirma berdi va bu oqlandimi?",
+    "What should we replenish first from the warehouse?": "Ombordan avval nimani toʻldirish kerak?",
+    "Could not reach the AI service. Check the internet connection of the server.": "AI xizmatiga ulanib boʻlmadi. Serverning internet aloqasini tekshiring.",
+    "The free AI limit is reached for now. Wait a minute and try again.": "Bepul AI limiti hozircha tugadi. Bir daqiqa kutib, qayta urining.",
+    "The AI service refused the request. Check GEMINI_API_KEY and GEMINI_MODEL in .env.": "AI xizmati soʻrovni rad etdi. .env dagi GEMINI_API_KEY va GEMINI_MODEL ni tekshiring.",
+    "The AI service is not available right now. Try again later.": "AI xizmati hozir mavjud emas. Keyinroq urinib koʻring.",
+    "The AI returned an empty answer. Rephrase the question and try again.": "AI boʻsh javob qaytardi. Savolni oʻzgartirib, qayta urining."
 }

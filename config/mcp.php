@@ -37,6 +37,7 @@ return [
         Tools\GetReceipt::class,
         Tools\ListPriceTypes::class,
         Tools\ItemPrices::class,
+        Tools\ReceiptAnalyticsReport::class,
     ],
 
 ];
