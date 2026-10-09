@@ -49,7 +49,8 @@ class ReceiptRequest extends FormRequest
             'payments.*.name' => ['required_with:payments.*', 'string'],
             'payments.*.value' => ['required_with:payments.*', 'numeric'],
 
-            'positions' => ['required', 'array', 'min:1'],
+            // Cancelled receipts may arrive with no positions at all.
+            'positions' => ['nullable', 'array'],
             'positions.*.item' => ['required', 'array'],
             'positions.*.item.id' => ['required', 'integer', 'exists:items,id'],
             'positions.*.item.art' => ['nullable', 'string'],

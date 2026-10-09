@@ -1,0 +1,93 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\ReceiptAnalytics\Index;
+use App\Models\Item;
+use App\Models\Receipt;
+use App\Models\ReceiptItem;
+use App\Models\Shop;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class ReceiptAnalyticsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function sale(Shop $shop, float $total, float $discount = 0, array $items = []): Receipt
+    {
+        $r = Receipt::factory()->create([
+            'shop_id' => $shop->id, 'active' => true, 'sell' => true,
+            'total' => $total, 'discount' => $discount, 'created_at' => now(),
+        ]);
+        foreach ($items as $item) {
+            ReceiptItem::factory()->create([
+                'receipt_id' => $r->id, 'item_id' => $item->id, 'qty' => 1, 'storno' => false,
+                'total' => $total / max(1, count($items)), 'discount' => $discount / max(1, count($items)),
+            ]);
+        }
+
+        return $r;
+    }
+
+    public function test_page_requires_login_and_menu_links_to_it(): void
+    {
+        $this->get(route('receipt-analytics.index'))->assertRedirect();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('receipt-analytics.index'))
+            ->assertOk()
+            ->assertSee(__('Receipt analytics'));
+    }
+
+    public function test_generate_builds_kpis_discounts_big_receipts_and_pairs_per_selected_shops(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $other = Shop::factory()->create();
+        $a = Item::factory()->create(['name' => 'Alpha']);
+        $b = Item::factory()->create(['name' => 'Beta']);
+
+        for ($i = 0; $i < 30; $i++) {
+            $this->sale($shop, 100, $i < 10 ? 10 : 0, [$a, $b]);
+        }
+        $this->sale($shop, 5000, 500, [$a]); // the big one
+        $this->sale($other, 999, 0, [$a]);   // other shop: must be excluded
+        // cancelled receipt with no items at all must be tolerated
+        Receipt::factory()->create(['shop_id' => $shop->id, 'active' => false, 'total' => 0, 'created_at' => now()]);
+
+        $c = Livewire::actingAs($user)->test(Index::class)
+            ->set('shopIds', [$shop->id])
+            ->call('generate')
+            ->assertHasNoErrors();
+
+        $report = $c->viewData('report');
+
+        $this->assertSame(31, $report['kpi']['sale_count']);
+        $this->assertEquals(8000.0, $report['kpi']['sale_sum']);
+        $this->assertSame(1, $report['kpi']['cancelled_count']);
+        $this->assertEquals(600.0, $report['kpi']['discount_sum']);
+        $this->assertNotNull($report['big']['cut']);
+        $this->assertSame(5000.0, $report['big']['top'][0]['total']);
+        $this->assertNotEmpty($report['relations']['pairs']);
+        $this->assertSame(30, $report['relations']['pairs'][0]['together']);
+    }
+
+    public function test_empty_selection_means_all_shops_and_invalid_range_is_rejected(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $this->sale($shop, 100);
+
+        $c = Livewire::actingAs($user)->test(Index::class)->call('generate');
+        $this->assertSame(1, $c->viewData('report')['kpi']['sale_count']);
+
+        Livewire::actingAs($user)->test(Index::class)
+            ->set('dateFrom', now()->toDateString())
+            ->set('dateTo', now()->subDay()->toDateString())
+            ->call('generate')
+            ->assertHasErrors('dateTo');
+    }
+}

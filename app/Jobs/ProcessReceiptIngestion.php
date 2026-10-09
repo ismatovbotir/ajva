@@ -133,9 +133,11 @@ class ProcessReceiptIngestion implements ShouldQueue
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
-            }, $this->data['positions']);
+            }, $this->data['positions'] ?? []);
 
-            ReceiptItem::query()->insert($items);
+            if ($items !== []) {
+                ReceiptItem::query()->insert($items);
+            }
 
             $payments = array_map(function (array $payment) use ($receipt, $now) {
                 return [

@@ -12,6 +12,7 @@
             ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'home'],
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
+            ['label' => 'Receipt analytics', 'route' => 'receipt-analytics.index', 'icon' => 'receipt'],
             ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard'],
         ]],
         ['label' => 'Entities', 'items' => [

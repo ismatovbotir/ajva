@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Analytics\Index as AnalyticsIndex;
+use App\Livewire\ReceiptAnalytics\Index as ReceiptAnalyticsIndex;
 use App\Livewire\Ordering\Index as OrderingIndex;
 use App\Livewire\Auth\Login;
 use App\Livewire\Categories\Index as CategoriesIndex;
@@ -76,6 +77,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/receipts', ReceiptsIndex::class)->name('receipts.index');
         Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
         Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
+        Route::get('/receipt-analytics', ReceiptAnalyticsIndex::class)->name('receipt-analytics.index');
         Route::get('/ordering', OrderingIndex::class)->name('ordering.index');
     });
 
