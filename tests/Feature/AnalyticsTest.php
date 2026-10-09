@@ -54,32 +54,29 @@ class AnalyticsTest extends TestCase
         $component->call('selectShop', $shop->id);
         $rows = $component->viewData('rows')->all();
 
-        $this->assertCount(3, $rows); // every item is listed, sold or not
-        $this->assertSame('Item C', $rows[0]['item']); // lowest remaining first
-        $this->assertEquals(0, $rows[0]['stock']);
-        $this->assertEquals(0, $rows[0]['sold']);
-        $this->assertNull($rows[0]['min']);
-        $this->assertSame('Item A', $rows[1]['item']);
-        $this->assertEquals(3, $rows[1]['sold']);      // 4 sold - 1 refunded
-        $this->assertEquals(7, $rows[1]['remaining']); // 10 - 3
-        $this->assertEquals(2, $rows[1]['min']);
-        $this->assertEquals(20, $rows[1]['max']);
-        $this->assertSame('Item B', $rows[2]['item']);
-        $this->assertEquals(45, $rows[2]['remaining']);
+        // Only items sold in this shop by successful sale receipts: Item C never sold, so it is not listed.
+        $this->assertCount(2, $rows);
+        $this->assertSame('Item A', $rows[0]['item']); // lowest remaining first
+        $this->assertEquals(4, $rows[0]['sold']);      // refund and cancelled receipts are not counted
+        $this->assertEquals(6, $rows[0]['remaining']); // 10 - 4
+        $this->assertEquals(2, $rows[0]['min']);
+        $this->assertEquals(20, $rows[0]['max']);
+        $this->assertSame('Item B', $rows[1]['item']);
+        $this->assertEquals(45, $rows[1]['remaining']);
 
         // Header sorting: first click sorts ascending, second click flips it.
         $component->call('sort', 'item');
-        $this->assertSame(['Item A', 'Item B', 'Item C'], array_column($component->viewData('rows')->all(), 'item'));
+        $this->assertSame(['Item A', 'Item B'], array_column($component->viewData('rows')->all(), 'item'));
         $component->call('sort', 'item');
-        $this->assertSame(['Item C', 'Item B', 'Item A'], array_column($component->viewData('rows')->all(), 'item'));
+        $this->assertSame(['Item B', 'Item A'], array_column($component->viewData('rows')->all(), 'item'));
         $component->call('sort', 'bogus')->call('sort', 'remaining');
         $this->assertSame('remaining', $component->get('sortBy'));
-        $this->assertSame('Item C', $component->viewData('rows')->first()['item']);
+        $this->assertSame('Item A', $component->viewData('rows')->first()['item']);
 
-        // Clicking Item A's net-sold cell lists the day's successful receipts containing it.
+        // Clicking Item A's sold cell lists the day's successful sale receipts containing it (not the refund).
         $component->call('showReceipts', $a->id);
         $modal = $component->viewData('modalReceipts');
-        $this->assertEqualsCanonicalizing([$sale->id, $refund->id], $modal->pluck('id')->all());
+        $this->assertEqualsCanonicalizing([$sale->id], $modal->pluck('id')->all());
         $component->assertSee($sale->number)->call('closeModal');
         $this->assertNull($component->viewData('modalReceipts'));
         $this->assertSame(10.0, Stock::where('item_id', $a->id)->first()->qty + 0.0); // stock untouched

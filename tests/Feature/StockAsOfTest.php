@@ -6,6 +6,8 @@ use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Mcp\InvalidArguments;
 use App\Mcp\Tools\StockLevels;
 use App\Models\Item;
+use App\Models\Receipt;
+use App\Models\ReceiptItem;
 use App\Models\Shop;
 use App\Models\Stock;
 use App\Models\User;
@@ -46,8 +48,17 @@ class StockAsOfTest extends TestCase
         parent::tearDown();
     }
 
+    /** The report lists only items sold that day, so give the item one successful sale on $date. */
+    private function sellOn(string $date): void
+    {
+        $receipt = Receipt::factory()->create(['shop_id' => $this->shop->id, 'active' => true, 'sell' => true, 'created_at' => $date.' 10:00:00']);
+        ReceiptItem::factory()->create(['receipt_id' => $receipt->id, 'item_id' => $this->item->id, 'qty' => 1, 'storno' => false]);
+    }
+
     private function analyticsRow(string $date): array
     {
+        $this->sellOn($date);
+
         $component = Livewire::actingAs(User::factory()->create())->test(AnalyticsIndex::class)
             ->set('date', $date)
             ->call('generate')
@@ -76,6 +87,8 @@ class StockAsOfTest extends TestCase
 
     public function test_the_stock_date_is_rendered_in_the_report(): void
     {
+        $this->sellOn('2026-10-06');
+
         Livewire::actingAs(User::factory()->create())->test(AnalyticsIndex::class)
             ->set('date', '2026-10-06')
             ->call('generate')

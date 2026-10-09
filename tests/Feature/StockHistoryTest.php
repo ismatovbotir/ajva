@@ -119,7 +119,11 @@ class StockHistoryTest extends TestCase
 
     public function test_history_does_not_inflate_analytics_rows(): void
     {
-        [$shop] = $this->pairWithHistory();
+        [$shop, $item] = $this->pairWithHistory();
+
+        // The report lists only items sold today by a successful sale receipt.
+        $receipt = \App\Models\Receipt::factory()->create(['shop_id' => $shop->id, 'active' => true, 'sell' => true, 'created_at' => now()]);
+        \App\Models\ReceiptItem::factory()->create(['receipt_id' => $receipt->id, 'item_id' => $item->id, 'qty' => 1, 'storno' => false]);
 
         $rows = Livewire::actingAs(User::factory()->create())->test(AnalyticsIndex::class)
             ->call('generate')->call('selectShop', $shop->id)->viewData('rows')->all();

@@ -117,7 +117,6 @@
     "Generate": "Hisoblash",
     "No report yet": "Hisobot hali yoʻq",
     "Pick a date and press Generate.": "Sanani tanlang va «Hisoblash» tugmasini bosing.",
-    "Stock left after the selected day's net sales, per shop and item.": "Tanlangan kunning sof savdosidan keyingi qoldiq, doʻkon va tovar boʻyicha.",
     "Click a column header to sort.": "Saralash uchun ustun sarlavhasini bosing.",
     "Stock": "Ombor qoldigʻi",
     "Net sold": "Sof sotilgan",
@@ -537,5 +536,7 @@
     "Running them on your data…": "Maʼlumotlaringiz boʻyicha ishga tushirilmoqda…",
     "Preparing advice…": "Maslahat tayyorlanmoqda…",
     "No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.": "Javob oʻz vaqtida kelmadi. Navbat ishchisi (php artisan queue:work) ishlayotganini tekshirib, qayta urining.",
-    "The answer took too long. Try a narrower question (shorter period or one shop).": "Javob juda uzoq kechdi. Savolni toraytiring (qisqaroq davr yoki bitta doʻkon)."
+    "The answer took too long. Try a narrower question (shorter period or one shop).": "Javob juda uzoq kechdi. Savolni toraytiring (qisqaroq davr yoki bitta doʻkon).",
+    "Stock left after the selected day's sales, per shop. Only items sold by successful sale receipts are listed.": "Tanlangan kun savdosidan keyingi qoldiq, doʻkonlar boʻyicha. Faqat muvaffaqiyatli savdo cheklari orqali sotilgan tovarlar koʻrsatiladi.",
+    "Open on its own page": "Alohida sahifada ochish"
 }

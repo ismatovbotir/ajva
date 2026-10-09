@@ -138,7 +138,7 @@
                         <thead><tr><th class="{{ $th }} text-left">{{ __('Receipt') }}</th><th class="{{ $th }} text-left">{{ __('Shop') }}</th><th class="{{ $th }} text-right">{{ __('Total') }}</th><th class="{{ $th }} text-right">{{ __('Discount') }}</th></tr></thead>
                         <tbody class="divide-y divide-slate-100 text-sm">
                         @foreach($big['top'] as $r)
-                            <tr><td class="px-3 py-2"><a href="{{ route('receipts.show', $r['id']) }}" class="text-brand-700 hover:underline">#{{ $r['number'] }}</a>
+                            <tr><td class="px-3 py-2"><button type="button" wire:click="openReceipt({{ $r['id'] }})" class="text-brand-700 hover:underline">#{{ $r['number'] }}</button>
                                 <span class="block text-xs text-slate-500">{{ \Illuminate\Support\Carbon::parse($r['created_at'])->format('d.m H:i') }} · {{ $r['cashier'] }}</span></td>
                                 <td class="px-3 py-2">{{ $r['shop'] }}</td><td class="px-3 py-2 text-right tabular-nums">{{ $money($r['total']) }}</td><td class="px-3 py-2 text-right tabular-nums">{{ $money($r['discount']) }}</td></tr>
                         @endforeach
@@ -179,4 +179,16 @@
             </x-ui.card>
         @endif
     @endif
+
+    {{-- Receipt view in a modal --}}
+    <x-ui.modal :show="$receipt !== null" :title="__('Receipt').' '.($receipt?->number)" class="max-w-3xl" close="closeReceipt" wire:keydown.escape.window="closeReceipt">
+        @if($receipt)
+            <div class="space-y-4 overflow-x-auto">
+                @include('livewire.receipts._detail', ['receipt' => $receipt])
+            </div>
+            <div class="mt-4 text-right">
+                <a href="{{ route('receipts.show', $receipt) }}" class="text-xs text-slate-500 hover:underline">{{ __('Open on its own page') }}</a>
+            </div>
+        @endif
+    </x-ui.modal>
 </div>

@@ -114,6 +114,7 @@ class Index extends Component
         return Receipt::query()
             ->where('shop_id', $this->shopId)
             ->where('active', true)
+            ->where('sell', true)
             ->whereBetween('created_at', [$from, $to])
             ->whereHas('items', fn ($q) => $q->where('item_id', $this->modalItemId)->where('storno', false))
             ->orderByDesc('created_at')
@@ -178,10 +179,10 @@ class Index extends Component
     }
 
     /**
-     * Every item (the base of the report) left-joined to the shop's stock and
-     * min/max rule and to the day's net sold qty — successful sale receipts
-     * add, successful refund receipts subtract, storno lines are ignored. An
-     * item with no stock row or no sales shows 0. Read-only: stocks are never
+     * Only the items that were sold in this shop on the day: lines of successful
+     * (active) sale receipts, storno lines ignored; refunds and cancelled
+     * receipts are not counted. Each is left-joined to the shop's stock and
+     * min/max rule (no stock row shows 0). Read-only: stocks are never
      * modified, 1C stays the source of truth for them.
      *
      * Sales are aggregated by item id in a separate query and merged in PHP,
@@ -195,13 +196,19 @@ class Index extends Component
             ->join('receipts', 'receipts.id', '=', 'receipt_items.receipt_id')
             ->where('receipts.shop_id', $shopId)
             ->where('receipts.active', true)
+            ->where('receipts.sell', true)
             ->where('receipt_items.storno', false)
             ->whereBetween('receipts.created_at', [$from, $to])
             ->groupBy('receipt_items.item_id')
-            ->selectRaw('receipt_items.item_id, SUM(CASE WHEN receipts.sell = 1 THEN receipt_items.qty ELSE -receipt_items.qty END) as sold_qty')
+            ->selectRaw('receipt_items.item_id, SUM(receipt_items.qty) as sold_qty')
             ->pluck('sold_qty', 'item_id');
 
+        if ($sold->isEmpty()) {
+            return collect();
+        }
+
         return DB::table('items')
+            ->whereIn('items.id', $sold->keys()->all())
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
             ->leftJoin('stocks', function ($join) use ($shopId, $from) {
                 $join->on('stocks.item_id', '=', 'items.id')->where('stocks.shop_id', '=', $shopId);

@@ -2,12 +2,14 @@
 
 namespace App\Livewire\ReceiptAnalytics;
 
+use App\Models\Receipt;
 use App\Services\ReceiptAnalytics;
 use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('components.layouts.app', ['title' => 'Receipt analytics'])]
@@ -26,6 +28,10 @@ class Index extends Component
     public array $shopIds = [];
 
     public bool $generated = false;
+
+    /** Receipt shown in the modal (opened from a link in the report). */
+    #[Locked]
+    public ?int $receiptId = null;
 
     /** The inputs the current report was built from (the form can change without regenerating). */
     public array $applied = [];
@@ -53,6 +59,20 @@ class Index extends Component
 
         $this->applied = ['from' => $this->dateFrom, 'to' => $this->dateTo, 'shops' => array_map('intval', $this->shopIds)];
         $this->generated = true;
+    }
+
+    public function openReceipt(int $id): void
+    {
+        $shopId = Receipt::query()->whereKey($id)->value('shop_id');
+        abort_if($shopId === null, 404);
+        ShopAccess::authorize((int) $shopId); // never trust a client id: other shops' receipts are a 404
+
+        $this->receiptId = $id;
+    }
+
+    public function closeReceipt(): void
+    {
+        $this->receiptId = null;
     }
 
     /** Shops the user may pick from. */
@@ -83,10 +103,17 @@ class Index extends Component
             $report = Cache::remember($key, self::CACHE_TTL, fn () => app(ReceiptAnalytics::class)->build($from, $to, $shopIds));
         }
 
+        $receipt = $this->receiptId === null ? null
+            : Receipt::query()->with(['pos', 'shop', 'items.item', 'payments'])->find($this->receiptId);
+        if ($receipt && ! ShopAccess::allows((int) $receipt->shop_id)) {
+            $receipt = null; // scope changed since it was opened
+        }
+
         return view('livewire.receipt-analytics.index', [
             'shops' => $shops,
             'noShops' => ShopAccess::hasNone(),
             'report' => $report,
+            'receipt' => $receipt,
         ]);
     }
 }

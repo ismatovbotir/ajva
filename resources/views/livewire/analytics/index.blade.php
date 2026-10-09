@@ -3,7 +3,7 @@
     $arrow = fn ($col) => $sortBy === $col ? ($sortDir === 'asc' ? '▲' : '▼') : '↕';
 @endphp
 <div>
-    <x-ui.page-header :title="__('Analytics')" :subtitle="__('Stock left after the selected day\'s net sales, per shop and item.')" />
+    <x-ui.page-header :title="__('Analytics')" :subtitle="__('Stock left after the selected day\'s sales, per shop. Only items sold by successful sale receipts are listed.')" />
 
     <div class="mb-6 flex flex-wrap items-end gap-3">
         <div class="w-full sm:w-56">

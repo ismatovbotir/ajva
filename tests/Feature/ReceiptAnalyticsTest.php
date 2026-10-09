@@ -75,6 +75,29 @@ class ReceiptAnalyticsTest extends TestCase
         $this->assertSame(30, $report['relations']['pairs'][0]['together']);
     }
 
+    public function test_receipt_links_open_the_receipt_in_a_modal_and_respect_shop_access(): void
+    {
+        $user = User::factory()->create();
+        $shop = Shop::factory()->create();
+        $item = Item::factory()->create(['name' => 'Alpha Item']);
+        $receipt = $this->sale($shop, 777, 0, [$item]);
+
+        Livewire::actingAs($user)->test(Index::class)
+            ->call('openReceipt', $receipt->id)
+            ->assertSet('receiptId', $receipt->id)
+            ->assertSee('Alpha Item')
+            ->assertSee($receipt->number)
+            ->call('closeReceipt')
+            ->assertSet('receiptId', null)
+            ->assertDontSee('Alpha Item');
+
+        // An operator without that shop gets a 404, not the receipt.
+        $operator = User::factory()->create(['role' => 'operator']);
+        Livewire::actingAs($operator)->test(Index::class)
+            ->call('openReceipt', $receipt->id)
+            ->assertNotFound();
+    }
+
     public function test_empty_selection_means_all_shops_and_invalid_range_is_rejected(): void
     {
         $user = User::factory()->create();
