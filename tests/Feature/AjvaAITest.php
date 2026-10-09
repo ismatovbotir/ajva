@@ -144,6 +144,35 @@ class AjvaAITest extends TestCase
         $this->assertSame('failed', \Illuminate\Support\Facades\Cache::get(\App\Jobs\RunAjvaQuestion::key(7, 'run1'))['status']);
     }
 
+    public function test_a_gemini_error_shows_its_full_text_in_a_modal_without_the_key(): void
+    {
+        config(['services.gemini.key' => 'SECRET-KEY-123', 'services.gemini.model' => 'gemini-test']);
+        Http::fakeSequence()
+            ->push(['error' => ['code' => 400, 'message' => 'API key not valid: SECRET-KEY-123. Please pass a valid API key.', 'status' => 'INVALID_ARGUMENT']], 400)
+            ->push(['candidates' => [['content' => ['role' => 'model', 'parts' => [['text' => 'Which period?']]]]]]);
+
+        $component = Livewire::actingAs($this->admin())->test(Index::class)
+            ->set('question', 'hi')
+            ->call('ask')
+            ->assertSet('showErrorDetails', true)
+            ->assertSee(__('Full error from the AI service'))
+            ->assertSee('INVALID_ARGUMENT')
+            ->assertSee('HTTP 400')
+            ->assertDontSee('SECRET-KEY-123');
+
+        // Closing keeps the short banner with a button to reopen the full text.
+        $component->call('closeErrorDetails')
+            ->assertSet('showErrorDetails', false)
+            ->assertSee(__('Show full error'))
+            ->call('openErrorDetails')
+            ->assertSet('showErrorDetails', true)
+            ->assertSee('INVALID_ARGUMENT');
+
+        // A new question clears the old error.
+        $component->call('closeErrorDetails');
+        $component->set('question', 'again')->call('ask')->assertSet('errorDetails', null)->assertSet('error', null);
+    }
+
     public function test_rate_limit_is_reported_in_plain_words(): void
     {
         config(['services.gemini.key' => 'test-key']);

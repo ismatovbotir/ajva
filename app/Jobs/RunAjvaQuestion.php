@@ -43,17 +43,17 @@ class RunAjvaQuestion implements ShouldQueue
             $result = $assistant->reply($this->contents);
             $this->store(['status' => 'done', 'contents' => $result['contents'], 'message' => AjvaMessage::fromResult($result)]);
         } catch (AssistantException $e) {
-            $this->store(['status' => 'failed', 'error' => $e->getMessage()]);
+            $this->store(['status' => 'failed', 'error' => $e->getMessage(), 'details' => $e->details]);
         } catch (\Throwable $e) {
             Log::error('AjvaAI run failed', ['exception' => $e]);
-            $this->store(['status' => 'failed', 'error' => __('The AI service is not available right now. Try again later.')]);
+            $this->store(['status' => 'failed', 'error' => __('The AI service is not available right now. Try again later.'), 'details' => get_class($e).': '.$e->getMessage()]);
         }
     }
 
     /** Called by the worker when it kills the job (timeout) or it throws past handle(). */
     public function failed(\Throwable $e): void
     {
-        $this->store(['status' => 'failed', 'error' => __('The answer took too long. Try a narrower question (shorter period or one shop).')]);
+        $this->store(['status' => 'failed', 'error' => __('The answer took too long. Try a narrower question (shorter period or one shop).'), 'details' => get_class($e).': '.$e->getMessage()]);
     }
 
     private function store(array $state): void

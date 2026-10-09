@@ -57,8 +57,27 @@
     @endif
 
     @if($error)
-        <p class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{{ $error }}</p>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p>{{ $error }}</p>
+            @if($errorDetails)
+                <button type="button" wire:click="openErrorDetails" class="rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-800 hover:bg-red-100">{{ __('Show full error') }}</button>
+            @endif
+        </div>
     @endif
+
+    {{-- The AI service's full error text --}}
+    <x-ui.modal :show="$showErrorDetails && $errorDetails" :title="__('Full error from the AI service')" class="max-w-3xl" close="closeErrorDetails" wire:keydown.escape.window="closeErrorDetails">
+        @if($error)<p class="mb-3 text-sm text-red-800">{{ $error }}</p>@endif
+        <div x-data="{ copied: false }">
+            <pre x-ref="text" class="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-3 text-xs leading-relaxed text-slate-100">{{ $errorDetails }}</pre>
+            <div class="mt-3 flex justify-end gap-2">
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        x-on:click="navigator.clipboard.writeText($refs.text.innerText).then(() => { copied = true; setTimeout(() => copied = false, 1500) })"
+                        x-text="copied ? @js(__('Copied')) : @js(__('Copy'))"></button>
+                <button type="button" wire:click="closeErrorDetails" class="rounded-lg bg-brand-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-800">{{ __('Close') }}</button>
+            </div>
+        </div>
+    </x-ui.modal>
 
     @if($messages === [])
         <x-ui.card>

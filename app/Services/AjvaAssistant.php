@@ -168,8 +168,8 @@ class AjvaAssistant
             $response = Http::withHeaders(['x-goog-api-key' => (string) config('services.gemini.key')])
                 ->timeout(60)->acceptJson()
                 ->post(sprintf(self::ENDPOINT, config('services.gemini.model')), $body);
-        } catch (ConnectionException) {
-            throw new AssistantException(__('Could not reach the AI service. Check the internet connection of the server.'));
+        } catch (ConnectionException $e) {
+            throw new AssistantException(__('Could not reach the AI service. Check the internet connection of the server.'), $this->redact($e->getMessage()));
         }
 
         if ($response->failed()) {
@@ -179,16 +179,34 @@ class AjvaAssistant
                 $response->status() === 429 => __('The free AI limit is reached for now. Wait a minute and try again.'),
                 in_array($response->status(), [400, 401, 403], true) => __('The AI service refused the request. Check GEMINI_API_KEY and GEMINI_MODEL in .env.'),
                 default => __('The AI service is not available right now. Try again later.'),
-            });
+            }, $this->describe($response));
         }
 
         $content = $response->json('candidates.0.content');
         if (! is_array($content) || ($content['parts'] ?? []) === []) {
-            throw new AssistantException(__('The AI returned an empty answer. Rephrase the question and try again.'));
+            // e.g. a safety block: finishReason / promptFeedback explain why.
+            throw new AssistantException(__('The AI returned an empty answer. Rephrase the question and try again.'), $this->describe($response));
         }
         $content['role'] = 'model';
 
         return $content;
+    }
+
+    /** Full technical text of a Gemini response for the error modal (status + body, key removed). */
+    private function describe(\Illuminate\Http\Client\Response $response): string
+    {
+        $body = $response->json() !== null
+            ? json_encode($response->json(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : $response->body();
+
+        return $this->redact('HTTP '.$response->status().' · model '.config('services.gemini.model')."\n\n".$body);
+    }
+
+    private function redact(string $text): string
+    {
+        $key = (string) config('services.gemini.key');
+
+        return $key !== '' ? str_replace($key, '[hidden]', $text) : $text;
     }
 
     /** MCP JSON schema -> the OpenAPI subset Gemini accepts, with shops addressed by name. */

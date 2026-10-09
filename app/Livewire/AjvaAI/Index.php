@@ -38,6 +38,12 @@ class Index extends Component
 
     public ?string $error = null;
 
+    /** Full technical text of the last failure (Google's raw error), shown in a modal. */
+    #[Locked]
+    public ?string $errorDetails = null;
+
+    public bool $showErrorDetails = false;
+
     public function boot(): void
     {
         // Defense in depth on top of the role:admin route group (the tools can read cost prices).
@@ -58,6 +64,8 @@ class Index extends Component
 
         $this->validate(['question' => ['required', 'string', 'max:1500']]);
         $this->error = null;
+        $this->errorDetails = null;
+        $this->showErrorDetails = false;
 
         $question = trim($this->question);
         $this->messages[] = ['role' => 'user', 'text' => $question];
@@ -96,6 +104,8 @@ class Index extends Component
             $this->messages[] = $state['message'];
         } elseif ($state['status'] === 'failed') {
             $this->error = $state['error'];
+            $this->errorDetails = $state['details'] ?? null;
+            $this->showErrorDetails = $this->errorDetails !== null; // open the full text at once
         } elseif (now()->timestamp - $this->runStartedAt > self::RUN_GIVE_UP_SECONDS) {
             $this->error = __('No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.');
         } else {
@@ -104,6 +114,16 @@ class Index extends Component
 
         Cache::forget(RunAjvaQuestion::key((int) auth()->id(), $this->runId));
         $this->runId = '';
+    }
+
+    public function openErrorDetails(): void
+    {
+        $this->showErrorDetails = $this->errorDetails !== null;
+    }
+
+    public function closeErrorDetails(): void
+    {
+        $this->showErrorDetails = false;
     }
 
     public function useSuggestion(int $index): void
@@ -120,6 +140,8 @@ class Index extends Component
         $this->contents = [];
         $this->messages = [];
         $this->error = null;
+        $this->errorDetails = null;
+        $this->showErrorDetails = false;
         $this->question = '';
         $this->runId = '';
     }

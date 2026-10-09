@@ -538,5 +538,7 @@
     "No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.": "Javob oʻz vaqtida kelmadi. Navbat ishchisi (php artisan queue:work) ishlayotganini tekshirib, qayta urining.",
     "The answer took too long. Try a narrower question (shorter period or one shop).": "Javob juda uzoq kechdi. Savolni toraytiring (qisqaroq davr yoki bitta doʻkon).",
     "Stock left after the selected day's sales, per shop. Only items sold by successful sale receipts are listed.": "Tanlangan kun savdosidan keyingi qoldiq, doʻkonlar boʻyicha. Faqat muvaffaqiyatli savdo cheklari orqali sotilgan tovarlar koʻrsatiladi.",
-    "Open on its own page": "Alohida sahifada ochish"
+    "Open on its own page": "Alohida sahifada ochish",
+    "Show full error": "Toʻliq xatoni koʻrsatish",
+    "Full error from the AI service": "AI xizmatining toʻliq xato matni"
 }
