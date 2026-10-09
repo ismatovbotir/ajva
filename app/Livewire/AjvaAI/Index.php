@@ -2,8 +2,10 @@
 
 namespace App\Livewire\AjvaAI;
 
+use App\Jobs\RunAjvaQuestion;
 use App\Services\AjvaAssistant;
-use App\Services\AssistantException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -14,15 +16,25 @@ class Index extends Component
     /** Raw Gemini history is trimmed to roughly this many entries (on a turn boundary). */
     private const MAX_CONTENTS = 40;
 
+    /** A run that has not reported back after this long is declared lost (no worker running?). */
+    private const RUN_GIVE_UP_SECONDS = 240;
+
     public string $question = '';
 
     /** @var array<int, array<string, mixed>> Gemini-native history; locked so the client cannot forge tool results. */
     #[Locked]
     public array $contents = [];
 
-    /** @var array<int, array{role: string, text: string}> What the page shows. */
+    /** @var array<int, array<string, mixed>> What the page shows (questions, plan notes, local results). */
     #[Locked]
     public array $messages = [];
+
+    /** Id of the question being answered in the background (empty = idle). */
+    #[Locked]
+    public string $runId = '';
+
+    #[Locked]
+    public int $runStartedAt = 0;
 
     public ?string $error = null;
 
@@ -32,8 +44,18 @@ class Index extends Component
         abort_unless(auth()->user()?->isAdmin(), 403);
     }
 
+    /**
+     * Start answering. The slow part (the AI call and the tools) runs in a queued
+     * job, so this request returns at once and the page polls checkRun(); no web
+     * or PHP timeout can cut a long answer. With QUEUE_CONNECTION=sync the job
+     * simply runs inside this request (with PHP's time limit lifted).
+     */
     public function ask(AjvaAssistant $assistant): void
     {
+        if ($this->runId !== '') {
+            return; // one question at a time
+        }
+
         $this->validate(['question' => ['required', 'string', 'max:1500']]);
         $this->error = null;
 
@@ -50,16 +72,38 @@ class Index extends Component
         $contents = $this->contents;
         $contents[] = ['role' => 'user', 'parts' => [['text' => $question]]];
 
-        try {
-            $result = $assistant->reply($contents);
-        } catch (AssistantException $e) {
-            $this->error = $e->getMessage();
+        $this->runId = Str::random(24);
+        $this->runStartedAt = now()->timestamp;
+        $userId = (int) auth()->id();
 
+        Cache::put(RunAjvaQuestion::key($userId, $this->runId), ['status' => 'pending'], now()->addMinutes(15));
+        RunAjvaQuestion::dispatch($userId, $this->runId, $contents);
+
+        $this->checkRun(); // the sync queue has already finished; a real queue answers on the next poll
+    }
+
+    /** Polled by the page while a question is being answered. */
+    public function checkRun(): void
+    {
+        if ($this->runId === '') {
             return;
         }
 
-        $this->contents = $this->trim($result['contents']);
-        $this->messages[] = ['role' => 'model', 'text' => $result['text']];
+        $state = Cache::get(RunAjvaQuestion::key((int) auth()->id(), $this->runId)) ?? ['status' => 'pending'];
+
+        if ($state['status'] === 'done') {
+            $this->contents = $this->trim($state['contents']);
+            $this->messages[] = $state['message'];
+        } elseif ($state['status'] === 'failed') {
+            $this->error = $state['error'];
+        } elseif (now()->timestamp - $this->runStartedAt > self::RUN_GIVE_UP_SECONDS) {
+            $this->error = __('No answer arrived in time. Check that the queue worker is running (php artisan queue:work), then try again.');
+        } else {
+            return; // still working
+        }
+
+        Cache::forget(RunAjvaQuestion::key((int) auth()->id(), $this->runId));
+        $this->runId = '';
     }
 
     public function useSuggestion(int $index): void
@@ -69,10 +113,15 @@ class Index extends Component
 
     public function newChat(): void
     {
+        if ($this->runId !== '') {
+            Cache::forget(RunAjvaQuestion::key((int) auth()->id(), $this->runId));
+        }
+
         $this->contents = [];
         $this->messages = [];
         $this->error = null;
         $this->question = '';
+        $this->runId = '';
     }
 
     /** @return array<int, string> */
@@ -103,6 +152,7 @@ class Index extends Component
         return view('livewire.ajva-ai.index', [
             'configured' => app(AjvaAssistant::class)->configured(),
             'suggestions' => $this->suggestions(),
+            'working' => $this->runId !== '',
         ]);
     }
 }
