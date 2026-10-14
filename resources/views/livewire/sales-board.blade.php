@@ -220,7 +220,7 @@
 
     {{-- Shops: today vs previous day --}}
     <x-ui.card>
-        <h3 class="text-base font-semibold text-slate-900">{{ __('Shops: today vs yesterday') }}</h3>
+        <h3 class="text-base font-semibold text-slate-900">{{ __('Shops: today vs yesterday and last week') }}</h3>
         <p class="mb-4 text-sm text-slate-500">{{ __('Yesterday is counted up to the same time of day; then the whole previous day, then the same weekday last week up to the same time.') }}</p>
 
         @if(empty($table))
@@ -233,6 +233,8 @@
                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Shop') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Receipts') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Last week') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday') }}</th>
@@ -248,6 +250,7 @@
                                 [$cT, $cC] = $deltaBadge($row['count_delta']);
                                 [$sT, $sC] = $deltaBadge($row['sum_delta']);
                                 [$wT, $wC] = $deltaBadge($row['w_sum_delta']);
+                                [$wcT, $wcC] = $deltaBadge($row['w_count_delta']);
                             @endphp
                             <tr>
                                 <td class="px-4 py-3 text-sm font-medium text-slate-900">
@@ -256,6 +259,8 @@
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-700">{{ $row['count'] }}</td>
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $row['y_count'] }}</td>
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $cC }}">{{ $cT }}</td>
+                                <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $row['w_count'] }}</td>
+                                <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $wcC }}">{{ $wcT }}</td>
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums text-slate-900">{{ $money($row['sum']) }}</td>
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['y_sum']) }}</td>
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $sC }}">{{ $sT }}</td>
@@ -271,6 +276,8 @@
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $totals['count'] }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $totals['y_count'] }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $countDeltaClass }}">{{ $countDeltaText }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $totals['w_count'] }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $wCountDeltaClass }}">{{ $wCountDeltaText }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['sum']) }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['y_sum']) }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $sumDeltaClass }}">{{ $sumDeltaText }}</td>
