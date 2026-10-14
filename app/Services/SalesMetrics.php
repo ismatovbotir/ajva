@@ -42,7 +42,10 @@ class SalesMetrics
         // The whole previous day (yf_*), shown next to the same-time figure (y_*).
         $yesterdayFull = $this->shopTotals($yesterdayStart, $yesterdayStart->copy()->endOfDay(), $shopIds);
 
-        $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday), array_keys($yesterdayFull)));
+        // Same weekday one week ago, up to the same time of day (w_*).
+        $lastWeek = $this->shopTotals($todayStart->copy()->subWeek(), $now->copy()->subWeek(), $shopIds);
+
+        $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday), array_keys($yesterdayFull), array_keys($lastWeek)));
         usort($shopIds, fn ($a, $b) => ($today[$b]['sum'] ?? 0) <=> ($today[$a]['sum'] ?? 0));
 
         $colors = [];
@@ -51,7 +54,7 @@ class SalesMetrics
         }
 
         $table = [];
-        $totals = ['count' => 0, 'sum' => 0.0, 'y_count' => 0, 'y_sum' => 0.0, 'yf_count' => 0, 'yf_sum' => 0.0];
+        $totals = ['count' => 0, 'sum' => 0.0, 'y_count' => 0, 'y_sum' => 0.0, 'yf_count' => 0, 'yf_sum' => 0.0, 'w_count' => 0, 'w_sum' => 0.0];
         foreach ($shopIds as $id) {
             $row = [
                 'name' => $shops[$id] ?? '#'.$id,
@@ -62,9 +65,13 @@ class SalesMetrics
                 'y_sum' => $yesterday[$id]['sum'] ?? 0.0,
                 'yf_count' => $yesterdayFull[$id]['count'] ?? 0,
                 'yf_sum' => $yesterdayFull[$id]['sum'] ?? 0.0,
+                'w_count' => $lastWeek[$id]['count'] ?? 0,
+                'w_sum' => $lastWeek[$id]['sum'] ?? 0.0,
             ];
             $row['count_delta'] = $this->delta($row['count'], $row['y_count']);
             $row['sum_delta'] = $this->delta($row['sum'], $row['y_sum']);
+            $row['w_count_delta'] = $this->delta($row['count'], $row['w_count']);
+            $row['w_sum_delta'] = $this->delta($row['sum'], $row['w_sum']);
             $table[] = $row;
 
             $totals['count'] += $row['count'];
@@ -73,6 +80,8 @@ class SalesMetrics
             $totals['y_sum'] += $row['y_sum'];
             $totals['yf_count'] += $row['yf_count'];
             $totals['yf_sum'] += $row['yf_sum'];
+            $totals['w_count'] += $row['w_count'];
+            $totals['w_sum'] += $row['w_sum'];
         }
         $totals['count_delta'] = $this->delta($totals['count'], $totals['y_count']);
         $totals['sum_delta'] = $this->delta($totals['sum'], $totals['y_sum']);
@@ -80,6 +89,10 @@ class SalesMetrics
         $totals['y_avg'] = $totals['y_count'] > 0 ? $totals['y_sum'] / $totals['y_count'] : 0.0;
         $totals['yf_avg'] = $totals['yf_count'] > 0 ? $totals['yf_sum'] / $totals['yf_count'] : 0.0;
         $totals['avg_delta'] = $this->delta($totals['avg'], $totals['y_avg']);
+        $totals['w_avg'] = $totals['w_count'] > 0 ? $totals['w_sum'] / $totals['w_count'] : 0.0;
+        $totals['w_count_delta'] = $this->delta($totals['count'], $totals['w_count']);
+        $totals['w_sum_delta'] = $this->delta($totals['sum'], $totals['w_sum']);
+        $totals['w_avg_delta'] = $this->delta($totals['avg'], $totals['w_avg']);
 
         $board = [
             'asOf' => $now->format('H:i'),
@@ -94,7 +107,7 @@ class SalesMetrics
         ];
 
         if ($withProfit) {
-            $board['profit'] = $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors, $shopIds);
+            $board['profit'] = $this->profitSummary($todayStart, $now, $yesterdayStart, $yesterdayCut, $shops, $colors, $shopIds, $todayStart->copy()->subWeek(), $now->copy()->subWeek());
         }
 
         return $board;
@@ -137,10 +150,24 @@ class SalesMetrics
             ->selectRaw("shop_id, CASE WHEN created_at >= ? THEN 1 ELSE 0 END as is_today, {$hourExpr} as hr, COUNT(*) as c, SUM(total) as s", [$todayStart])
             ->get();
 
+        // Same weekday one week ago, whole day, all shops together.
+        $weekStart = $todayStart->copy()->subWeek();
+        $weekRows = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
+            ->where('active', true)
+            ->where('sell', true)
+            ->whereBetween('created_at', [$weekStart, $weekStart->copy()->endOfDay()])
+            ->groupBy('hr')
+            ->selectRaw("{$hourExpr} as hr, COUNT(*) as c, SUM(total) as s")
+            ->get();
+
         $series = [];
         foreach (['sum' => 's', 'count' => 'c'] as $metric => $col) {
             $todayBy = [];
             $yesterdayBy = [];
+            $weekBy = [];
+            foreach ($weekRows as $r) {
+                $weekBy[(int) $r->hr] = (float) $r->{$col};
+            }
             foreach ($rows as $r) {
                 $value = (float) $r->{$col};
                 if ($r->is_today) {
@@ -152,7 +179,7 @@ class SalesMetrics
 
             $max = 0.0;
             for ($h = 0; $h < 24; $h++) {
-                $max = max($max, array_sum($todayBy[$h] ?? []), $yesterdayBy[$h] ?? 0);
+                $max = max($max, array_sum($todayBy[$h] ?? []), $yesterdayBy[$h] ?? 0, $weekBy[$h] ?? 0);
             }
 
             $hours = [];
@@ -168,12 +195,16 @@ class SalesMetrics
                     ];
                 }
                 $y = $yesterdayBy[$h] ?? 0;
+                $w = $weekBy[$h] ?? 0;
                 $hours[] = [
                     'hour' => sprintf('%02d', $h),
                     'height' => $max > 0 ? $total / $max * 100 : 0,
                     'marker' => $max > 0 ? $y / $max * 100 : 0,
                     'total' => $total,
                     'y_total' => $y,
+                    'w_marker' => $max > 0 ? $w / $max * 100 : 0,
+                    'w_total' => $w,
+                    'last_week' => number_format($w, 0, '.', ' '),
                     'today' => number_format($total, 0, '.', ' '),
                     'yesterday' => number_format($y, 0, '.', ' '),
                     'segments' => $segments,
@@ -280,7 +311,7 @@ class SalesMetrics
      *
      * @return array<string, mixed>
      */
-    public function profitSummary(Carbon $from, Carbon $to, Carbon $yFrom, Carbon $yTo, array $shops, array $colors, ?array $shopIds = null): array
+    public function profitSummary(Carbon $from, Carbon $to, Carbon $yFrom, Carbon $yTo, array $shops, array $colors, ?array $shopIds = null, ?Carbon $wFrom = null, ?Carbon $wTo = null): array
     {
         $today = $this->profitByShop($from, $to, $shopIds);
         $yesterday = $this->profitByShop($yFrom, $yTo, $shopIds);
@@ -290,6 +321,7 @@ class SalesMetrics
         $tCovered = $sum($today, 'covered');
         $tRevenue = $sum($today, 'revenue');
         $yProfit = $sum($yesterday, 'profit');
+        $wProfit = $wFrom && $wTo ? $sum($this->profitByShop($wFrom, $wTo, $shopIds), 'profit') : 0.0;
 
         $empty = ['profit' => 0.0, 'covered' => 0.0, 'revenue' => 0.0];
         $rows = [];
@@ -321,6 +353,8 @@ class SalesMetrics
             'total' => $tProfit,
             'yesterday' => $yProfit,
             'delta' => $this->delta($tProfit, $yProfit),
+            'last_week' => $wProfit,
+            'last_week_delta' => $this->delta($tProfit, $wProfit),
             'margin' => $tCovered > 0 ? $tProfit / $tCovered * 100 : null,
             'uncovered_percent' => $tRevenue > 0 ? round(($tRevenue - $tCovered) / $tRevenue * 100, 1) : 0.0,
             'missing_items' => $missingItems,

@@ -28,12 +28,12 @@
     $peak = collect($charts['sum'])->sortByDesc('total')->first();
 
     $tiles = [
-        ['label' => __('Sales total'), 'value' => $money($totals['sum']), 'prev' => $money($totals['y_sum']), 'delta' => $totals['sum_delta'], 'negative' => false],
+        ['label' => __('Sales total'), 'value' => $money($totals['sum']), 'prev' => $money($totals['y_sum']), 'delta' => $totals['sum_delta'], 'wprev' => $money($totals['w_sum']), 'wdelta' => $totals['w_sum_delta'], 'negative' => false],
         $showProfit
-            ? ['label' => __('Profit'), 'value' => $money($profit['total']), 'prev' => $money($profit['yesterday']), 'delta' => $profit['delta'], 'negative' => $profit['total'] < 0, 'extra' => __('Margin').' '.$margin]
+            ? ['label' => __('Profit'), 'value' => $money($profit['total']), 'prev' => $money($profit['yesterday']), 'delta' => $profit['delta'], 'wprev' => $money($profit['last_week']), 'wdelta' => $profit['last_week_delta'], 'negative' => $profit['total'] < 0, 'extra' => __('Margin').' '.$margin]
             : ['label' => __('Peak hour'), 'value' => $peak && $peak['total'] > 0 ? $peak['hour'].':00' : '—', 'prev' => null, 'delta' => null, 'negative' => false, 'extra' => $peak && $peak['total'] > 0 ? $money($peak['total']) : null],
-        ['label' => __('Receipts'), 'value' => (string) $totals['count'], 'prev' => (string) $totals['y_count'], 'delta' => $totals['count_delta'], 'negative' => false, 'extra' => $refunds['count'] > 0 ? __('Refunds').': '.$refunds['count'].' · '.$money($refunds['sum']) : null],
-        ['label' => __('Average check'), 'value' => $money($totals['avg']), 'prev' => $money($totals['y_avg']), 'delta' => $totals['avg_delta'], 'negative' => false],
+        ['label' => __('Receipts'), 'value' => (string) $totals['count'], 'prev' => (string) $totals['y_count'], 'delta' => $totals['count_delta'], 'wprev' => (string) $totals['w_count'], 'wdelta' => $totals['w_count_delta'], 'negative' => false, 'extra' => $refunds['count'] > 0 ? __('Refunds').': '.$refunds['count'].' · '.$money($refunds['sum']) : null],
+        ['label' => __('Average check'), 'value' => $money($totals['avg']), 'prev' => $money($totals['y_avg']), 'delta' => $totals['avg_delta'], 'wprev' => $money($totals['w_avg']), 'wdelta' => $totals['w_avg_delta'], 'negative' => false],
     ];
 @endphp
 
@@ -48,6 +48,13 @@
                     <p class="tabular text-[1.05rem] text-slate-400">
                         {{ __('Yesterday by :time', ['time' => $asOf]) }}: {{ $tile['prev'] }}
                         <span class="ml-2 font-bold {{ $dClass }}">{{ $dText }}</span>
+                    </p>
+                @endif
+                @if(isset($tile['wprev']))
+                    @php [$wText, $wClass] = $delta($tile['wdelta']); @endphp
+                    <p class="tabular text-[1.05rem] text-slate-400">
+                        {{ __('Last week by :time', ['time' => $asOf]) }}: {{ $tile['wprev'] }}
+                        <span class="ml-2 font-bold {{ $wClass }}">{{ $wText }}</span>
                     </p>
                 @endif
                 @if(! empty($tile['extra']))

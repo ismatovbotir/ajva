@@ -10,17 +10,21 @@
     [$sumDeltaText, $sumDeltaClass] = $deltaBadge($totals['sum_delta']);
     [$countDeltaText, $countDeltaClass] = $deltaBadge($totals['count_delta']);
     [$avgDeltaText, $avgDeltaClass] = $deltaBadge($totals['avg_delta']);
+    [$wSumDeltaText, $wSumDeltaClass] = $deltaBadge($totals['w_sum_delta']);
+    [$wCountDeltaText, $wCountDeltaClass] = $deltaBadge($totals['w_count_delta']);
+    [$wAvgDeltaText, $wAvgDeltaClass] = $deltaBadge($totals['w_avg_delta']);
     // The profit payload is only present for users who may see it (see ProfitAccess).
     $hasProfit = isset($profit);
     if ($hasProfit) {
         [$profitDeltaText, $profitDeltaClass] = $deltaBadge($profit['delta']);
+        [$wProfitDeltaText, $wProfitDeltaClass] = $deltaBadge($profit['last_week_delta']);
     }
 @endphp
 <div wire:poll.120s class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-2">
         <div>
             <h2 class="text-lg font-semibold text-slate-900">{{ __('Sales today') }}</h2>
-            <p class="text-sm text-slate-500">{{ __('Successful sales, compared with the previous day up to the same time.') }}</p>
+            <p class="text-sm text-slate-500">{{ __('Successful sales, compared with the previous day and the same weekday last week, up to the same time.') }}</p>
         </div>
         <p class="text-xs text-slate-500">{{ __('Updated') }} {{ $asOf }} · {{ __('updates every 2 minutes') }}</p>
     </div>
@@ -37,6 +41,10 @@
             <p class="text-sm text-slate-500">
                 {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $money($totals['yf_sum']) }}</span>
             </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Last week, same weekday') }}: <span class="tabular-nums">{{ $money($totals['w_sum']) }}</span>
+                <span class="ml-2 font-medium {{ $wSumDeltaClass }}">{{ $wSumDeltaText }}</span>
+            </p>
         </x-ui.card>
         @if($hasProfit)
         <x-ui.card>
@@ -45,6 +53,10 @@
             <p class="mt-1 text-sm text-slate-500">
                 {{ __('Yesterday') }}: <span class="tabular-nums">{{ $money($profit['yesterday']) }}</span>
                 <span class="ml-2 font-medium {{ $profitDeltaClass }}">{{ $profitDeltaText }}</span>
+            </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Last week, same weekday') }}: <span class="tabular-nums">{{ $money($profit['last_week']) }}</span>
+                <span class="ml-2 font-medium {{ $wProfitDeltaClass }}">{{ $wProfitDeltaText }}</span>
             </p>
             <p class="mt-1 text-sm text-slate-500">{{ __('Margin') }}: <span class="font-medium tabular-nums">{{ $profit['margin'] === null ? '—' : number_format($profit['margin'], 1).'%' }}</span></p>
             @if($profit['missing_items'] > 0)
@@ -64,6 +76,10 @@
             <p class="text-sm text-slate-500">
                 {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $totals['yf_count'] }}</span>
             </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Last week, same weekday') }}: <span class="tabular-nums">{{ $totals['w_count'] }}</span>
+                <span class="ml-2 font-medium {{ $wCountDeltaClass }}">{{ $wCountDeltaText }}</span>
+            </p>
             @if($refunds['count'] > 0)
                 <p class="mt-1 text-sm text-red-700">{{ __('Refunds') }}: <span class="tabular-nums">{{ $refunds['count'] }} · {{ $money($refunds['sum']) }}</span></p>
             @endif
@@ -77,6 +93,10 @@
             </p>
             <p class="text-sm text-slate-500">
                 {{ __('Yesterday, full day') }}: <span class="tabular-nums">{{ $money($totals['yf_avg']) }}</span>
+            </p>
+            <p class="text-sm text-slate-500">
+                {{ __('Last week, same weekday') }}: <span class="tabular-nums">{{ $money($totals['w_avg']) }}</span>
+                <span class="ml-2 font-medium {{ $wAvgDeltaClass }}">{{ $wAvgDeltaText }}</span>
             </p>
         </x-ui.card>
     </div>
@@ -160,6 +180,10 @@
                         <span class="h-0 w-4 shrink-0 border-t-2 border-dashed border-slate-500"></span>
                         <span class="text-slate-500">{{ __('Yesterday') }}</span>
                     </li>
+                    <li class="flex items-center gap-1.5 text-xs">
+                        <span class="h-0 w-4 shrink-0 border-t-2 border-dotted border-blue-600"></span>
+                        <span class="text-slate-500">{{ __('Last week, same weekday') }}</span>
+                    </li>
                 </ul>
 
                 @foreach($charts as $metric => $hours)
@@ -168,7 +192,7 @@
                         <div class="flex h-56 min-w-[34rem] items-end gap-1">
                             @foreach($hours as $h)
                                 <div class="relative flex h-full flex-1 flex-col justify-end"
-                                     title="{{ $h['hour'] }}:00 — {{ __('Today') }}: {{ $h['today'] }} · {{ __('Yesterday') }}: {{ $h['yesterday'] }}">
+                                     title="{{ $h['hour'] }}:00 — {{ __('Today') }}: {{ $h['today'] }} · {{ __('Yesterday') }}: {{ $h['yesterday'] }} · {{ __('Last week') }}: {{ $h['last_week'] }}">
                                     <div class="flex flex-col-reverse overflow-hidden rounded-t-[3px]" style="height: {{ $h['height'] }}%;">
                                         @foreach($h['segments'] as $seg)
                                             <div title="{{ $seg['name'] }}: {{ $seg['label'] }}" class="w-full" style="height: {{ $seg['percent'] }}%; background-color: {{ $seg['color'] }};"></div>
@@ -176,6 +200,9 @@
                                     </div>
                                     @if($h['marker'] > 0)
                                         <div class="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-slate-500" style="bottom: {{ $h['marker'] }}%;"></div>
+                                    @endif
+                                    @if($h['w_marker'] > 0)
+                                        <div class="pointer-events-none absolute inset-x-0 border-t-2 border-dotted border-blue-600" style="bottom: {{ $h['w_marker'] }}%;"></div>
                                     @endif
                                 </div>
                             @endforeach
@@ -194,7 +221,7 @@
     {{-- Shops: today vs previous day --}}
     <x-ui.card>
         <h3 class="text-base font-semibold text-slate-900">{{ __('Shops: today vs yesterday') }}</h3>
-        <p class="mb-4 text-sm text-slate-500">{{ __('Yesterday is counted up to the same time of day; the last column is the whole previous day.') }}</p>
+        <p class="mb-4 text-sm text-slate-500">{{ __('Yesterday is counted up to the same time of day; then the whole previous day, then the same weekday last week up to the same time.') }}</p>
 
         @if(empty($table))
             <x-ui.empty-state :title="__('No sales yet today')" :description="__('Sales will appear here as POS terminals send receipts.')" />
@@ -211,6 +238,8 @@
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Yesterday, full day') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Last week') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Δ</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -218,6 +247,7 @@
                             @php
                                 [$cT, $cC] = $deltaBadge($row['count_delta']);
                                 [$sT, $sC] = $deltaBadge($row['sum_delta']);
+                                [$wT, $wC] = $deltaBadge($row['w_sum_delta']);
                             @endphp
                             <tr>
                                 <td class="px-4 py-3 text-sm font-medium text-slate-900">
@@ -230,6 +260,8 @@
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['y_sum']) }}</td>
                                 <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $sC }}">{{ $sT }}</td>
                                 <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['yf_sum']) }}</td>
+                                <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $money($row['w_sum']) }}</td>
+                                <td class="px-4 py-3 text-right text-sm font-medium tabular-nums {{ $wC }}">{{ $wT }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -243,6 +275,8 @@
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['y_sum']) }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $sumDeltaClass }}">{{ $sumDeltaText }}</td>
                             <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['yf_sum']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums">{{ $money($totals['w_sum']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $wSumDeltaClass }}">{{ $wSumDeltaText }}</td>
                         </tr>
                     </tfoot>
                 </table>

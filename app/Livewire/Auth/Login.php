@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Auth;
 
+use App\Enums\UserRole;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Livewire\Attributes\Layout;
@@ -15,6 +17,39 @@ class Login extends Component
     public string $password = '';
 
     public bool $remember = false;
+
+    /**
+     * Local-only shortcut: with DEV_AUTO_LOGIN=true the login page signs in
+     * the first admin (or DEV_AUTO_LOGIN_EMAIL) without a password.
+     * Hard-gated to the "local" environment, so it can never fire in production.
+     */
+    public function mount(): void
+    {
+        if (! app()->environment('local') || ! config('app.dev_auto_login')) {
+            return;
+        }
+
+        $email = config('app.dev_auto_login_email');
+
+        $user = $email
+            ? User::where('email', $email)->first()
+            : User::where('role', UserRole::Admin)->orderBy('id')->first();
+
+        // Empty local database: create the seeder's default admin on the spot.
+        $user ??= User::create([
+            'name' => 'Admin',
+            'email' => $email ?: 'admin@example.com',
+            'password' => 'password',
+            'role' => UserRole::Admin,
+        ]);
+
+        Auth::login($user);
+        session()->regenerate();
+
+        $home = $user->role?->homeRoute() ?? 'dashboard';
+
+        $this->redirectRoute(Route::has($home) ? $home : 'dashboard', navigate: false);
+    }
 
     public function login(): void
     {

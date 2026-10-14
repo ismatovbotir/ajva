@@ -75,6 +75,10 @@ return [
     // filters (dashboard, reports) miss receipts. Override with APP_TIMEZONE.
     'timezone' => env('APP_TIMEZONE', 'Asia/Tashkent'),
 
+    // Local-only passwordless login (see Login::mount); ignored unless APP_ENV=local.
+    'dev_auto_login' => (bool) env('DEV_AUTO_LOGIN', false),
+    'dev_auto_login_email' => env('DEV_AUTO_LOGIN_EMAIL'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

@@ -99,27 +99,41 @@ class DemoSalesSeeder extends Seeder
 
         $now = now();
         $today = $now->copy()->startOfDay();
-        $yesterday = $today->copy()->subDay();
-        $seq = 0;
+                $seq = 0;
 
+        // Weighted slots (shop x day x hour): busier shops and peak hours get more receipts.
+        $slots = [];
         foreach ($shops as $shopIndex => $shop) {
-            // Busier shops first so the colours / ranking differ.
             $scale = 1.4 - $shopIndex * 0.25;
-
-            foreach ([[$yesterday, 21], [$today, max(9, min(21, $now->hour))]] as [$day, $lastHour]) {
+            // Today plus the 7 days before it, so yesterday and the same weekday last week both have data.
+            $days = [[$today, max(9, min(21, $now->hour))]];
+            for ($d = 1; $d <= 7; $d++) {
+                $days[] = [$today->copy()->subDays($d), 21];
+            }
+            foreach ($days as [$day, $lastHour]) {
                 for ($hour = 8; $hour <= $lastHour; $hour++) {
                     $peak = in_array($hour, [12, 13, 18, 19], true) ? 2.2 : 1.0;
-                    $count = (int) round((mt_rand(2, 6)) * $scale * $peak);
-
-                    for ($i = 0; $i < $count; $i++) {
-                        $at = $day->copy()->setTime($hour, mt_rand(0, 59), mt_rand(0, 59));
-                        if ($at->greaterThan($now) && $day->isSameDay($today)) {
-                            continue;
-                        }
-                        $this->createReceipt($shop, $posByShop[$shop->id][mt_rand(0, 1)], $items, $at, ++$seq);
-                    }
+                    $slots[] = [$shop, $day, $hour, $scale * $peak];
                 }
             }
+        }
+        $weightSum = array_sum(array_column($slots, 3));
+
+        $target = (int) env('DEMO_RECEIPTS', 1000);
+        while ($seq < $target) {
+            $pick = mt_rand() / mt_getrandmax() * $weightSum;
+            foreach ($slots as $slot) {
+                $pick -= $slot[3];
+                if ($pick <= 0) {
+                    break;
+                }
+            }
+            [$shop, $day, $hour] = $slot;
+            $at = $day->copy()->setTime($hour, mt_rand(0, 59), mt_rand(0, 59));
+            if ($at->greaterThan($now)) {
+                continue;
+            }
+            $this->createReceipt($shop, $posByShop[$shop->id][mt_rand(0, 1)], $items, $at, ++$seq);
         }
     }
 
