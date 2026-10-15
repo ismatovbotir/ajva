@@ -24,6 +24,23 @@ class SalesMetrics
     public const TOP_ITEMS = 20;
 
     /**
+     * The three comparison windows every comparable figure uses, each cut at the SAME time of day:
+     * today so far, yesterday up to the same time, and the same weekday one week ago up to the same time.
+     *
+     * @return array{today: array{0: Carbon, 1: Carbon}, yesterday: array{0: Carbon, 1: Carbon}, week: array{0: Carbon, 1: Carbon}}
+     */
+    public static function windows(Carbon $now): array
+    {
+        $todayStart = $now->copy()->startOfDay();
+
+        return [
+            'today' => [$todayStart, $now->copy()],
+            'yesterday' => [$todayStart->copy()->subDay(), $now->copy()->subDay()],
+            'week' => [$todayStart->copy()->subWeek(), $now->copy()->subWeek()],
+        ];
+    }
+
+    /**
      * @param  array<int, int>|null  $shopIds  restrict to these shops (null = all, see ShopAccess)
      * @param  bool  $withProfit  false skips every cost/profit query and leaves the profit keys out (see ProfitAccess)
      * @return array<string, mixed>
@@ -43,7 +60,8 @@ class SalesMetrics
         $yesterdayFull = $this->shopTotals($yesterdayStart, $yesterdayStart->copy()->endOfDay(), $shopIds);
 
         // Same weekday one week ago, up to the same time of day (w_*).
-        $lastWeek = $this->shopTotals($todayStart->copy()->subWeek(), $now->copy()->subWeek(), $shopIds);
+        [$weekFrom, $weekTo] = self::windows($now)['week'];
+        $lastWeek = $this->shopTotals($weekFrom, $weekTo, $shopIds);
 
         $shopIds = array_unique(array_merge(array_keys($today), array_keys($yesterday), array_keys($yesterdayFull), array_keys($lastWeek)));
         usort($shopIds, fn ($a, $b) => ($today[$b]['sum'] ?? 0) <=> ($today[$a]['sum'] ?? 0));
@@ -433,13 +451,13 @@ class SalesMetrics
     }
 
     /**
-     * Last 7 days including today: revenue and profit (cost-covered lines) per day.
+     * Last N days (7 by default) including today: revenue and profit (cost-covered lines) per day.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function trend(Carbon $todayStart, ?array $shopIds = null, bool $withProfit = true): array
+    public function trend(Carbon $todayStart, ?array $shopIds = null, bool $withProfit = true, int $span = 7): array
     {
-        $from = $todayStart->copy()->subDays(6);
+        $from = $todayStart->copy()->subDays($span - 1);
         $to = $todayStart->copy()->endOfDay();
 
         $rev = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds)
@@ -463,19 +481,19 @@ class SalesMetrics
             ->get()
             ->keyBy('d');
 
-        $days = [];
+        $out = [];
         $max = 0.0;
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < $span; $i++) {
             $day = $from->copy()->addDays($i);
             $key = $day->toDateString();
             $r = (float) ($rev[$key]->s ?? 0);
             $p = (float) ($profit[$key]->p ?? 0);
             $max = max($max, $r, $p);
-            $days[] = ['label' => $day->format('d.m'), 'revenue' => $r, 'count' => (int) ($rev[$key]->c ?? 0)]
+            $out[] = ['label' => $day->format('d.m'), 'revenue' => $r, 'count' => (int) ($rev[$key]->c ?? 0)]
                 + ($withProfit ? ['profit' => $p] : []);
         }
 
-        foreach ($days as &$d) {
+        foreach ($out as &$d) {
             $d['revenue_h'] = $max > 0 ? max($d['revenue'], 0) / $max * 100 : 0;
             $d['revenue_label'] = number_format($d['revenue'], 0, '.', ' ');
 
@@ -486,7 +504,7 @@ class SalesMetrics
         }
         unset($d);
 
-        return $days;
+        return $out;
     }
 
     public function delta(float|int $current, float|int $previous): ?float

@@ -2,106 +2,90 @@
 
 namespace App\Services;
 
+use App\Enums\OrderStatus;
+use App\Models\OrderRule;
 use App\Models\Stock;
-use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Order recommendations per shop for the people preparing deliveries from the
- * main warehouse: RULES + SALES SPEED. (The dashboard's Ordering page keeps
- * the rules-only OrderingReport; this class reuses its estimated-stock logic.)
+ * Order lines per shop and the consolidated warehouse pick list for a horizon of H days, on top of
+ * ForecastService (the demand model: est, in-transit, weekday forecast, order[H], see its dictionary).
+ * Used by the Ordering page (any H, 1-7) and the warehouse monitor (H = inventory.order_horizon_days).
  *
- * Metric dictionary
- * -----------------
- * estimated stock   current snapshot (Stock::applyCurrent) minus net sales (sales - refunds, active receipts,
- *                   storno lines excluded) from the snapshot DAY on, never below 0 - same as OrderingReport
- * daily speed       net sales of the last WINDOW_DAYS (14) COMPLETE days (today is partial, so it is left out),
- *                   zero-sales days included, divided by the days the item could sell in that shop:
- *                   min(14, days since the first stock snapshot of the pair). Fewer than MIN_SPEED_DAYS (3)
- *                   days of history = no speed (rules only). Negative net (more refunds than sales) = 0.
- *                   Caveat: days the item was out of stock are not excluded (they are not reliably known),
- *                   so the speed of an item that was out of stock for long can be understated.
- * days of cover     estimated stock / daily speed (none when the speed is 0 or unknown)
- * candidate         estimated stock <= min (rule, as OrderingReport)  OR  days of cover < COVER_ALERT_DAYS (3)
- *                   Only items with a rule (max > 0) are covered.
- * target            max; when the item sells, the larger of max and min(speed x COVER_TARGET_DAYS (7),
- *                   2 x max) - the cap stops one busy week from inflating the order beyond a sensible size
- * recommended qty   target - estimated stock, candidates only when > 0. Piece items (min, max and stock all
- *                   whole numbers) are rounded UP to whole pieces; other items (kg, litres) up to 0.1.
- * urgency           out (estimated stock 0) > critical (cover < 1 day) > soon (cover < 3 days) > low
- *                   (at or below min with enough cover or no speed)
- * warehouse stock   current snapshot of the main warehouse shop (Stock::applyCurrent); the main warehouse is
- *                   never replenished itself
- * allocation        per item, when the warehouse has less than the total need: the warehouse quantity (floored
- *                   to a whole piece / 0.1) is given to the most urgent TIER first (out, then critical, soon,
- *                   low) and a tier is served in full while stock lasts; when a tier cannot be served in full
- *                   its demands share the rest proportionally to their need (floored to the unit), left-over
- *                   units go to the lowest days of cover. Rest of the lines = shortage. The allocation only
- *                   considers the shops in view (the viewer's shops for an operator).
- * shortage          need - send > 0 (only when the warehouse is configured)
+ * Metric dictionary (what this class adds)
+ * ----------------------------------------
+ * line              a forecast row listed for H (position <= min OR cover < H OR stock-out within H days,
+ *                   and order[H] > 0); need = order[H]
+ * urgency           the forecast level: out > critical (cover < 1 day) > soon (< 3 days) > low
+ * tier              allocation priority of a line: 0 out of stock, 1 stock-out within 1 day, 2 stock-out/cover
+ *                   within H days, 3 the rest (at/below min only)
+ * warehouse stock   Stock::applyCurrent of the main warehouse shop MINUS the quantities on open orders
+ *                   (pending_approval / approved, any shop; not fulfilled), never below 0. The warehouse is
+ *                   never replenished itself.
+ * allocation        per item, when the warehouse has less than the total need: the quantity (floored to a
+ *                   whole piece / 0.1) goes to the most urgent TIER first (served in full), the tier that
+ *                   cannot be served in full shares the rest proportionally (floored to the unit, left-over
+ *                   units to the lowest cover). Only the shops in view take part (the viewer's shops for an operator).
+ * send / short      send = allocated quantity, short = need - send (only when the warehouse is configured);
+ *                   starved = an out-of-stock line that receives nothing
  *
- * Scale: catalog of thousands of items x up to ~11 shops with rules = tens of thousands of (shop, item)
- * pairs. Four set-based queries (current stock + rule pairs with the first-snapshot date, net sales since
- * snapshot, 14-day net sales grouped by shop+item, warehouse stock); the only PHP loop is one pass over
- * the pairs. The caller caches the result (~60 s).
+ * No warehouse configured: needs only (send = need, no shortage check).
  */
 class OrderRecommendations
 {
-    public const WINDOW_DAYS = 14;
-
-    public const MIN_SPEED_DAYS = 3;
-
-    public const COVER_ALERT_DAYS = 3;
-
-    public const COVER_TARGET_DAYS = 7;
-
-    public const TARGET_CAP_FACTOR = 2;
-
-    /** Never add up sales further back than this since an old snapshot. */
-    public const LOOKBACK_DAYS = 31;
-
     public const RANK = ['out' => 0, 'critical' => 1, 'soon' => 2, 'low' => 3];
 
     /**
+     * Forecast + plan in one go (the warehouse monitor).
+     *
      * @param  array<int, int>|null  $shopIds  shops to recommend for (null = every shop)
      * @param  int|null  $warehouseId  the main warehouse shop: excluded from the shops, its stock limits the sending
+     * @param  int|null  $horizon  one horizon for every shop; null = each shop's own order rule
      * @return array<string, mixed>
      */
-    public function build(?array $shopIds, ?int $warehouseId, ?Carbon $now = null): array
+    public function build(?array $shopIds, ?int $warehouseId, ?Carbon $now = null, ?int $horizon = null): array
     {
-        $now ??= now();
-        $todayStart = $now->copy()->startOfDay();
+        $forecast = app(ForecastService::class)->build($shopIds, $warehouseId === null ? [] : [$warehouseId], $now);
 
-        $shops = ShopAccess::restrictTo(DB::table('shops'), 'shops.id', $shopIds)
-            ->when($warehouseId !== null, fn ($q) => $q->where('shops.id', '!=', $warehouseId))
-            ->orderBy('name')->orderBy('id')
-            ->get(['id', 'name']);
-        $scope = $shops->pluck('id')->map(fn ($id) => (int) $id)->all();
+        return $this->plan($forecast, $horizon === null ? null : ForecastService::horizon($horizon), $warehouseId);
+    }
+
+    /**
+     * Lines, shop summaries and the pick list for horizon $horizon from an (optionally cached) forecast.
+     * Cheap: two small stock/order queries and one pass over the listed lines.
+     *
+     * @param  array<string, mixed>  $forecast  ForecastService::build() result
+     * @param  int|null  $horizon  one horizon (1-7) for every shop; null = each shop's own order rule (shop entries
+     *                             and lines carry their horizon, `horizon` of the result is the chain default)
+     * @return array<string, mixed>
+     */
+    public function plan(array $forecast, ?int $horizon, ?int $warehouseId): array
+    {
+        $default = ForecastService::horizon($horizon);
+        $horizons = $horizon === null
+            ? OrderRule::horizons(array_column($forecast['shops'], 'id'))
+            : [];
+        $horizonOf = fn (int $shopId): int => $horizons[$shopId] ?? $default;
 
         $rowsByShop = [];
-        if ($scope !== []) {
-            $pairs = $this->pairs($scope);
-            $since = $this->netSinceSnapshot($scope, $pairs, $now);
-            $speedNet = $this->netLastDays($scope, $todayStart);
-
-            foreach ($pairs as $p) {
-                $row = $this->recommend($p, $since[$p->shop_id][$p->item_id] ?? [], $speedNet[$p->shop_id][$p->item_id] ?? 0.0, $todayStart);
-                if ($row !== null) {
-                    $rowsByShop[(int) $p->shop_id][] = $row;
-                }
+        foreach ($forecast['rows'] as $r) {
+            $h = $horizonOf($r['shop_id']);
+            if ($r['listed'][$h]) {
+                $rowsByShop[$r['shop_id']][] = $this->line($r, $h);
             }
         }
 
         $configured = $warehouseId !== null;
         $available = $configured && $rowsByShop !== [] ? $this->warehouseStock($warehouseId) : [];
+        $shopNames = collect($forecast['shops'])->pluck('name', 'id')->all();
 
-        [$rowsByShop, $pick] = $this->allocate($rowsByShop, $configured, $available);
+        [$rowsByShop, $pick] = $this->allocate($rowsByShop, $configured, $available, $shopNames);
 
         $result = [];
-        $kpi = ['shops' => 0, 'lines' => 0, 'items' => count($pick), 'out' => 0, 'critical' => 0, 'soon' => 0, 'low' => 0, 'short_items' => 0, 'short_lines' => 0];
-        foreach ($shops as $shop) {
-            $rows = $rowsByShop[(int) $shop->id] ?? [];
+        $kpi = ['shops' => 0, 'lines' => 0, 'items' => count($pick), 'out' => 0, 'critical' => 0, 'soon' => 0, 'low' => 0, 'short_items' => 0, 'short_lines' => 0, 'starved' => 0];
+        foreach ($forecast['shops'] as $shop) {
+            $rows = $rowsByShop[$shop['id']] ?? [];
             usort($rows, fn (array $a, array $b) => $this->sortKey($a) <=> $this->sortKey($b));
 
             $counts = ['out' => 0, 'critical' => 0, 'soon' => 0, 'low' => 0];
@@ -109,6 +93,7 @@ class OrderRecommendations
             foreach ($rows as $r) {
                 $counts[$r['urgency']]++;
                 $short += $r['short'] > 0 ? 1 : 0;
+                $kpi['starved'] += $r['starved'] ? 1 : 0;
             }
 
             foreach ($counts as $k => $n) {
@@ -119,8 +104,9 @@ class OrderRecommendations
             $kpi['shops'] += $rows === [] ? 0 : 1;
 
             $result[] = [
-                'id' => (int) $shop->id,
-                'name' => (string) $shop->name,
+                'id' => $shop['id'],
+                'name' => $shop['name'],
+                'horizon' => $horizonOf($shop['id']),
                 'count' => count($rows),
                 'counts' => $counts,
                 'short' => $short,
@@ -135,7 +121,8 @@ class OrderRecommendations
         $kpi['short_items'] = count(array_filter($pick, fn (array $i) => $i['short'] > 0));
 
         return [
-            'generated_at' => $now->format('H:i:s'),
+            'generated_at' => $forecast['generated_at'],
+            'horizon' => $default,
             'warehouse_configured' => $configured,
             'kpi' => $kpi,
             'shops' => $result,
@@ -206,72 +193,53 @@ class OrderRecommendations
     }
 
     /**
-     * One recommendation row for a (shop, item) pair, or null when nothing needs to be sent.
+     * One order line of a forecast row for horizon $h (a superset of what the monitor view needs).
      *
-     * @param  array<string, float>  $since  net sales per day (Y-m-d) since the oldest relevant snapshot
+     * @param  array<string, mixed>  $r
+     * @return array<string, mixed>
      */
-    private function recommend(object $p, array $since, float $net14, Carbon $todayStart): ?array
+    private function line(array $r, int $h): array
     {
-        $stock = (float) $p->qty;
-        $min = (float) $p->min;
-        $max = (float) $p->max;
-
-        $net = 0.0;
-        foreach ($since as $day => $value) {
-            if ($day >= $p->stock_date) {
-                $net += $value;
-            }
-        }
-        $estimated = max($stock - $net, 0.0);
-
-        $days = $p->first_seen === null ? 0 : min(self::WINDOW_DAYS, max(0, (int) Carbon::parse($p->first_seen)->startOfDay()->diffInDays($todayStart, false)));
-        $speed = $days >= self::MIN_SPEED_DAYS ? max($net14, 0.0) / $days : null;
-        $cover = $speed !== null && $speed > 0 ? $estimated / $speed : null;
-
-        $belowMin = $estimated <= $min;
-        $coverLow = $cover !== null && $cover < self::COVER_ALERT_DAYS;
-        if (! $belowMin && ! $coverLow) {
-            return null;
-        }
-
-        $target = $max;
-        if ($speed !== null && $speed > 0) {
-            $target = max($max, min($speed * self::COVER_TARGET_DAYS, $max * self::TARGET_CAP_FACTOR));
-        }
-        $need = $target - $estimated;
-        if ($need <= 1e-9) {
-            return null;
-        }
-
-        $piece = $this->isWhole($stock) && $this->isWhole($min) && $this->isWhole($max);
-        $need = $piece ? ceil($need - 1e-9) : ceil($need * 10 - 1e-9) / 10;
-
-        $urgency = $estimated <= 0 ? 'out'
-            : ($cover !== null && $cover < 1 ? 'critical'
-            : ($cover !== null && $cover < self::COVER_ALERT_DAYS ? 'soon' : 'low'));
+        $belowMin = $r['position'] <= $r['min'];
+        $coverLow = ($r['cover_days'] !== null && $r['cover_days'] < $h) || ($r['stockout_in'] !== null && $r['stockout_in'] <= $h);
+        $urgency = isset(self::RANK[$r['level']]) ? $r['level'] : 'low';
+        $tier = $r['level'] === 'out' ? 0
+            : ($r['stockout_in'] !== null && $r['stockout_in'] <= 1 ? 1
+            : ($coverLow ? 2 : 3));
 
         return [
-            'item_id' => (int) $p->item_id,
-            'item' => (string) $p->item_name,
-            'shop_id' => (int) $p->shop_id,
-            'stock' => $stock,
-            'estimated' => round($estimated, 3),
-            'min' => $min,
-            'max' => $max,
-            'speed' => $speed === null ? null : round($speed, 3),
-            'cover' => $cover === null ? null : round($cover, 1),
+            'item_id' => $r['item_id'],
+            'item' => $r['item'],
+            'group' => $r['group'],
+            'shop_id' => $r['shop_id'],
+            'stock' => $r['stock'],
+            'stock_date' => $r['stock_date'],
+            'estimated' => $r['est'],
+            'in_transit' => $r['in_transit'],
+            'min' => $r['min'],
+            'max' => $r['max'],
+            'speed' => $r['speed'],
+            'cover' => $r['cover_days'],
+            'stockout_in' => $r['stockout_in'],
+            'stockout_date' => $r['stockout_date'],
+            'abc' => $r['abc'],
+            'xyz' => $r['xyz'],
+            'confidence' => $r['confidence'],
+            'rules_only' => $r['rules_only'],
+            'clipped' => $r['clipped'],
+            'stale' => $r['stale'],
+            'censored_days' => $r['censored_days'],
+            'level' => $r['level'],
             'reason' => $belowMin && $coverLow ? 'both' : ($belowMin ? 'min' : 'cover'),
             'urgency' => $urgency,
-            'need' => (float) $need,
-            'send' => (float) $need,
+            'tier' => $tier,
+            'forecast' => $r['F'][$h],
+            'need' => (float) $r['order'][$h],
+            'send' => (float) $r['order'][$h],
             'short' => 0.0,
-            'piece' => $piece,
+            'starved' => false,
+            'piece' => $r['piece'],
         ];
-    }
-
-    private function isWhole(float $v): bool
-    {
-        return abs($v - round($v)) < 1e-9;
     }
 
     /** @return array<int, mixed> */
@@ -285,9 +253,10 @@ class OrderRecommendations
      *
      * @param  array<int, array<int, array<string, mixed>>>  $rowsByShop
      * @param  array<int, float>  $available  warehouse qty per item id
+     * @param  array<int, string>  $shopNames
      * @return array{0: array<int, array<int, array<string, mixed>>>, 1: array<int, array<string, mixed>>}
      */
-    private function allocate(array $rowsByShop, bool $configured, array $available): array
+    private function allocate(array $rowsByShop, bool $configured, array $available, array $shopNames): array
     {
         $byItem = [];
         foreach ($rowsByShop as $shopId => $rows) {
@@ -296,8 +265,6 @@ class OrderRecommendations
             }
         }
 
-        $shopNames = DB::table('shops')->whereIn('id', array_keys($rowsByShop))->pluck('name', 'id');
-
         $pick = [];
         foreach ($byItem as $itemId => $refs) {
             $demands = [];
@@ -305,7 +272,7 @@ class OrderRecommendations
             foreach ($refs as $n => [$shopId, $i]) {
                 $r = $rowsByShop[$shopId][$i];
                 $piece = $piece && $r['piece'];
-                $demands[] = ['key' => $n, 'rank' => self::RANK[$r['urgency']], 'cover' => $r['cover'], 'need' => $r['need']];
+                $demands[] = ['key' => $n, 'rank' => $r['tier'], 'cover' => $r['cover'], 'need' => $r['need']];
             }
             $needTotal = array_sum(array_column($demands, 'need'));
             $have = $configured ? (float) ($available[$itemId] ?? 0.0) : null;
@@ -318,34 +285,43 @@ class OrderRecommendations
             $worst = 3;
             $minCover = null;
             $sendTotal = 0.0;
+            $starved = false;
+            $name = '';
             foreach ($refs as $n => [$shopId, $i]) {
                 $r = &$rowsByShop[$shopId][$i];
                 $r['send'] = (float) $send[$n];
                 $r['short'] = $configured ? round($r['need'] - $r['send'], 6) : 0.0;
+                $r['starved'] = $configured && $r['level'] === 'out' && $r['send'] <= 0;
                 $worst = min($worst, self::RANK[$r['urgency']]);
                 $minCover = $r['cover'] === null ? $minCover : ($minCover === null ? $r['cover'] : min($minCover, $r['cover']));
                 $sendTotal += $r['send'];
+                $starved = $starved || $r['starved'];
+                $name = $r['item'];
                 $shopsOut[] = [
                     'shop_id' => $shopId,
                     'shop' => (string) ($shopNames[$shopId] ?? '#'.$shopId),
                     'need' => $r['need'],
                     'send' => $r['send'],
+                    'short' => $r['short'],
                     'urgency' => $r['urgency'],
+                    'starved' => $r['starved'],
                 ];
-                $name = $r['item'];
                 unset($r);
             }
             usort($shopsOut, fn ($a, $b) => [self::RANK[$a['urgency']], -$a['need'], $a['shop']] <=> [self::RANK[$b['urgency']], -$b['need'], $b['shop']]);
 
+            $short = $configured ? round($needTotal - $sendTotal, 6) : 0.0;
             $pick[] = [
                 'item_id' => (int) $itemId,
-                'item' => (string) $name,
+                'item' => $name,
                 'need' => round($needTotal, 6),
                 'send' => round($sendTotal, 6),
                 'available' => $have,
-                'short' => $configured ? round($needTotal - $sendTotal, 6) : 0.0,
+                'short' => $short,
+                'short_pct' => $needTotal > 0 ? round($short / $needTotal * 100, 1) : 0.0,
                 'urgency' => array_search($worst, self::RANK, true),
                 'cover' => $minCover,
+                'starved' => $starved,
                 'shops' => $shopsOut,
             ];
         }
@@ -356,101 +332,32 @@ class OrderRecommendations
         return [$rowsByShop, $pick];
     }
 
-    /** @return array<int, float> current quantity of the main warehouse per item id */
+    /**
+     * Current quantity of the main warehouse per item id, minus what open orders already claim.
+     *
+     * @return array<int, float>
+     */
     private function warehouseStock(int $warehouseId): array
     {
-        return Stock::applyCurrent(DB::table('stocks'))
+        $stock = Stock::applyCurrent(DB::table('stocks'))
             ->where('stocks.shop_id', $warehouseId)
             ->pluck('stocks.qty', 'stocks.item_id')
             ->map(fn ($q) => (float) $q)
             ->all();
-    }
 
-    /**
-     * Every (shop, item) pair that has a usable rule, with its current stock and the date of its first snapshot.
-     *
-     * @param  array<int, int>  $scope
-     */
-    private function pairs(array $scope)
-    {
-        return Stock::applyCurrent(DB::table('stocks'))
-            ->join('item_order_rules as r', function ($join) {
-                $join->on('r.item_id', '=', 'stocks.item_id')->on('r.shop_id', '=', 'stocks.shop_id');
-            })
-            ->join('items', 'items.id', '=', 'stocks.item_id')
-            ->whereIn('stocks.shop_id', $scope)
-            ->where('r.max', '>', 0)
-            ->select([
-                'stocks.shop_id', 'stocks.item_id', 'stocks.qty', 'stocks.stock_date',
-                'r.min', 'r.max', 'items.name as item_name',
-            ])
-            ->selectSub(
-                DB::table('stocks as s_first')
-                    ->selectRaw('min(s_first.stock_date)')
-                    ->whereColumn('s_first.item_id', 'stocks.item_id')
-                    ->whereColumn('s_first.shop_id', 'stocks.shop_id'),
-                'first_seen'
-            )
-            ->get();
-    }
+        $claimed = DB::table('order_items as ol')
+            ->join('orders as o', 'o.id', '=', 'ol.order_id')
+            ->whereIn('o.status', OrderStatus::open())
+            ->groupBy('ol.item_id')
+            ->selectRaw('ol.item_id as item_id, SUM(ol.qty) as qty')
+            ->pluck('qty', 'item_id');
 
-    /**
-     * Net sales per shop, item and day from the oldest snapshot that matters up to now (bounded).
-     *
-     * @param  array<int, int>  $scope
-     * @return array<int, array<int, array<string, float>>>
-     */
-    private function netSinceSnapshot(array $scope, $pairs, Carbon $now): array
-    {
-        if ($pairs->isEmpty()) {
-            return [];
+        foreach ($claimed as $itemId => $qty) {
+            if (isset($stock[$itemId])) {
+                $stock[$itemId] = max($stock[$itemId] - (float) $qty, 0.0);
+            }
         }
 
-        $floor = $now->copy()->subDays(self::LOOKBACK_DAYS)->startOfDay()->toDateString();
-        $oldest = max((string) $pairs->min('stock_date'), $floor);
-
-        $rows = DB::table('receipt_items as ri')
-            ->join('receipts', 'receipts.id', '=', 'ri.receipt_id')
-            ->where('receipts.active', true)
-            ->where('ri.storno', false)
-            ->where('receipts.created_at', '>=', $oldest.' 00:00:00')
-            ->whereIn('receipts.shop_id', $scope)
-            ->groupBy('receipts.shop_id', 'ri.item_id', 'd')
-            ->selectRaw('receipts.shop_id as shop_id, ri.item_id as item_id, DATE(receipts.created_at) as d, SUM(CASE WHEN receipts.sell = 1 THEN ri.qty ELSE -ri.qty END) as net')
-            ->get();
-
-        $byDay = [];
-        foreach ($rows as $r) {
-            $byDay[(int) $r->shop_id][(int) $r->item_id][(string) $r->d] = (float) $r->net;
-        }
-
-        return $byDay;
-    }
-
-    /**
-     * Net sales of the WINDOW_DAYS complete days before today, per shop and item (no day dimension).
-     *
-     * @param  array<int, int>  $scope
-     * @return array<int, array<int, float>>
-     */
-    private function netLastDays(array $scope, Carbon $todayStart): array
-    {
-        $rows = DB::table('receipt_items as ri')
-            ->join('receipts', 'receipts.id', '=', 'ri.receipt_id')
-            ->where('receipts.active', true)
-            ->where('ri.storno', false)
-            ->where('receipts.created_at', '>=', $todayStart->copy()->subDays(self::WINDOW_DAYS))
-            ->where('receipts.created_at', '<', $todayStart)
-            ->whereIn('receipts.shop_id', $scope)
-            ->groupBy('receipts.shop_id', 'ri.item_id')
-            ->selectRaw('receipts.shop_id as shop_id, ri.item_id as item_id, SUM(CASE WHEN receipts.sell = 1 THEN ri.qty ELSE -ri.qty END) as net')
-            ->get();
-
-        $out = [];
-        foreach ($rows as $r) {
-            $out[(int) $r->shop_id][(int) $r->item_id] = (float) $r->net;
-        }
-
-        return $out;
+        return $stock;
     }
 }

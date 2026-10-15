@@ -162,7 +162,7 @@ class Dashboard extends Component
         $totalValue = (float) $perShop->sum('value');
         $units = (float) $perShop->sum('units');
         $uncovered = (float) $perShop->sum('uncovered_units');
-        $max = (float) ($perShop->max('value') ?: 1);
+        $max = (float) $perShop->max('value') ?: 1.0;
 
         $missingItems = (int) $this->shopScoped(DB::table('stocks'))
             ->leftJoin('item_prices as cost', function ($join) use ($costId) {

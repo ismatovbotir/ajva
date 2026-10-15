@@ -19,7 +19,6 @@ use App\Models\Stock;
 use App\Models\User;
 use App\Services\ReceiptsMetrics;
 use App\Support\MonitorScope;
-use App\Support\ShopAccess;
 use App\Support\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -253,7 +252,7 @@ class ReceiptsMonitorTest extends TestCase
             ->assertSee(__('Cancelled'))
             ->assertSee('Alpha')
             ->assertSee('600')
-            ->assertDontSee(__('Light theme'));
+            ->assertSee(__('Light theme'));
         $signed->assertSee('data-panel="shops"', false);
 
         auth()->logout();

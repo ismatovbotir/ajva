@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Monitor;
 use App\Models\Stock;
+use App\Monitor\MonitorData;
 use App\Services\OrderRecommendations;
 use App\Services\ReceiptsMetrics;
 use App\Services\SalesMetrics;
@@ -82,7 +83,8 @@ class MonitorScreen extends Component
         abort_unless($user !== null, 403);
 
         $monitor = $this->monitorId === null ? null : Monitor::query()->find($this->monitorId);
-        abort_if($monitor === null || (! $monitor->enabled && ! $user->isAdmin()), 404);
+        // Templates are layouts, not screens. Non-admins also need the monitor enabled and to be allowed (role / user list).
+        abort_if($monitor === null || $monitor->is_template || (! $user->isAdmin() && (! $monitor->enabled || ! $monitor->allowsUser($user))), 404);
 
         return $monitor;
     }
@@ -193,6 +195,17 @@ class MonitorScreen extends Component
         );
 
         return ['rec' => $rec, 'warehouseName' => $warehouseId === null ? null : Warehouse::shop()?->name];
+    }
+
+    /**
+     * Custom type: the widget grid of the monitor's saved layout (see App\Monitor\MonitorData). Profit widgets are
+     * absent from the payload unless $scope->withProfit, receipt-level widgets are absent on public links.
+     *
+     * @return array<string, mixed>
+     */
+    protected function customData(MonitorScope $scope): array
+    {
+        return ['custom' => MonitorData::build($scope)];
     }
 
     /**

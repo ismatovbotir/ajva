@@ -22,17 +22,76 @@ class Monitor extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'type', 'token', 'enabled', 'show_profit'];
+    protected $fillable = ['name', 'type', 'token', 'enabled', 'show_profit', 'description', 'layout', 'layout_version', 'is_template', 'roles', 'layout_rows'];
 
     protected $casts = [
         'type' => MonitorType::class,
         'enabled' => 'boolean',
         'show_profit' => 'boolean',
+        'is_template' => 'boolean',
+        'layout' => 'array',
+        'roles' => 'array',
+        'layout_version' => 'integer',
+        'layout_rows' => 'integer',
     ];
 
     public function shops(): BelongsToMany
     {
         return $this->belongsToMany(Shop::class);
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class);
+    }
+
+    /** Templates are reusable layouts, never screens: they have no link and are not listed to viewers. */
+    public function scopeScreens(Builder $query): Builder
+    {
+        return $query->where('is_template', false);
+    }
+
+    /** @return array<int, array<string, mixed>> the saved widget list (custom type) */
+    public function widgets(): array
+    {
+        return is_array($this->layout) ? array_values($this->layout) : [];
+    }
+
+    /** Allowed row-density settings of the screen (null = as many rows as the layout uses). */
+    public const ROW_CHOICES = [8, 12, 18];
+
+    /**
+     * How many rows the screen is divided into: the fixed density when set, never fewer than the layout needs.
+     * Shared by the real screen and the builder canvas, so both draw the same row height.
+     */
+    public function gridRows(?array $widgets = null): int
+    {
+        $used = 1;
+        foreach ($widgets ?? $this->widgets() as $w) {
+            $used = max($used, (int) ($w['y'] ?? 0) + (int) ($w['h'] ?? 1));
+        }
+
+        return max($used, (int) $this->layout_rows);
+    }
+
+    /**
+     * Who may open the screen: admins always; with no roles AND no users selected every
+     * role that may open monitors; otherwise only a listed role or a listed user.
+     */
+    public function allowsUser(User $user): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $roles = is_array($this->roles) ? $this->roles : [];
+        $userIds = $this->relationLoaded('users') ? $this->users->pluck('id') : $this->users()->pluck('users.id');
+
+        if ($roles === [] && $userIds->isEmpty()) {
+            return true;
+        }
+
+        return in_array($user->role->value, $roles, true) || $userIds->contains($user->id);
     }
 
     public function scopeEnabled(Builder $query): Builder
@@ -47,7 +106,7 @@ class Monitor extends Model
             return null;
         }
 
-        $monitor = static::query()->enabled()->where('token', $token)->first();
+        $monitor = static::query()->enabled()->screens()->where('token', $token)->first();
 
         return $monitor !== null && hash_equals((string) $monitor->token, $token) ? $monitor : null;
     }
@@ -97,9 +156,10 @@ class Monitor extends Model
      */
     public static function openableBy(User $user)
     {
-        $monitors = static::query()->with('shops:id,name')
+        $monitors = static::query()->with(['shops:id,name', 'users:id'])->screens()
             ->when(! $user->isAdmin(), fn ($q) => $q->enabled())
-            ->orderBy('name')->orderBy('id')->get();
+            ->orderBy('name')->orderBy('id')->get()
+            ->filter(fn (self $m) => $m->allowsUser($user))->values();
 
         $allowed = ShopAccess::ids($user);
         if ($allowed === null) {

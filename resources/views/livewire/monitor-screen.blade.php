@@ -12,7 +12,7 @@
     x-init="setInterval(() => now = Date.now(), 1000)"
     @online.window="online = true"
     @offline.window="online = false"
-    class="flex min-h-screen flex-col gap-[0.9rem] p-[1rem] lg:h-screen lg:overflow-hidden"
+    class="flex min-h-screen flex-col gap-[0.9rem] p-[1rem] lg:mx-auto lg:mt-[max(0px,calc((100vh-54rem)/2))] lg:h-[54rem] lg:min-h-0 lg:w-[96rem] lg:overflow-hidden"
 >
     @if($noShops)
         <p class="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-[1.2rem] py-[0.7rem] text-[1.1rem] text-amber-300">{{ $noShopsAssigned ? __('No shops are assigned to you. Ask an admin.') : __("None of this monitor's shops are available to you.") }}</p>
@@ -49,8 +49,7 @@
             <button type="button" @click="fullscreen()" class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800">
                 <x-icon name="monitor" class="h-[1.2rem] w-[1.2rem]" />{{ __('Fullscreen') }}
             </button>
-            @if($public)
-                {{-- Public screen: no link back into the admin panel; instead a Light/Dark switch (remembered per browser). --}}
+            {{-- Light/Dark switch on every monitor screen (remembered per browser). --}}
                 <button
                     type="button"
                     x-data="{
@@ -72,6 +71,8 @@
                     <span x-show="light" x-cloak><x-icon name="moon" class="h-[1.2rem] w-[1.2rem]" /></span>
                     <span x-show="! light">{{ __('Light theme') }}</span><span x-show="light" x-cloak>{{ __('Dark theme') }}</span>
                 </button>
+            @if($public)
+                {{-- Public screen: no link back into the admin panel. --}}
             @elseif(Route::has('dashboard') && auth()->user()?->canUsePanel())
                 @if($hasOtherMonitors)
                     <a href="{{ route('monitor') }}" class="rounded-lg border border-slate-700 px-[0.7rem] py-[0.3rem] text-slate-200 hover:bg-slate-800">{{ __('All monitors') }}</a>

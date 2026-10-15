@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OrderStatus;
 use App\Models\Item;
 use App\Models\ItemOrderRule;
+use App\Models\Order;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\Shop;
@@ -63,11 +65,12 @@ class OrderRecommendationsTest extends TestCase
         ReceiptItem::factory()->create(['receipt_id' => $receipt->id, 'item_id' => $item->id, 'qty' => $qty, 'storno' => $storno]);
     }
 
-    /** Sales spread over the 14 complete days before today (qty in total). */
-    private function sellOverWindow(Shop $shop, Item $item, float $total): void
+    /** The same quantity sold every day over the $days complete days before today. */
+    private function sellDaily(Shop $shop, Item $item, float $qty, int $days = 28): void
     {
-        $this->sell($shop, $item, $total / 2, '2026-09-30 11:00:00');
-        $this->sell($shop, $item, $total / 2, '2026-10-05 11:00:00');
+        for ($i = 1; $i <= $days; $i++) {
+            $this->sell($shop, $item, $qty, Carbon::now()->subDays($i)->setTime(11, 0)->toDateTimeString());
+        }
     }
 
     /** @return array<string, array<string, mixed>> */
@@ -76,17 +79,17 @@ class OrderRecommendationsTest extends TestCase
         return collect(collect($rec['shops'])->firstWhere('id', $shop->id)['rows'])->keyBy('item')->all();
     }
 
-    private function build(?array $ids = null, bool $warehouse = true): array
+    private function build(?array $ids = null, bool $warehouse = true, ?int $horizon = null): array
     {
-        return app(OrderRecommendations::class)->build($ids, $warehouse ? $this->wh->id : null);
+        return app(OrderRecommendations::class)->build($ids, $warehouse ? $this->wh->id : null, null, $horizon);
     }
 
     public function test_speed_and_cover_recommend_an_item_that_is_above_min(): void
     {
-        $fine = $this->item('Fine', $this->a, 30, 5, 20);      // 28 sold / 14 days = 2/day, cover 15 days
-        $this->sellOverWindow($this->a, $fine, 28);
+        $fine = $this->item('Fine', $this->a, 30, 5, 20);      // 2/day, cover 15 days: not listed
+        $this->sellDaily($this->a, $fine, 2);
         $soon = $this->item('Soon', $this->a, 5, 2, 10);       // 2/day, cover 2.5 days, above min 2
-        $this->sellOverWindow($this->a, $soon, 28);
+        $this->sellDaily($this->a, $soon, 2);
 
         $rows = $this->rows($this->build(), $this->a);
 
@@ -96,46 +99,59 @@ class OrderRecommendationsTest extends TestCase
         $this->assertEqualsWithDelta(2.5, $row['cover'], 0.001);
         $this->assertSame('cover', $row['reason']);
         $this->assertSame('soon', $row['urgency']);
-        // target = max(max 10, min(speed 2 x 7 days = 14, 2 x max = 20)) = 14; need = 14 - 5
-        $this->assertEquals(9, $row['need']);
+        $this->assertSame('high', $row['confidence']);
+        // horizon 3: F = rest of today 2 + 3 x 2 = 8; order = ceil(min 2 + 8 - 5)
+        $this->assertEquals(5, $row['need']);
     }
 
-    public function test_the_cover_target_is_capped_at_twice_the_max_and_urgency_follows_the_cover(): void
+    public function test_urgency_follows_the_cover_and_the_order_grows_with_the_horizon(): void
     {
         $hot = $this->item('Hot', $this->a, 4, 1, 10);         // 10/day -> cover 0.4 days
-        $this->sellOverWindow($this->a, $hot, 140);
+        $this->sellDaily($this->a, $hot, 10);
 
         $row = $this->rows($this->build(), $this->a)['Hot'];
-
         $this->assertSame('critical', $row['urgency']);
-        $this->assertEquals(16, $row['need']);                  // target min(70, 20) = 20, minus 4
+        $this->assertEquals(37, $row['need']);                  // ceil(1 + 10 x 4 - 4)
+
+        $orders = [];
+        foreach (range(1, 7) as $h) {
+            $orders[] = $this->rows($this->build(horizon: $h), $this->a)['Hot']['need'];
+        }
+        $this->assertSame([17.0, 27.0, 37.0, 47.0, 57.0, 67.0, 77.0], $orders);
     }
 
-    public function test_out_of_stock_wins_and_below_min_without_speed_is_low(): void
+    public function test_out_of_stock_wins_and_without_history_the_rules_decide(): void
     {
-        $this->item('Out', $this->a, 0, 5, 15);
-        $this->item('Slow', $this->a, 3, 5, 12);                // below min, no sales at all -> speed 0, no cover
+        $this->item('Out', $this->a, 0, 5, 15, '2026-10-07');
+        $this->item('Slow', $this->a, 3, 5, 12, '2026-10-07');   // below min, no history at all
 
         $rows = $this->rows($this->build(), $this->a);
 
         $this->assertSame('out', $rows['Out']['urgency']);
         $this->assertSame('low', $rows['Slow']['urgency']);
         $this->assertSame('min', $rows['Slow']['reason']);
+        $this->assertSame('none', $rows['Slow']['confidence']);
+        $this->assertNull($rows['Slow']['speed']);
         $this->assertNull($rows['Slow']['cover']);
-        $this->assertEquals(9, $rows['Slow']['need']);
+        $this->assertEquals(9, $rows['Slow']['need']);          // rules only: max - stock
     }
 
-    public function test_the_speed_only_counts_the_days_the_item_could_sell(): void
+    public function test_the_history_starts_at_the_earlier_of_first_sale_and_first_snapshot(): void
     {
         $new = $this->item('New', $this->a, 4, 1, 10, '2026-10-02');   // first snapshot 5 days ago
-        $this->sell($this->a, $new, 10, '2026-10-04 10:00:00');          // 10 / 5 days = 2 a day, not 10 / 14
-        $tooNew = $this->item('TooNew', $this->a, 0, 1, 10, '2026-10-06'); // 1 day of history: below MIN_SPEED_DAYS
-        $this->sell($this->a, $tooNew, 50, '2026-10-06 10:00:00');
+        $this->sell($this->a, $new, 10, '2026-10-04 10:00:00');          // 10 / 5 days = 2 a day
+        // Only one snapshot (today) but sold since Oct 3: the monitor used to see 0 days of history here.
+        $sold = $this->item('Sold', $this->a, 2, 1, 10, '2026-10-07');
+        $this->sell($this->a, $sold, 6, '2026-10-03 10:00:00');            // 6 / 4 days = 1.5 a day
+        $tooNew = $this->item('TooNew', $this->a, 0, 1, 10, '2026-10-06');
+        $this->sell($this->a, $tooNew, 50, '2026-10-06 10:00:00');        // 1 day: not enough
 
         $rows = $this->rows($this->build(), $this->a);
 
         $this->assertEqualsWithDelta(2.0, $rows['New']['speed'], 0.001);
         $this->assertEqualsWithDelta(2.0, $rows['New']['cover'], 0.001);
+        $this->assertEqualsWithDelta(1.5, $rows['Sold']['speed'], 0.001);
+        $this->assertSame('low', $rows['Sold']['confidence']);
         $this->assertNull($rows['TooNew']['speed']);
     }
 
@@ -150,29 +166,28 @@ class OrderRecommendationsTest extends TestCase
         $row = $this->rows($this->build(), $this->a)['X'];
 
         $this->assertEquals(8, $row['estimated']);              // 20 - 15 + 3
-        $this->assertEquals(32, $row['need']);
+        $this->assertEquals(2, $row['need']);                   // no earlier sales: min 10 - 8
     }
 
     public function test_piece_items_round_up_to_whole_pieces_and_weight_items_to_a_tenth(): void
     {
-        $piece = $this->item('Piece', $this->a, 5, 2, 20);     // 45 sold -> speed 3.214, target min(22.5, 40) = 22.5 -> need 17.5
-        $this->sellOverWindow($this->a, $piece, 45);
-        $weight = $this->item('Weight', $this->a, 2.55, 3, 6);  // fractional stock: not a piece item, need 3.45
+        $piece = $this->item('Piece', $this->a, 5, 2, 20);     // 3/day
+        $this->sellDaily($this->a, $piece, 3);
+        $this->item('Weight', $this->a, 2.55, 3, 6);            // fractional stock: not a piece item, 3 - 2.55
 
         $rows = $this->rows($this->build(), $this->a);
 
         $this->assertTrue($rows['Piece']['piece']);
-        $this->assertEquals(18, $rows['Piece']['need']);
+        $this->assertEquals(9, $rows['Piece']['need']);         // ceil(2 + 3 x 4 - 5)
         $this->assertFalse($rows['Weight']['piece']);
-        $this->assertEqualsWithDelta(3.5, $rows['Weight']['need'], 1e-9);
+        $this->assertEqualsWithDelta(0.5, $rows['Weight']['need'], 1e-9);
     }
 
     public function test_the_scarce_warehouse_stock_goes_to_the_most_urgent_shops_first(): void
     {
-        $i = $this->item('Cola', $this->a, 0, 5, 10);          // out of stock in Alpha: needs 10
+        $i = $this->item('Cola', $this->a, 0, 5, 10, '2026-10-07');   // out of stock in Alpha: needs 10
         ItemOrderRule::query()->create(['shop_id' => $this->b->id, 'item_id' => $i->id, 'min' => 5, 'max' => 10]);
-        Stock::query()->create(['shop_id' => $this->b->id, 'item_id' => $i->id, 'qty' => 5, 'stock_date' => '2026-09-01']);
-        Stock::query()->create(['shop_id' => $this->b->id, 'item_id' => $i->id, 'qty' => 5, 'stock_date' => '2026-10-07']);
+        Stock::query()->create(['shop_id' => $this->b->id, 'item_id' => $i->id, 'qty' => 4, 'stock_date' => '2026-10-07']);
         $this->warehouseHas($i, 12);
 
         $rec = $this->build();
@@ -183,16 +198,30 @@ class OrderRecommendationsTest extends TestCase
         $this->assertSame('low', $beta['urgency']);
         $this->assertEquals(10, $alpha['send']);                // the urgent tier is served in full
         $this->assertEquals(0, $alpha['short']);
-        $this->assertEquals(2, $beta['send']);                  // what is left
-        $this->assertEquals(3, $beta['short']);                 // needs 5
+        $this->assertFalse($alpha['starved']);
+        $this->assertEquals(2, $beta['send']);                  // what is left; needs 6
+        $this->assertEquals(4, $beta['short']);
 
         $pick = $rec['pick'][0];
-        $this->assertEquals(15, $pick['need']);
+        $this->assertEquals(16, $pick['need']);
         $this->assertEquals(12, $pick['send']);
-        $this->assertEquals(3, $pick['short']);
+        $this->assertEquals(4, $pick['short']);
+        $this->assertEquals(25.0, $pick['short_pct']);
         $this->assertEquals(12, $pick['available']);
         $this->assertSame(1, $rec['kpi']['short_items']);
-        $this->assertSame(1, $rec['kpi']['short_lines']);   // one shortage line (Beta)
+        $this->assertSame(1, $rec['kpi']['short_lines']);
+    }
+
+    public function test_an_out_of_stock_shop_that_gets_nothing_is_starved(): void
+    {
+        $i = $this->item('Cola', $this->a, 0, 5, 10, '2026-10-07');
+        $this->warehouseHas($i, 0);
+
+        $rec = $this->build();
+
+        $this->assertTrue($this->rows($rec, $this->a)['Cola']['starved']);
+        $this->assertTrue($rec['pick'][0]['starved']);
+        $this->assertSame(1, $rec['kpi']['starved']);
     }
 
     public function test_splitting_inside_a_tier_is_proportional_and_leftovers_go_to_the_lowest_cover(): void
@@ -226,7 +255,7 @@ class OrderRecommendationsTest extends TestCase
 
     public function test_an_item_the_warehouse_does_not_have_is_a_shortage_and_an_unset_warehouse_is_not_checked(): void
     {
-        $this->item('Gone', $this->a, 0, 5, 10);                // the warehouse has no row for it
+        $this->item('Gone', $this->a, 0, 5, 10, '2026-10-07');  // the warehouse has no row for it
 
         $withWarehouse = $this->build();
         $row = $this->rows($withWarehouse, $this->a)['Gone'];
@@ -246,12 +275,12 @@ class OrderRecommendationsTest extends TestCase
 
     public function test_the_pick_list_aggregates_items_over_shops_sorted_by_urgency(): void
     {
-        $cola = $this->item('Cola', $this->a, 0, 5, 10);        // out in Alpha
+        $cola = $this->item('Cola', $this->a, 0, 5, 10, '2026-10-07');   // out in Alpha
         ItemOrderRule::query()->create(['shop_id' => $this->b->id, 'item_id' => $cola->id, 'min' => 5, 'max' => 20]);
         Stock::query()->create(['shop_id' => $this->b->id, 'item_id' => $cola->id, 'qty' => 4, 'stock_date' => '2026-10-07']);
-        $this->item('Water', $this->b, 3, 5, 8);                // low in Beta only
+        $water = $this->item('Water', $this->b, 3, 5, 8, '2026-10-07');  // low in Beta only
         $this->warehouseHas($cola, 100);
-        $this->warehouseHas(Item::query()->where('name', 'Water')->first(), 100);
+        $this->warehouseHas($water, 100);
 
         $rec = $this->build();
 
@@ -269,9 +298,9 @@ class OrderRecommendationsTest extends TestCase
 
     public function test_the_warehouse_shop_and_unrelated_shops_are_left_out_and_scope_applies(): void
     {
-        $this->item('Wh item', $this->wh, 0, 5, 10);            // the main warehouse is never replenished
-        $this->item('A item', $this->a, 0, 5, 10);
-        $this->item('B item', $this->b, 0, 5, 10);
+        $this->item('Wh item', $this->wh, 0, 5, 10, '2026-10-07');   // the main warehouse is never replenished
+        $this->item('A item', $this->a, 0, 5, 10, '2026-10-07');
+        $this->item('B item', $this->b, 0, 5, 10, '2026-10-07');
 
         $all = $this->build();
         $this->assertSame(['Alpha', 'Beta'], array_column($all['shops'], 'name'));
@@ -289,7 +318,7 @@ class OrderRecommendationsTest extends TestCase
 
     public function test_the_current_warehouse_snapshot_is_used_and_nothing_is_written(): void
     {
-        $i = $this->item('Cola', $this->a, 0, 5, 10);
+        $i = $this->item('Cola', $this->a, 0, 5, 10, '2026-10-07');
         Stock::query()->create(['shop_id' => $this->wh->id, 'item_id' => $i->id, 'qty' => 100, 'stock_date' => '2026-10-01']);
         $this->warehouseHas($i, 4);                              // newest snapshot says 4
         $before = Stock::query()->count();
@@ -299,5 +328,25 @@ class OrderRecommendationsTest extends TestCase
         $this->assertEquals(4, $row['send']);
         $this->assertEquals(6, $row['short']);
         $this->assertSame($before, Stock::query()->count());
+    }
+
+    public function test_open_orders_reduce_the_warehouse_stock_and_count_as_in_transit(): void
+    {
+        $i = $this->item('Cola', $this->a, 0, 5, 10, '2026-10-07');
+        $this->warehouseHas($i, 12);
+        $order = Order::query()->create(['shop_id' => $this->b->id, 'status' => OrderStatus::Confirmed]);
+        $order->items()->create(['item_id' => $i->id, 'qty' => 9]);
+        $done = Order::query()->create(['shop_id' => $this->b->id, 'status' => OrderStatus::Fulfilled]);
+        $done->items()->create(['item_id' => $i->id, 'qty' => 100]);   // fulfilled: already in the stock figures
+
+        $rec = $this->build();
+
+        $this->assertEquals(3, $rec['pick'][0]['available']);           // 12 - 9 on the open order
+        $this->assertEquals(3, $this->rows($rec, $this->a)['Cola']['send']);
+
+        $order2 = Order::query()->create(['shop_id' => $this->a->id, 'status' => OrderStatus::PendingApproval]);
+        $order2->items()->create(['item_id' => $i->id, 'qty' => 10]);   // 10 on the way to Alpha itself
+
+        $this->assertArrayNotHasKey('Cola', $this->rows($this->build(), $this->a));
     }
 }

@@ -221,13 +221,13 @@ class AjvaAITest extends TestCase
     public function test_a_failure_to_start_the_request_is_shown_in_the_modal_too(): void
     {
         config(['services.gemini.key' => 'test-key']);
-        config(['queue.default' => 'database']); // the test database has no jobs table
+        config(['queue.default' => 'database', 'queue.connections.database.table' => 'missing_jobs']); // dispatch fails: no such table
 
         Livewire::actingAs($this->admin())->test(Index::class)
             ->set('question', 'hi')->call('ask')
             ->assertSet('runId', '')
             ->assertSet('showErrorDetails', true)
-            ->assertSee('jobs');
+            ->assertSee('missing_jobs');
     }
 
     public function test_rate_limit_is_reported_in_plain_words(): void

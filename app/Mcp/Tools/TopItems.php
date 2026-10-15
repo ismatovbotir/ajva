@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\BaseTool;
+use App\Support\Warehouse;
 use Illuminate\Support\Facades\DB;
 
 class TopItems extends BaseTool
@@ -43,6 +44,7 @@ class TopItems extends BaseTool
             ->where('receipt_items.storno', false)
             ->whereBetween('receipts.created_at', [$from, $to])
             ->when($shopId, fn ($q) => $q->where('receipts.shop_id', $shopId))
+            ->when($shopId === null && Warehouse::shopId() !== null, fn ($q) => $q->where('receipts.shop_id', '!=', Warehouse::shopId()))
             ->groupBy('receipt_items.item_id', 'items.name')
             ->orderByRaw('SUM(receipt_items.qty) DESC')
             ->limit($limit)

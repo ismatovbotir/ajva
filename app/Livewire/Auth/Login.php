@@ -5,6 +5,7 @@ namespace App\Livewire\Auth;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -32,10 +33,17 @@ class Login extends Component
         $email = config('app.dev_auto_login_email');
 
         $user = $email
-            ? User::where('email', $email)->first()
-            : User::where('role', UserRole::Admin)->orderBy('id')->first();
+            ? User::where('email', $email)->where('is_active', true)->first()
+            : User::where('role', UserRole::Admin)->where('is_active', true)->orderBy('id')->first();
 
-        // Empty local database: create the seeder's default admin on the spot.
+        // Empty local database: create the seeder's default admin on the spot (never when the admin exists but is deactivated).
+        $deactivated = $email
+            ? User::where('email', $email)->exists()
+            : User::where('role', UserRole::Admin)->exists();
+        if ($user === null && $deactivated) {
+            return;
+        }
+
         $user ??= User::create([
             'name' => 'Admin',
             'email' => $email ?: 'admin@example.com',
@@ -58,8 +66,12 @@ class Login extends Component
             'password' => ['required', 'string'],
         ]);
 
-        if (! Auth::attempt($credentials, $this->remember)) {
-            $this->addError('email', __('These credentials do not match our records.'));
+        if (! Auth::attempt($credentials + ['is_active' => true], $this->remember)) {
+            // A deactivated account is told so only when the password was right.
+            $inactive = User::query()->where('email', $credentials['email'])->where('is_active', false)->first();
+            $this->addError('email', $inactive !== null && Hash::check($credentials['password'], $inactive->password)
+                ? __('This account is deactivated. Ask an administrator.')
+                : __('These credentials do not match our records.'));
 
             return;
         }

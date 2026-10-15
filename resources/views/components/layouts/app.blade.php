@@ -13,7 +13,8 @@
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
             ['label' => 'Receipt analytics', 'route' => 'receipt-analytics.index', 'icon' => 'receipt'],
-            ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard'],
+            ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard', 'roles' => ['admin']],
+            ['label' => 'Orders', 'route' => 'orders.index', 'icon' => 'clipboard'],
             ['label' => 'AjvaAI', 'route' => 'ajva-ai.index', 'icon' => 'sparkles', 'roles' => ['admin']],
         ]],
         ['label' => 'Entities', 'items' => [
@@ -28,6 +29,7 @@
             ['label' => 'MCP server', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
             ['label' => 'Monitors', 'route' => 'settings.monitors', 'icon' => 'monitor'],
             ['label' => 'Warehouse', 'route' => 'settings.warehouse', 'icon' => 'box'],
+            ['label' => 'Order rules', 'route' => 'settings.order-rules', 'icon' => 'clipboard'],
             ['label' => 'Users', 'route' => 'users.index', 'icon' => 'users'],
         ]],
     ])->map(function ($group) use ($currentRole) {
@@ -172,6 +174,7 @@
             </div>
         </div>
     </div>
+    <x-ui.confirm-modal />
     @livewireScripts
 </body>
 </html>

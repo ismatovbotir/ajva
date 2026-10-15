@@ -8,10 +8,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ? $title.' - '.config('app.name') : config('app.name') }}</title>
     <style>
-        /* Everything on the monitor is sized in rem, so the whole screen scales with the viewport. */
+        /* Everything on the monitor is sized in rem and the screen is a FIXED 16:9 stage of 96rem x 54rem (the TV ratio):
+           1rem = min(width/96, height/54), so it fills a 16:9 TV exactly and shows black bars on any other ratio. */
         html.monitor-root { font-size: 15px; }
         @media (min-width: 1024px) {
-            html.monitor-root { font-size: clamp(12px, min(1.05vw, 1.85vh), 40px); }
+            html.monitor-root { font-size: min(calc(100vw / 96), calc(100vh / 54)); }
         }
         html.monitor-root, html.monitor-root body { background: var(--color-slate-950); }
         .tabular { font-variant-numeric: tabular-nums; }
@@ -21,8 +22,7 @@
             .monitor-bar { transition: height .6s ease, width .6s ease; }
         }
     </style>
-    @if($public)
-        {{-- Public link only: saved Light/Dark choice (default dark) applied before first paint. --}}
+    {{-- Saved Light/Dark choice (default dark) applied before first paint, on every monitor screen. --}}
         <script>
             (function () {
                 try {
@@ -32,7 +32,6 @@
                 } catch (e) {}
             })();
         </script>
-    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>

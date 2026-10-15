@@ -49,14 +49,15 @@ class MonitorSettingsTest extends TestCase
         $component = Livewire::actingAs($admin)->test(MonitorsSettings::class)
             ->call('create')
             ->set('name', 'Boss TV')
-            ->set('type', 'warehouse')
+            ->set('templateSource', 'preset:warehouse')
             ->set('shopIds', [(string) $a->id])
             ->call('save')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertRedirect();
 
         $monitor = Monitor::query()->firstOrFail();
         $this->assertSame('Boss TV', $monitor->name);
-        $this->assertSame(MonitorType::Warehouse, $monitor->type);
+        $this->assertSame(MonitorType::Custom, $monitor->type, 'every new monitor has the constructor');
         $this->assertTrue($monitor->enabled);          // default on
         $this->assertFalse($monitor->show_profit);     // default off
         $this->assertNull($monitor->token);
@@ -65,7 +66,6 @@ class MonitorSettingsTest extends TestCase
         $component->call('edit', $monitor->id)
             ->assertSet('name', 'Boss TV')
             ->set('name', 'Lobby TV')
-            ->set('type', 'receipts')
             ->set('shopIds', [])                       // empty = all shops
             ->set('enabled', false)
             ->set('showProfit', true)
@@ -73,7 +73,7 @@ class MonitorSettingsTest extends TestCase
 
         $monitor->refresh();
         $this->assertSame('Lobby TV', $monitor->name);
-        $this->assertSame(MonitorType::Receipts, $monitor->type);
+        $this->assertSame(MonitorType::Custom, $monitor->type);
         $this->assertFalse($monitor->enabled);
         $this->assertTrue($monitor->show_profit);
         $this->assertSame(0, $monitor->shops()->count());
@@ -95,10 +95,13 @@ class MonitorSettingsTest extends TestCase
         Livewire::actingAs($admin)->test(MonitorsSettings::class)
             ->call('create')
             ->set('name', '')
-            ->set('type', 'nope')
+            ->set('templateSource', 'preset:nope')
             ->set('shopIds', ['9999'])
             ->call('save')
-            ->assertHasErrors(['name', 'type', 'shopIds.0']);
+            ->assertHasErrors(['name', 'shopIds.0']);
+
+        Livewire::actingAs($admin)->test(MonitorsSettings::class)
+            ->call('create')->set('name', 'Ok')->set('templateSource', 'preset:nope')->call('save')->assertHasErrors('templateSource');
 
         $this->assertSame(0, Monitor::query()->count());
 
@@ -164,13 +167,15 @@ class MonitorSettingsTest extends TestCase
 
     public function test_the_modal_keeps_the_public_profit_warning_and_shop_notes(): void
     {
+        $legacy = Monitor::factory()->type(MonitorType::Warehouse)->create();
+
         Livewire::actingAs(User::factory()->create())->test(MonitorsSettings::class)
             ->call('create')
             ->assertSee(__('Leave empty to show all shops.'))
             ->assertSee(__('Show profit on the public screen'))
             ->assertSee(__('Anyone with a public link can see the sales.'))
             ->assertDontSee(__('The main warehouse is excluded automatically.'))
-            ->set('type', 'warehouse')
+            ->call('edit', $legacy->id)
             ->assertSee(__('The main warehouse is excluded automatically.'));
     }
 
@@ -183,9 +188,13 @@ class MonitorSettingsTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        // Later migrations extend the table: roll the builder columns back first and re-apply them after.
+        $builder = require database_path('migrations/2026_10_15_100000_add_builder_columns_to_monitors_table.php');
         $migration = require database_path('migrations/2026_10_07_100000_create_monitors_table.php');
+        $builder->down();
         $migration->down();
         $migration->up();
+        $builder->up();
 
         $monitor = Monitor::query()->firstOrFail();
         $this->assertSame('Office monitor', $monitor->name);

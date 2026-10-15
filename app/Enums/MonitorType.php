@@ -12,6 +12,7 @@ enum MonitorType: string
     case Executive = 'executive';
     case Receipts = 'receipts';
     case Warehouse = 'warehouse';
+    case Custom = 'custom';
 
     public function label(): string
     {
@@ -19,6 +20,7 @@ enum MonitorType: string
             self::Executive => __('Executive'),
             self::Receipts => __('Receipts'),
             self::Warehouse => __('Warehouse'),
+            self::Custom => __('Custom'),
         };
     }
 
@@ -28,6 +30,7 @@ enum MonitorType: string
             self::Executive => __('Everything for the current day: sales, payments, shops and latest receipts.'),
             self::Receipts => __('Receipts analytics.'),
             self::Warehouse => __('Order recommendations per shop for the main warehouse.'),
+            self::Custom => __('Your own layout of widgets, built in the monitor builder.'),
         };
     }
 
@@ -37,6 +40,7 @@ enum MonitorType: string
             self::Executive => 'chart',
             self::Receipts => 'receipt',
             self::Warehouse => 'box',
+            self::Custom => 'chart',
         };
     }
 
@@ -46,6 +50,7 @@ enum MonitorType: string
             self::Executive => 'success',
             self::Receipts => 'info',
             self::Warehouse => 'warning',
+            self::Custom => 'default',
         };
     }
 

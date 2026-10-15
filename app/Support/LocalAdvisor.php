@@ -22,6 +22,7 @@ class LocalAdvisor
             'sales_summary' => self::salesSummary($data['totals'] ?? []),
             'stock_levels' => self::stockLevels($data['rows'] ?? []),
             'item_prices' => self::itemPrices($data['items'] ?? []),
+            'list_orders' => self::orders($data['orders'] ?? []),
             default => [],
         };
     }
@@ -107,6 +108,14 @@ class LocalAdvisor
             $notes[] = ['level' => $cancelled >= 5 ? 'warn' : 'info', 'text' => __('Cancelled receipts are :p % of all receipts for this day.', ['p' => self::fmt($cancelled)])];
         }
 
+        $c = $t['comparison'] ?? null;
+        if ($c) {
+            $worst = min(array_filter([$c['delta_prev_day_pct'], $c['delta_same_weekday_lw_pct']], fn ($d) => $d !== null) ?: [0]);
+            if ($worst < -15) {
+                $notes[] = ['level' => 'warn', 'text' => __('Sales are :p % below the same time yesterday or on the same weekday last week. Check which shops and hours fell.', ['p' => self::fmt(abs($worst))])];
+            }
+        }
+
         return $notes;
     }
 
@@ -135,5 +144,24 @@ class LocalAdvisor
         }
 
         return $thin === [] ? [] : [['level' => 'warn', 'text' => __(':n items have a sell price margin under 10 %: :names.', ['n' => count($thin), 'names' => implode(', ', array_slice(array_keys($thin), 0, 5))])]];
+    }
+
+    private static function orders(array $orders): array
+    {
+        $notes = [];
+
+        $failed = array_values(array_filter($orders, fn ($o) => ($o['sync_status'] ?? '') === 'failed'));
+        if ($failed !== []) {
+            $names = implode(', ', array_map(fn ($o) => $o['number'], array_slice($failed, 0, 5)));
+            $notes[] = ['level' => 'warn', 'text' => __(':n orders failed to sync to 1C: :names. Open each one and use Retry sync once the cause is fixed.', ['n' => count($failed), 'names' => $names])];
+        }
+
+        $unsent = array_values(array_filter($orders, fn ($o) => ($o['status'] ?? '') === 'draft' && in_array($o['telegram_status'] ?? '', ['failed', 'no_recipients', 'no_token'], true)));
+        if ($unsent !== []) {
+            $names = implode(', ', array_map(fn ($o) => $o['number'], array_slice($unsent, 0, 5)));
+            $notes[] = ['level' => 'warn', 'text' => __(':n draft orders did not reach the shop by Telegram: :names. Resend the link or ask the responsible person to open the panel.', ['n' => count($unsent), 'names' => $names])];
+        }
+
+        return $notes;
     }
 }

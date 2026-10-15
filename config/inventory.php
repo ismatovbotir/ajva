@@ -16,4 +16,22 @@ return [
 
     'cost_price_id' => (int) env('COST_PRICE_ID', 1),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Ordering / forecast
+    |--------------------------------------------------------------------------
+    |
+    | order_horizon_days  days of sales the order must cover (1-7): the default of
+    |                     the Ordering page and the horizon of the warehouse monitor.
+    | ordering_cache_seconds  how long the heavy forecast is cached (Refresh bypasses it).
+    | outlier_mad_factor  daily sales above median + factor x MAD are clipped per item.
+    |
+    */
+
+    'order_horizon_days' => (int) env('ORDER_HORIZON_DAYS', 3),
+
+    'ordering_cache_seconds' => (int) env('ORDERING_CACHE_SECONDS', 300),
+
+    'outlier_mad_factor' => (float) env('OUTLIER_MAD_FACTOR', 3),
+
 ];

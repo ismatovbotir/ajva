@@ -25,7 +25,12 @@ class User extends Authenticatable
         'password',
         'role',
         'can_see_profit',
+        'telegram_chat_id',
+        'is_active',
     ];
+
+    /** New users are active (same as the column default, also for models that were never reloaded). */
+    protected $attributes = ['is_active' => true];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -35,6 +40,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'telegram_chat_id',
     ];
 
     /**
@@ -47,6 +53,7 @@ class User extends Authenticatable
         'password' => 'hashed',
         'role' => UserRole::class,
         'can_see_profit' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function isAdmin(): bool

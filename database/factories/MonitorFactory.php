@@ -19,6 +19,8 @@ class MonitorFactory extends Factory
             'token' => null,
             'enabled' => true,
             'show_profit' => false,
+            'is_template' => false,
+            'layout_version' => 1,
         ];
     }
 

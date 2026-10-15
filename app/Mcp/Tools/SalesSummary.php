@@ -14,14 +14,18 @@ class SalesSummary extends BaseTool
 
     public function description(): string
     {
-        return 'Receipt counts and totals per shop for one day: successful sales, successful refunds and cancelled receipts, plus net total (sales minus refunds).';
+        return 'Receipt counts and totals per shop for one day: successful sales, successful refunds and cancelled receipts, plus net total (sales minus refunds). The main warehouse shop is left out unless asked for by shop_id. With compare=true the totals (and each shop) also carry the sale count and total of yesterday and of the same weekday last week at the same time of day, with percent deltas.';
     }
 
     public function schema(): array
     {
         return [
             'type' => 'object',
-            'properties' => ['date' => self::DATE_SCHEMA, 'shop_id' => self::SHOP_SCHEMA],
+            'properties' => [
+                'date' => self::DATE_SCHEMA,
+                'shop_id' => self::SHOP_SCHEMA,
+                'compare' => ['type' => 'boolean', 'description' => 'Also compare with yesterday and with the same weekday last week, cut at the same time of day (today: up to now; a past day: whole days). Percent deltas are null when the baseline has fewer than 10 receipts.'],
+            ],
         ];
     }
 
@@ -30,7 +34,7 @@ class SalesSummary extends BaseTool
         [$from, $to] = $this->dayRange($arguments);
         $shopId = $this->optionalInt($arguments, 'shop_id', 1);
 
-        $rows = DB::table('receipts')
+        $rows = $this->withoutWarehouse(DB::table('receipts'), 'shop_id', $shopId)
             ->whereBetween('created_at', [$from, $to])
             ->when($shopId, fn ($q) => $q->where('shop_id', $shopId))
             ->groupBy('shop_id')
@@ -65,6 +69,23 @@ class SalesSummary extends BaseTool
 
         $totals['net_total'] = $this->money($totals['sell_total'] - $totals['refund_total']);
 
-        return ['date' => $from->toDateString(), 'shops' => $shops, 'totals' => $totals];
+        $result = ['date' => $from->toDateString(), 'shops' => $shops, 'totals' => $totals];
+
+        if (! empty($arguments['compare'])) {
+            $windows = $this->comparisonWindows($from);
+            $now = $this->saleTotals(...$windows['today'], shopId: $shopId);
+            $prev = $this->saleTotals(...$windows['yesterday'], shopId: $shopId);
+            $week = $this->saleTotals(...$windows['week'], shopId: $shopId);
+
+            $sum = fn (array $set) => [array_sum(array_column($set, 0)), array_sum(array_column($set, 1))];
+            $result['comparison'] = $this->comparisonHeader($windows);
+            $result['totals']['comparison'] = $this->comparisonBlock($sum($now), $sum($prev), $sum($week));
+            foreach ($result['shops'] as $i => $row) {
+                $id = $row['shop_id'];
+                $result['shops'][$i]['comparison'] = $this->comparisonBlock($now[$id] ?? [0, 0.0], $prev[$id] ?? [0, 0.0], $week[$id] ?? [0, 0.0]);
+            }
+        }
+
+        return $result;
     }
 }

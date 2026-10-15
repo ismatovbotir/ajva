@@ -18,8 +18,8 @@ class ThemeTest extends TestCase
 
         $this->assertStringNotContainsString('data-theme', $html);
         $this->assertStringNotContainsString("localStorage.getItem('theme')", $html);
-        $this->assertStringNotContainsString('monitorTheme', $html);
-        $this->assertStringNotContainsString('aria-pressed', $html);
+        $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
+        $this->assertStringContainsString(':aria-pressed="light.toString()"', $html);
         $this->assertStringContainsString('md:bg-brand-700', $html);   // green sidebar
         $this->assertStringContainsString('bg-brand-700', $html);      // green mobile bar
     }
@@ -47,14 +47,14 @@ class ThemeTest extends TestCase
         $this->assertStringContainsString('monitor-root', $html);
     }
 
-    public function test_authenticated_monitor_stays_dark_without_a_toggle(): void
+    public function test_authenticated_monitor_has_the_light_dark_toggle_too(): void
     {
         $monitor = Monitor::factory()->create();
         $html = $this->actingAs(User::factory()->create())->get('/monitors/'.$monitor->id)->assertOk()->getContent();
 
         $this->assertStringContainsString('monitor-root', $html);
-        $this->assertStringNotContainsString('monitorTheme', $html);
-        $this->assertStringNotContainsString('aria-pressed', $html);
+        $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
+        $this->assertStringContainsString(':aria-pressed="light.toString()"', $html);
     }
 
     public function test_admin_palette_is_the_original_olive_and_series_colours(): void

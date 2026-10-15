@@ -186,4 +186,34 @@ class UsersTest extends TestCase
 
         $this->assertSame(1, User::count());
     }
+
+    public function test_the_telegram_chat_id_is_saved_validated_and_cleared(): void
+    {
+        $admin = User::factory()->create();
+        $target = User::factory()->operator()->create();
+
+        $c = Livewire::actingAs($admin)->test(Index::class)->call('edit', $target->id);
+        foreach (['abc', '12 34', str_repeat('1', 41), '--5'] as $bad) {
+            $c->set('telegramChatId', $bad)->call('save')->assertHasErrors('telegramChatId');
+        }
+
+        $c->set('telegramChatId', '-100123456')->call('save')->assertHasNoErrors();
+        $this->assertSame('-100123456', $target->fresh()->telegram_chat_id);
+
+        Livewire::actingAs($admin)->test(Index::class)->call('edit', $target->id)
+            ->assertSet('telegramChatId', '-100123456')->assertSee('@userinfobot')
+            ->set('telegramChatId', '')->call('save')->assertHasNoErrors();
+        $this->assertNull($target->fresh()->telegram_chat_id);
+    }
+
+    public function test_the_list_marks_users_with_telegram_and_operators_cannot_open_the_page(): void
+    {
+        $admin = User::factory()->create();
+        User::factory()->operator()->create(['name' => 'Linked Person', 'telegram_chat_id' => '987654']);
+
+        $this->actingAs($admin)->get(route('users.index'))->assertOk()->assertSee('Telegram')->assertDontSee('987654');
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAs(User::factory()->operator()->create(['telegram_chat_id' => '1']))->get(route('users.index'))->assertForbidden();
+    }
 }

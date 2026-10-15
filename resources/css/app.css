@@ -75,6 +75,23 @@ html.monitor-root[data-monitor-theme="light"] .bg-brand-600 {
 
 
 
+/*
+ * Custom monitor widget grid. Narrow screens: one column in reading order (the DOM is sorted by y, then x).
+ * md and up: 12 columns, each widget placed from its --gc / --gr custom properties (x, y, w, h of the layout).
+ */
+.mon-grid { display: grid; gap: 0.7rem; grid-template-columns: minmax(0, 1fr); }
+.mon-widget { min-height: 9rem; }
+@media (min-width: 768px) {
+    /* Rows share the free height of the screen (a TV shows the whole layout), never less than 4rem each. */
+    .mon-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(4rem, 1fr)); min-height: 100%; }
+    .mon-widget { grid-column: var(--gc); grid-row: var(--gr); min-height: 0; container-type: size; overflow: hidden; }
+}
+/* Short tiles drop the baseline values and keep only the delta chips. */
+@container (max-height: 6.4rem) { .mon-kpi-detail { display: none; } }
+/* Lists that do not fit wrap their last rows into an invisible second column instead of cutting a row in half. */
+.mon-list { display: flex; flex-flow: column wrap; overflow: hidden; align-content: flex-start; }
+.mon-list > * { width: 100%; }
+
 /* "Generating report" modal (analytics): entrance + indeterminate progress + spinner. */
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-panel-in { from { opacity: 0; transform: translateY(0.75rem) scale(0.96); } to { opacity: 1; transform: none; } }
@@ -104,3 +121,40 @@ html.monitor-root[data-monitor-theme="light"] .bg-brand-600 {
     .indeterminate-bar { animation: none; width: 100%; opacity: 0.6; }
     .spinner { animation-duration: 3s; }
 }
+
+/* ---- Monitor builder: the real widget grid inside a 16:9 TV frame ----
+   Everything on the monitor is sized in rem and the TV root font is ~1/96 of the screen width, so a frame of 96rem x 54rem
+   lays the widgets out exactly like a 16:9 screen, at any size. The frame is scaled to fit the page with a CSS transform
+   (--s), and the 12-column rules apply at every viewport width (the real screen collapses to one column below md). */
+.mon-frame { width: 96rem; height: 54rem; transform-origin: 0 0; }
+.mon-frame .mon-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(4rem, 1fr)); min-height: 100%; position: relative; }
+.mon-frame .mon-widget, .mon-frame .mon-overlay { grid-column: var(--gc); grid-row: var(--gr); min-height: 0; }
+.mon-frame .mon-widget { container-type: size; overflow: hidden; }
+/* Overlay layer of the edit canvas: captures the pointer (the real widget below is not clickable), shows the outline,
+   the size badge and the 8 resize handles. Sizes are divided by the zoom so handles stay ~14 screen pixels. */
+.mon-overlay { position: relative; z-index: 5; border-radius: 1rem; cursor: grab; touch-action: none; user-select: none; --hs: calc(14px / var(--s, 1)); }
+.mon-overlay:hover { box-shadow: 0 0 0 calc(2px / var(--s, 1)) rgb(96 165 250 / .6); }
+.mon-overlay.is-selected { box-shadow: 0 0 0 calc(3px / var(--s, 1)) #3b82f6; background: rgb(59 130 246 / .06); }
+.mon-overlay.is-active { opacity: .35; }
+.mon-overlay:focus-visible { outline: calc(3px / var(--s, 1)) solid #fff; outline-offset: calc(2px / var(--s, 1)); }
+.mon-h { position: absolute; z-index: 6; width: var(--hs); height: var(--hs); opacity: 0; touch-action: none; }
+.mon-overlay:hover .mon-h, .mon-overlay.is-selected .mon-h { opacity: 1; }
+.mon-h > i { position: absolute; background: #fff; border: calc(2px / var(--s, 1)) solid #3b82f6; border-radius: calc(3px / var(--s, 1)); }
+.mon-h[data-edge="nw"], .mon-h[data-edge="ne"], .mon-h[data-edge="se"], .mon-h[data-edge="sw"] { z-index: 7; }
+.mon-h[data-edge="nw"] > i, .mon-h[data-edge="ne"] > i, .mon-h[data-edge="se"] > i, .mon-h[data-edge="sw"] > i { inset: 10%; }
+.mon-h[data-edge="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.mon-h[data-edge="ne"] { right: 0; top: 0; cursor: nesw-resize; }
+.mon-h[data-edge="se"] { right: 0; bottom: 0; cursor: nwse-resize; }
+.mon-h[data-edge="sw"] { left: 0; bottom: 0; cursor: nesw-resize; }
+.mon-h[data-edge="n"], .mon-h[data-edge="s"] { left: var(--hs); right: var(--hs); width: auto; cursor: ns-resize; }
+.mon-h[data-edge="e"], .mon-h[data-edge="w"] { top: var(--hs); bottom: var(--hs); height: auto; cursor: ew-resize; }
+.mon-h[data-edge="n"] { top: 0; } .mon-h[data-edge="s"] { bottom: 0; } .mon-h[data-edge="e"] { right: 0; } .mon-h[data-edge="w"] { left: 0; }
+.mon-h[data-edge="n"] > i, .mon-h[data-edge="s"] > i { left: 50%; width: calc(var(--hs) * 2.4); height: calc(var(--hs) * .45); top: 25%; transform: translateX(-50%); }
+.mon-h[data-edge="e"] > i, .mon-h[data-edge="w"] > i { top: 50%; height: calc(var(--hs) * 2.4); width: calc(var(--hs) * .45); left: 25%; transform: translateY(-50%); }
+.mon-badge { position: absolute; left: 50%; top: 50%; z-index: 8; transform: translate(-50%, -50%); padding: calc(3px / var(--s, 1)) calc(10px / var(--s, 1)); border-radius: 999px; background: #1d4ed8; color: #fff; font-weight: 700; font-size: calc(13px / var(--s, 1)); pointer-events: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mon-ghost { position: absolute; z-index: 9; pointer-events: none; border-radius: 1rem; border: calc(2px / var(--s, 1)) dashed #3b82f6; background: rgb(59 130 246 / .18); }
+.mon-tools { position: absolute; right: calc(24px / var(--s, 1)); top: calc(6px / var(--s, 1)); z-index: 8; display: flex; gap: calc(4px / var(--s, 1)); }
+.mon-tools button { height: calc(24px / var(--s, 1)); min-width: calc(24px / var(--s, 1)); padding: 0 calc(6px / var(--s, 1)); font-size: calc(13px / var(--s, 1)); border-radius: calc(6px / var(--s, 1)); background: #fff; color: #0f172a; font-weight: 600; cursor: pointer; border: 0; }
+.mon-tools button.danger { background: #dc2626; color: #fff; }
+@media (prefers-reduced-motion: no-preference) { .mon-overlay { transition: box-shadow .12s ease; } }
+.mon-size { position: absolute; left: calc(6px / var(--s, 1)); top: calc(6px / var(--s, 1)); z-index: 8; padding: calc(2px / var(--s, 1)) calc(8px / var(--s, 1)); border-radius: 999px; background: #1d4ed8; color: #fff; font-weight: 700; font-size: calc(12px / var(--s, 1)); pointer-events: none; font-variant-numeric: tabular-nums; }

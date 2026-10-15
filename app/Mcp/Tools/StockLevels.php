@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\BaseTool;
 use App\Mcp\InvalidArguments;
 use App\Models\Stock;
+use App\Support\Warehouse;
 use Illuminate\Support\Facades\DB;
 
 class StockLevels extends BaseTool
@@ -16,7 +17,7 @@ class StockLevels extends BaseTool
 
     public function description(): string
     {
-        return 'Current stock per shop and item (as last synced from 1C) with the min/max order rule and a below_min flag.';
+        return 'Current stock per shop and item (the latest 1C snapshot of each pair; with date the snapshot on or before it) with the min/max order rule and a below_min flag. Rows of the main warehouse shop carry is_warehouse=true (the warehouse has no min/max rule).';
     }
 
     public function schema(): array
@@ -66,6 +67,8 @@ class StockLevels extends BaseTool
                 'groups.name as group', 'stocks.qty', 'stocks.stock_date', 'item_order_rules.min', 'item_order_rules.max',
             ]);
 
+        $warehouseId = Warehouse::shopId();
+
         return [
             'as_of' => $asOf,
             'rows' => $rows->map(fn ($r) => [
@@ -74,6 +77,7 @@ class StockLevels extends BaseTool
                 'item_id' => (int) $r->item_id,
                 'item' => $r->item,
                 'group' => $r->group,
+                'is_warehouse' => (int) $r->shop_id === $warehouseId,
                 'qty' => round((float) $r->qty, 3),
                 'stock_date' => $r->stock_date,
                 'min' => $r->min === null ? null : round((float) $r->min, 3),

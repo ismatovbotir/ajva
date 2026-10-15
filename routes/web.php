@@ -2,8 +2,6 @@
 
 use App\Livewire\AjvaAI\Index as AjvaAIIndex;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
-use App\Livewire\ReceiptAnalytics\Index as ReceiptAnalyticsIndex;
-use App\Livewire\Ordering\Index as OrderingIndex;
 use App\Livewire\Auth\Login;
 use App\Livewire\Categories\Index as CategoriesIndex;
 use App\Livewire\Dashboard;
@@ -12,12 +10,19 @@ use App\Livewire\Items\Index as ItemsIndex;
 use App\Livewire\Items\Show as ItemsShow;
 use App\Livewire\MonitorList;
 use App\Livewire\MonitorScreen;
+use App\Livewire\Ordering\Index as OrderingIndex;
+use App\Livewire\Orders\Index as OrdersIndex;
+use App\Livewire\Orders\PublicDraft as OrdersPublicDraft;
+use App\Livewire\Orders\Show as OrdersShow;
 use App\Livewire\Pos\Index as PosIndex;
 use App\Livewire\Prices\Index as PricesIndex;
+use App\Livewire\ReceiptAnalytics\Index as ReceiptAnalyticsIndex;
 use App\Livewire\Receipts\Index as ReceiptsIndex;
 use App\Livewire\Receipts\Show as ReceiptsShow;
 use App\Livewire\Settings\Mcp as McpSettingsPage;
+use App\Livewire\Settings\MonitorBuilder as MonitorBuilderPage;
 use App\Livewire\Settings\Monitors as MonitorsSettings;
+use App\Livewire\Settings\OrderRules as OrderRulesSettings;
 use App\Livewire\Settings\Warehouse as WarehouseSettings;
 use App\Livewire\Shops\Index as ShopsIndex;
 use App\Livewire\Shops\Show as ShopsShow;
@@ -55,6 +60,14 @@ Route::get('/monitor/{token}', MonitorScreen::class)
     ->middleware(['throttle:60,1', 'monitor.headers'])
     ->name('monitor.public');
 
+// PERSONAL secret link of a DRAFT order for one shop manager (sent to Telegram): the token is the only credential, belongs
+// to one user (order_links) and works only while the order is a draft and the user is active and assigned to the shop
+// (anything else = plain 404, re-checked on every Livewire request). Changes are recorded for that user.
+Route::get('/o/{token}', OrdersPublicDraft::class)
+    ->where('token', '[0-9a-f\-]{36}')
+    ->middleware(['throttle:60,1', 'public.headers'])
+    ->name('orders.public');
+
 Route::middleware('auth')->group(function () {
     // Roles: admin = everything, operator = everything except settings,
     // monitor = the monitor screen only (see App\Enums\UserRole).
@@ -79,14 +92,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
         Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
         Route::get('/receipt-analytics', ReceiptAnalyticsIndex::class)->name('receipt-analytics.index');
-        Route::get('/ordering', OrderingIndex::class)->name('ordering.index');
+        Route::get('/orders', OrdersIndex::class)->name('orders.index');
+        Route::get('/orders/{order}', OrdersShow::class)->name('orders.show');
     });
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('/ordering', OrderingIndex::class)->name('ordering.index');
         Route::get('/ajva-ai', AjvaAIIndex::class)->name('ajva-ai.index');
         Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
         Route::get('/settings/monitors', MonitorsSettings::class)->name('settings.monitors');
+        Route::get('/settings/monitors/{monitor}/builder', MonitorBuilderPage::class)->name('settings.monitors.builder');
         Route::redirect('/settings/monitor', '/settings/monitors')->name('settings.monitor');
+        Route::get('/settings/order-rules', OrderRulesSettings::class)->name('settings.order-rules');
         Route::get('/settings/warehouse', WarehouseSettings::class)->name('settings.warehouse');
         Route::get('/settings/users', UsersIndex::class)->name('users.index');
     });

@@ -59,7 +59,7 @@
         </dl>
 
         <div class="mt-4">
-            <x-ui.button type="button" wire:click="generateToken"
+            <x-ui.button type="button" wire:click="generateToken" data-confirm-tone="{{ $hasStoredToken ? 'danger' : 'primary' }}"
                          wire:confirm="{{ $hasStoredToken ? __('Generate a new token? The current one stops working immediately.') : __('Generate a token?') }}">
                 {{ $hasStoredToken ? __('Regenerate token') : __('Generate token') }}
             </x-ui.button>

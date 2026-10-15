@@ -25,7 +25,10 @@ class RouteServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            // POS terminals of one shop share an IP and post every receipt as it happens:
+            // a low limit would 429 (and lose) receipts, so ingestion gets a generous one.
+            // Only the MCP route has its own, stricter throttle.
+            return Limit::perMinute(1200)->by($request->user()?->id ?: $request->ip());
         });
 
         $this->routes(function () {

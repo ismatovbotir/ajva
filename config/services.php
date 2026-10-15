@@ -27,6 +27,21 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
     ],
 
+    // Replenishment orders are pushed to 1C after confirmation (App\Jobs\SyncOrderTo1C).
+    'onec' => [
+        'orders_url' => env('ONEC_ORDERS_URL'),
+        'token' => env('ONEC_ORDERS_TOKEN'),
+        'timeout' => (int) env('ONEC_ORDERS_TIMEOUT', 30),
+    ],
+
+    // Telegram bot that sends the daily draft order link to the shop managers (App\Services\Telegram).
+    // Create the bot with @BotFather and put its token here; managers must press Start in the bot first.
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        // Bot username without @: builds the connect link t.me/<username>?start=<code> in Settings > Users.
+        'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+    ],
+
     'pos' => [
         'token' => env('POS_API_TOKEN'),
     ],

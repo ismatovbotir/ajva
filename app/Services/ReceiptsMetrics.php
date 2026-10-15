@@ -29,7 +29,10 @@ use Illuminate\Support\Facades\DB;
  * busiest / quietest shop   most / fewest sale receipts today among the shown shops (a shop without a sale is
  *                  the quietest; needs two or more shops)
  * tills active     distinct POS terminals with an active receipt in the last 30 minutes / POS terminals of the shops
- * baseline         same shops, yesterday from 00:00 up to the current time of day
+ * discount rate   discount / (total + discount) of sale receipts, in percent (total is paid, after the discount)
+ * baseline         same shops, yesterday from 00:00 up to the current time of day (`yesterday`), and the same weekday
+ *                  one week ago up to the same time of day (`week`, `deltas_w`). Every comparable figure therefore has
+ *                  two baselines (A = yesterday, B = same weekday last week), each cut at the same time of day.
  *
  * Everything is aggregated in SQL (one grouped query per question) over receipts for two days:
  * index receipts(created_at) / receipts(shop_id, created_at); at 66k receipts/day this is a range of ~130k
@@ -56,22 +59,24 @@ class ReceiptsMetrics
         $todayStart = $now->copy()->startOfDay();
         $yStart = $todayStart->copy()->subDay();
         $yCut = $now->copy()->subDay();
+        [$wStart, $wCut] = SalesMetrics::windows($now)['week'];
 
         $shops = ShopAccess::restrictTo(DB::table('shops')->orderBy('name')->orderBy('id'), 'id', $shopIds)->pluck('name', 'id')->all();
 
-        [$perShop, $lines] = $this->perShop($todayStart, $now, $yStart, $yCut, $shopIds);
+        [$perShop, $lines] = $this->perShop($todayStart, $now, $yStart, $yCut, $shopIds, $wStart, $wCut);
 
         $rows = [];
-        $total = [1 => $this->blank(), 0 => $this->blank()];
+        $total = [1 => $this->blank(), 0 => $this->blank(), 2 => $this->blank()];
         foreach ($shops as $id => $name) {
             $id = (int) $id;
             $row = ['id' => $id, 'name' => (string) $name];
-            foreach ([1 => 'today', 0 => 'yesterday'] as $w => $key) {
+            foreach ([1 => 'today', 0 => 'yesterday', 2 => 'week'] as $w => $key) {
                 $cell = $this->blank();
                 foreach (['s', 'r', 'c'] as $k) {
-                    $cell[$k] = $perShop[$id][$w][$k] ?? ['count' => 0, 'sum' => 0.0];
+                    $cell[$k] = $perShop[$id][$w][$k] ?? ['count' => 0, 'sum' => 0.0, 'disc' => 0.0];
                     $total[$w][$k]['count'] += $cell[$k]['count'];
                     $total[$w][$k]['sum'] += $cell[$k]['sum'];
+                    $total[$w][$k]['disc'] += $cell[$k]['disc'];
                 }
                 $cell['lines'] = $lines[$id][$w] ?? 0;
                 $total[$w]['lines'] += $cell['lines'];
@@ -79,12 +84,15 @@ class ReceiptsMetrics
             }
             $row['count_delta'] = $this->delta($row['today']['count'], $row['yesterday']['count']);
             $row['sum_delta'] = $this->delta($row['today']['sum'], $row['yesterday']['sum']);
+            $row['w_count_delta'] = $this->delta($row['today']['count'], $row['week']['count']);
+            $row['w_sum_delta'] = $this->delta($row['today']['sum'], $row['week']['sum']);
             $rows[] = $row;
         }
         usort($rows, fn ($a, $b) => [$b['today']['sum'], $b['today']['count'], $a['name']] <=> [$a['today']['sum'], $a['today']['count'], $b['name']]);
 
         $today = $this->derive($total[1]);
         $yesterday = $this->derive($total[0]);
+        $week = $this->derive($total[2]);
 
         $hourly = $this->hourly($todayStart, $now, $yStart, $yCut, $shopIds);
 
@@ -92,6 +100,13 @@ class ReceiptsMetrics
             'asOf' => $now->format('H:i'),
             'today' => $today,
             'yesterday' => $yesterday,
+            'week' => $week,
+            'deltas_w' => [
+                'count' => $this->deltaPair($today['count'], $week['count']),
+                'sum' => $this->deltaPair($today['sum'], $week['sum']),
+                'avg' => $this->deltaPair($today['avg'], $week['avg']),
+                'basket' => $this->deltaPair($today['basket'], $week['basket']),
+            ],
             'deltas' => [
                 'count' => $this->deltaPair($today['count'], $yesterday['count']),
                 'sum' => $this->deltaPair($today['sum'], $yesterday['sum']),
@@ -157,7 +172,7 @@ class ReceiptsMetrics
     /** @return array<string, mixed> */
     private function blank(): array
     {
-        return ['s' => ['count' => 0, 'sum' => 0.0], 'r' => ['count' => 0, 'sum' => 0.0], 'c' => ['count' => 0, 'sum' => 0.0], 'lines' => 0];
+        return ['s' => ['count' => 0, 'sum' => 0.0, 'disc' => 0.0], 'r' => ['count' => 0, 'sum' => 0.0, 'disc' => 0.0], 'c' => ['count' => 0, 'sum' => 0.0, 'disc' => 0.0], 'lines' => 0];
     }
 
     /**
@@ -175,6 +190,8 @@ class ReceiptsMetrics
             'sum' => $sum,
             'avg' => $count > 0 ? $sum / $count : 0.0,
             'basket' => $count > 0 ? $t['lines'] / $count : 0.0,
+            'discount' => (float) $t['s']['disc'],
+            'discount_percent' => ($sum + $t['s']['disc']) > 0 ? $t['s']['disc'] / ($sum + $t['s']['disc']) * 100 : 0.0,
             'refund_count' => (int) $t['r']['count'],
             'refund_sum' => (float) $t['r']['sum'],
             'refund_percent' => $all > 0 ? $t['r']['count'] / $all * 100 : 0.0,
@@ -186,45 +203,57 @@ class ReceiptsMetrics
         ];
     }
 
-    /** Adds the two comparison windows to a query on receipts (qualified column). */
-    private function windows($query, string $column, Carbon $todayStart, Carbon $now, Carbon $yStart, Carbon $yCut)
+    /** Adds the comparison windows (today, yesterday and optionally last week) to a query on receipts (qualified column). */
+    private function windows($query, string $column, Carbon $todayStart, Carbon $now, Carbon $yStart, Carbon $yCut, ?Carbon $wStart = null, ?Carbon $wCut = null)
     {
-        return $query->where(fn ($q) => $q
-            ->whereBetween($column, [$todayStart, $now])
-            ->orWhereBetween($column, [$yStart, $yCut]));
+        return $query->where(function ($q) use ($column, $todayStart, $now, $yStart, $yCut, $wStart, $wCut) {
+            $q->whereBetween($column, [$todayStart, $now])
+                ->orWhereBetween($column, [$yStart, $yCut]);
+
+            if ($wStart !== null && $wCut !== null) {
+                $q->orWhereBetween($column, [$wStart, $wCut]);
+            }
+        });
+    }
+
+    /** SQL window code: 1 today, 0 yesterday, 2 last week (the query is already limited to the three windows). */
+    private function windowCase(string $column): string
+    {
+        return "CASE WHEN {$column} >= ? THEN 1 WHEN {$column} >= ? THEN 0 ELSE 2 END";
     }
 
     /**
      * Receipts per shop, window (1 today, 0 yesterday-to-same-time) and kind (s sale, r refund, c cancelled),
      * and the positions of the sale receipts.
      *
-     * @return array{0: array<int, array<int, array<string, array{count: int, sum: float}>>>, 1: array<int, array<int, int>>}
+     * @return array{0: array<int, array<int, array<string, array{count: int, sum: float, disc: float}>>>, 1: array<int, array<int, int>>}
      */
-    private function perShop(Carbon $todayStart, Carbon $now, Carbon $yStart, Carbon $yCut, ?array $shopIds): array
+    private function perShop(Carbon $todayStart, Carbon $now, Carbon $yStart, Carbon $yCut, ?array $shopIds, Carbon $wStart, Carbon $wCut): array
     {
-        $rows = $this->windows(ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds), 'created_at', $todayStart, $now, $yStart, $yCut)
+        $rows = $this->windows(ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $shopIds), 'created_at', $todayStart, $now, $yStart, $yCut, $wStart, $wCut)
             ->groupBy('shop_id', 'w', 'k')
             ->selectRaw(
-                "shop_id, CASE WHEN created_at >= ? THEN 1 ELSE 0 END AS w, CASE WHEN active = 0 THEN 'c' WHEN sell = 1 THEN 's' ELSE 'r' END AS k, "
-                .'COUNT(*) AS c, SUM(CASE WHEN active = 1 AND sell = 1 THEN total ELSE ABS(total) END) AS s',
-                [$todayStart]
+                'shop_id, '.$this->windowCase('created_at')." AS w, CASE WHEN active = 0 THEN 'c' WHEN sell = 1 THEN 's' ELSE 'r' END AS k, "
+                .'COUNT(*) AS c, SUM(CASE WHEN active = 1 AND sell = 1 THEN total ELSE ABS(total) END) AS s, '
+                .'SUM(CASE WHEN active = 1 AND sell = 1 THEN discount ELSE 0 END) AS d',
+                [$todayStart, $yStart]
             )
             ->get();
 
         $perShop = [];
         foreach ($rows as $r) {
-            $perShop[(int) $r->shop_id][(int) $r->w][(string) $r->k] = ['count' => (int) $r->c, 'sum' => (float) $r->s];
+            $perShop[(int) $r->shop_id][(int) $r->w][(string) $r->k] = ['count' => (int) $r->c, 'sum' => (float) $r->s, 'disc' => (float) $r->d];
         }
 
         $lineRows = $this->windows(
             ShopAccess::restrictTo(DB::table('receipt_items as ri')->join('receipts', 'receipts.id', '=', 'ri.receipt_id'), 'receipts.shop_id', $shopIds),
-            'receipts.created_at', $todayStart, $now, $yStart, $yCut
+            'receipts.created_at', $todayStart, $now, $yStart, $yCut, $wStart, $wCut
         )
             ->where('receipts.active', true)
             ->where('receipts.sell', true)
             ->where('ri.storno', false)
             ->groupBy('receipts.shop_id', 'w')
-            ->selectRaw('receipts.shop_id AS shop_id, CASE WHEN receipts.created_at >= ? THEN 1 ELSE 0 END AS w, COUNT(*) AS n', [$todayStart])
+            ->selectRaw('receipts.shop_id AS shop_id, '.$this->windowCase('receipts.created_at').' AS w, COUNT(*) AS n', [$todayStart, $yStart])
             ->get();
 
         $lines = [];
