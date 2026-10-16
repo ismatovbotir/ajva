@@ -114,13 +114,52 @@
                     <input type="text" readonly value="{{ $generatedLink }}" data-generated-link class="mt-2 w-full rounded-lg border border-slate-300 bg-sand-50 px-3 py-2 text-xs text-slate-600" onfocus="this.select()" />
                 @endif
             @endif
+            @if($links !== [])
+                <ul class="mt-3 space-y-2" data-order-links>
+                    @foreach($links as $link)
+                        <li class="flex flex-wrap items-center gap-2" x-data="{ copied: false }" wire:key="plink-{{ $loop->index }}">
+                            <span class="w-40 shrink-0 truncate text-sm text-slate-700">{{ $link['name'] }}</span>
+                            <input type="text" readonly value="{{ $link['url'] }}" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-sand-50 px-3 py-2 text-xs text-slate-600" onfocus="this.select()" />
+                            <button type="button" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+                                    @click="navigator.clipboard?.writeText(@js($link['url'])); copied = true; setTimeout(() => copied = false, 1500)" x-text="copied ? @js(__('Copied')) : @js(__('Copy'))"></button>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
             <p class="mt-2 text-xs text-slate-500">{{ __('Telegram') }}: @include('livewire.orders.partials.telegram-badge', ['order' => $order])</p>
             @if($telegramNote !== '')
                 <p class="mt-2 text-sm {{ $telegramStatus === 'sent' ? 'text-brand-700' : 'text-amber-700' }}" data-telegram-result>{{ $telegramNote }}</p>
             @endif
         </x-ui.card>
     @elseif($order->status === \App\Enums\OrderStatus::Draft)
+        @if($links !== [])
+            <x-ui.card class="mt-4" data-my-link>
+                <h3 class="mb-1 text-sm font-semibold text-slate-700">{{ __('Your link for the phone') }}</h3>
+                <p class="mb-2 text-xs text-slate-500">{{ __('Open this link on your phone: a simple page with the items, quantities, a comment and the Accept button. It stops working when the order is confirmed.') }}</p>
+                <div class="flex flex-wrap items-center gap-2" x-data="{ copied: false }">
+                    <input type="text" readonly value="{{ $links[0]['url'] }}" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-sand-50 px-3 py-2 text-xs text-slate-600" onfocus="this.select()" />
+                    <a href="{{ $links[0]['url'] }}" target="_blank" rel="noopener noreferrer" class="shrink-0 rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600">{{ __('Open') }}</a>
+                    <button type="button" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700"
+                            @click="navigator.clipboard?.writeText(@js($links[0]['url'])); copied = true; setTimeout(() => copied = false, 1500)" x-text="copied ? @js(__('Copied')) : @js(__('Copy'))"></button>
+                </div>
+            </x-ui.card>
+        @endif
         <p class="mt-4 text-xs text-slate-500">{{ __('Telegram') }}: @include('livewire.orders.partials.telegram-badge', ['order' => $order])</p>
+    @endif
+
+    {{-- Comment of the responsible person: editable while a draft, shown when set afterwards --}}
+    @if($canEdit)
+        <x-ui.card class="mt-4">
+            <label for="order-comment" class="mb-1 block text-sm font-semibold text-slate-700">{{ __('Comment') }}</label>
+            <textarea id="order-comment" rows="3" maxlength="1000" wire:model="comment" wire:blur="saveComment" placeholder="{{ __('A note for the warehouse (optional)') }}"
+                      class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:ring-brand-600"></textarea>
+            @error('comment')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </x-ui.card>
+    @elseif((string) $order->comment !== '')
+        <x-ui.card class="mt-4" data-comment>
+            <h3 class="mb-1 text-sm font-semibold text-slate-700">{{ __('Comment') }}</h3>
+            <p class="whitespace-pre-line text-sm text-slate-700">{{ $order->comment }}</p>
+        </x-ui.card>
     @endif
 
     <div class="mt-4 flex flex-wrap gap-3">

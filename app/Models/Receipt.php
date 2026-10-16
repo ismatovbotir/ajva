@@ -11,6 +11,14 @@ class Receipt extends Model
 {
     use HasFactory;
 
+    /** Sent by a till in real time (POST /api/receipts). */
+    public const SOURCE_POS = 'pos';
+
+    /** Delivered by 1C in the history migration (POST /api/receipts/batch). */
+    public const SOURCE_HISTORY = 'history';
+
+    public const SOURCES = [self::SOURCE_POS, self::SOURCE_HISTORY];
+
     protected $fillable = [
         'pos_id',
         'shop_id',
@@ -34,6 +42,7 @@ class Receipt extends Model
         'pos_user_name',
         'pos_user_text',
         'aos',
+        'source',
     ];
 
     protected $casts = [

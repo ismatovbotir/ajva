@@ -28,9 +28,36 @@ trait EditsDraftOrder
     /** OrderEvent::CHANNEL_PANEL or OrderEvent::CHANNEL_LINK. */
     abstract protected function channel(): string;
 
-    private function logEvent(Order $order, string $action, ?int $itemId = null, ?float $old = null, ?float $new = null): void
+    /** The responsible person's free-text comment (loaded in mount, saved on blur and before confirming). */
+    public string $comment = '';
+
+    private function logEvent(Order $order, string $action, ?int $itemId = null, ?float $old = null, ?float $new = null, ?string $note = null): void
     {
-        OrderEvent::record($order, $this->actorId(), $this->channel(), $action, $itemId, $old, $new);
+        OrderEvent::record($order, $this->actorId(), $this->channel(), $action, $itemId, $old, $new, $note);
+    }
+
+    /** Stores the comment on the (editable) order and records the change; no-op when nothing changed. */
+    private function persistComment(Order $order): void
+    {
+        $text = trim(strip_tags($this->comment));
+        if (mb_strlen($text) > 1000) {
+            $this->addError('comment', __('The comment can be at most :max characters.', ['max' => 1000]));
+
+            return;
+        }
+        $this->resetErrorBag('comment');
+
+        if ($text === (string) $order->comment) {
+            return;
+        }
+
+        $order->forceFill(['comment' => $text === '' ? null : $text])->save();
+        $this->logEvent($order, OrderEvent::COMMENT, null, null, null, $text === '' ? __('removed') : mb_substr($text, 0, 255));
+    }
+
+    public function saveComment(): void
+    {
+        $this->persistComment($this->draftOrder());
     }
 
     /** Server-side check of a typed quantity: a number above 0 and sane. */

@@ -626,6 +626,7 @@ class CustomMonitorBuilderTest extends TestCase
             'cashier_operations' => ['refund_rate', 'cancelled_rate', 'discount_rate', 'tills_active', 'receipt_ticker', 'shop_leaderboard'],
             'fmcg_buyer' => ['top_items', 'low_cover_items', 'margin_pct', 'profit_by_shop', 'sync_freshness'],
             'receipts' => ['receipt_count', 'sales_revenue', 'avg_check', 'basket_size', 'hourly_sales', 'payment_mix', 'receipt_ticker', 'refund_rate', 'cancelled_rate', 'tills_active', 'discount_rate', 'shop_leaderboard'],
+            'assortment' => ['a_items_out', 'unsold_items', 'wh_out_of_stock', 'customer_share', 'abc_mix', 'abc_xyz_matrix', 'unsold_by_group'],
             'blank' => [],
         ];
 

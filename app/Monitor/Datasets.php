@@ -4,10 +4,13 @@ namespace App\Monitor;
 
 use App\Models\Shop;
 use App\Models\Stock;
+use App\Services\AssortmentAnalysis;
 use App\Services\ForecastService;
 use App\Services\OrderRecommendations;
 use App\Services\ReceiptsMetrics;
 use App\Services\SalesMetrics;
+use App\Services\UnsoldStock;
+use App\Services\WarehouseOutOfStock;
 use App\Support\MonitorScope;
 use App\Support\ShopAccess;
 use App\Support\Warehouse;
@@ -82,6 +85,10 @@ class Datasets
             'profit' => $this->profit(),
             'inventory' => $this->inventory(),
             'sync' => $this->sync(),
+            'assortment' => $this->assortment(),
+            'unsold' => $this->unsold(),
+            'wh_oos' => $this->warehouseOutOfStock(),
+            'customers' => $this->customers(),
             default => [],
         };
     }
@@ -221,6 +228,63 @@ class Datasets
             'warehouse_name' => $warehouseId === null ? null : Warehouse::shop()?->name,
             'stock_as_of' => $this->lastStockDate($shopIds),
         ];
+    }
+
+    /**
+     * The shops of the sales widgets as a concrete list (the assortment services need ids, not "all").
+     *
+     * @return array<int, int>
+     */
+    private function shopList(): array
+    {
+        return $this->salesShopIds() ?? Shop::query()->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /** ABC x XYZ over the last 12 whole weeks (AssortmentAnalysis); only the small figures the widgets draw are kept. */
+    private function assortment(): array
+    {
+        $to = $this->scope->now->copy()->subDay();
+        $r = app(AssortmentAnalysis::class)->build($to->copy()->subDays(83), $to, $this->shopList(), false);
+
+        return [
+            'items' => $r['kpi']['items'],
+            'weeks' => $r['window']['weeks'],
+            'xyz' => $r['window']['xyz'],
+            'abc' => $r['abc_summary'],
+            'matrix' => $r['matrix'],
+            'a_at_risk' => $r['kpi']['a_at_risk'],
+            'stock_as_of' => $r['kpi']['stock_as_of'],
+        ];
+    }
+
+    /** Stock without sales over the last 60 days (UnsoldStock), figures and groups only. */
+    private function unsold(): array
+    {
+        $to = $this->scope->now->copy()->subDay();
+        $r = app(UnsoldStock::class)->build($to->copy()->subDays(59), $to, $this->shopList(), false);
+
+        return ['days' => $r['window']['days'], 'kpi' => $r['kpi'], 'groups' => $r['groups']];
+    }
+
+    /** Main warehouse out-of-stock figures (WarehouseOutOfStock): state, sync dates and the KPI block. */
+    private function warehouseOutOfStock(): array
+    {
+        $d = app(WarehouseOutOfStock::class)->data($this->scope->now->copy());
+
+        return ['state' => $d['state'], 'ref' => $d['ref'], 'chain' => $d['chain'], 'partial' => $d['partial'], 'kpi' => $d['kpi'], 'warehouse' => $d['warehouse']];
+    }
+
+    /** Today's sale receipts and how many of them carry a customer / loyalty card (the aos JSON column, as in ReceiptAnalytics). */
+    private function customers(): array
+    {
+        $from = $this->scope->now->copy()->startOfDay();
+        $row = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $this->salesShopIds())
+            ->where('active', true)->where('sell', true)
+            ->whereBetween('created_at', [$from, $this->scope->now->copy()])
+            ->selectRaw("COUNT(*) AS n, SUM(CASE WHEN (aos IS NOT NULL AND aos NOT IN ('[]', '{}', 'null', '')) THEN 1 ELSE 0 END) AS c")
+            ->first();
+
+        return ['all' => (int) ($row->n ?? 0), 'with' => (int) ($row->c ?? 0)];
     }
 
     private function sync(): array

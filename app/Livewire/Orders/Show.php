@@ -45,6 +45,7 @@ class Show extends Component
         abort_unless(Gate::allows('view', $order), 404);
 
         $this->orderId = $order->id;
+        $this->comment = (string) $order->comment;
     }
 
     private function order(): Order
@@ -110,6 +111,13 @@ class Show extends Component
         $order = $this->order();
         Gate::authorize('confirm', $order);
 
+        if (Gate::allows('edit', $order)) {
+            $this->persistComment($order);
+            if ($this->getErrorBag()->has('comment')) {
+                return;
+            }
+        }
+
         app(OrderSync::class)->confirm($order, auth()->user());
         OrderingIndex::bumpOrdersVersion();
     }
@@ -145,7 +153,21 @@ class Show extends Component
                 ->orderBy('name')->limit(8)->get(['id', 'name']);
         }
 
+        // Personal links shown on the page: the admin sees every responsible person's link, an assigned operator his own
+        // (created on first view; what is done through a link is recorded for its owner).
+        $links = [];
+        if ($order->status === OrderStatus::Draft) {
+            if (Gate::allows('generate', Order::class)) {
+                foreach (OrderTelegram::responsible($order->shop_id) as $person) {
+                    $links[] = ['name' => $person->name, 'url' => OrderLink::forUser($order, $person)->url()];
+                }
+            } elseif (auth()->user() !== null && OrderLink::mayAct(auth()->user(), (int) $order->shop_id)) {
+                $links[] = ['name' => auth()->user()->name, 'url' => OrderLink::forUser($order, auth()->user())->url()];
+            }
+        }
+
         return view('livewire.orders.show', [
+            'links' => $links,
             'order' => $order,
             'items' => $items,
             'results' => $results,

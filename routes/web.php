@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\WarehouseOutOfStockController;
 use App\Livewire\AjvaAI\Index as AjvaAIIndex;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\Auth\Login;
@@ -23,10 +24,12 @@ use App\Livewire\Settings\Mcp as McpSettingsPage;
 use App\Livewire\Settings\MonitorBuilder as MonitorBuilderPage;
 use App\Livewire\Settings\Monitors as MonitorsSettings;
 use App\Livewire\Settings\OrderRules as OrderRulesSettings;
+use App\Livewire\Settings\ReceiptsSync as ReceiptsSyncSettings;
 use App\Livewire\Settings\Warehouse as WarehouseSettings;
 use App\Livewire\Shops\Index as ShopsIndex;
 use App\Livewire\Shops\Show as ShopsShow;
 use App\Livewire\Users\Index as UsersIndex;
+use App\Livewire\Warehouse\OutOfStock as WarehouseOutOfStock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -92,14 +95,20 @@ Route::middleware('auth')->group(function () {
         Route::get('/receipts/{receipt}', ReceiptsShow::class)->name('receipts.show');
         Route::get('/analytics', AnalyticsIndex::class)->name('analytics.index');
         Route::get('/receipt-analytics', ReceiptAnalyticsIndex::class)->name('receipt-analytics.index');
+        Route::get('/assortment', \App\Livewire\Assortment\Index::class)->name('assortment.index');
+        Route::get('/unsold-stock', \App\Livewire\UnsoldStock\Index::class)->name('unsold-stock.index');
         Route::get('/orders', OrdersIndex::class)->name('orders.index');
         Route::get('/orders/{order}', OrdersShow::class)->name('orders.show');
     });
 
     Route::middleware('role:admin')->group(function () {
         Route::get('/ordering', OrderingIndex::class)->name('ordering.index');
+        Route::get('/warehouse/out-of-stock', WarehouseOutOfStock::class)->name('warehouse.out-of-stock');
+        Route::get('/warehouse/out-of-stock/export', [WarehouseOutOfStockController::class, 'csv'])->name('warehouse.out-of-stock.csv');
+        Route::get('/warehouse/out-of-stock/print', [WarehouseOutOfStockController::class, 'print'])->name('warehouse.out-of-stock.print');
         Route::get('/ajva-ai', AjvaAIIndex::class)->name('ajva-ai.index');
         Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
+        Route::get('/settings/receipts-sync', ReceiptsSyncSettings::class)->name('settings.receipts-sync');
         Route::get('/settings/monitors', MonitorsSettings::class)->name('settings.monitors');
         Route::get('/settings/monitors/{monitor}/builder', MonitorBuilderPage::class)->name('settings.monitors.builder');
         Route::redirect('/settings/monitor', '/settings/monitors')->name('settings.monitor');

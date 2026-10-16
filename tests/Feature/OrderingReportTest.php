@@ -215,7 +215,7 @@ class OrderingReportTest extends TestCase
         $this->sellDaily($this->a, $x, 1);
         $user = User::factory()->create();
 
-        $component = Livewire::actingAs($user)->test(Index::class);
+        $component = Livewire::actingAs($user)->test(Index::class)->call("generate");
         $this->assertSame(3, $component->viewData('horizon'));
         $this->assertSame($this->a->id, $component->viewData('active')['id']);
         $before = $component->viewData('active')['rows'][0];
@@ -239,7 +239,7 @@ class OrderingReportTest extends TestCase
         $x = $this->item('X', $this->a, 4, 5, 20, '2026-09-01');
         $this->sellDaily($this->a, $x, 1);
 
-        $component = Livewire::actingAs(User::factory()->create())->test(Index::class);
+        $component = Livewire::actingAs(User::factory()->create())->test(Index::class)->call("generate");
         $this->assertNull($component->viewData('detail'));
         $heat = $component->viewData('heat');
         $this->assertSame(['X'], array_column($heat['items'], 'name'));
@@ -263,7 +263,9 @@ class OrderingReportTest extends TestCase
 
         $this->actingAs($op)->get('/ordering')->assertForbidden();
         $this->actingAs(User::factory()->monitor()->create())->get('/ordering')->assertStatus(302);
-        $this->actingAs(User::factory()->create())->get('/ordering')->assertOk()->assertSee('Only A');
+        // Opening the page calculates nothing: the figures appear only after Generate.
+        $this->actingAs(User::factory()->create())->get('/ordering')->assertOk()->assertSee(__('Generate'))->assertDontSee('Only A');
+        Livewire::actingAs(User::factory()->create())->test(Index::class)->assertSet('generated', false)->assertDontSee('Only A')->call('generate')->assertSet('generated', true)->assertSee('Only A');
 
         // The nav entry is not offered to operators.
         $this->actingAs($op)->get('/orders')->assertOk()->assertDontSee(route('ordering.index'));
@@ -282,7 +284,7 @@ class OrderingReportTest extends TestCase
         $admin = User::factory()->create();
         Queue::fake();
 
-        $component = Livewire::actingAs($admin)->test(Index::class)->call('prepareOrder', $this->a->id);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate")->call('prepareOrder', $this->a->id);
 
         $order = Order::query()->with('items')->sole();
         $this->assertSame(OrderStatus::Draft, $order->status);
@@ -308,7 +310,7 @@ class OrderingReportTest extends TestCase
     {
         $cola = $this->item('Cola', $this->a, 0, 5, 10);
         $admin = User::factory()->create();
-        $component = Livewire::actingAs($admin)->test(Index::class)->call('prepareOrder', $this->a->id);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate")->call('prepareOrder', $this->a->id);
         $draft = Order::query()->sole();
         $draft->items()->where('item_id', $cola->id)->update(['qty' => 3]);     // the shop edited it
         $manual = Item::factory()->create();
@@ -331,7 +333,7 @@ class OrderingReportTest extends TestCase
         $this->item('Cola', $this->a, 0, 5, 10);
         $this->item('Water', $this->b, 0, 5, 20);
 
-        Livewire::actingAs(User::factory()->create())->test(Index::class)->call('prepareAllOrders');
+        Livewire::actingAs(User::factory()->create())->test(Index::class)->call("generate")->call('prepareAllOrders');
 
         $this->assertSame(2, Order::query()->count());
         $this->assertEquals(10, Order::query()->where('shop_id', $this->a->id)->first()->items->sole()->qty);

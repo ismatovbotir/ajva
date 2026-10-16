@@ -38,11 +38,14 @@ return [
         Tools\ListPriceTypes::class,
         Tools\ItemPrices::class,
         Tools\ReceiptAnalyticsReport::class,
+        Tools\AssortmentAnalysisReport::class,
+        Tools\UnsoldStockReport::class,
         Tools\ListOrders::class,
         Tools\GetOrder::class,
         Tools\ReplenishmentForecast::class,
         Tools\OrderRulesReport::class,
         Tools\ListMonitors::class,
+        Tools\WarehouseOutOfStock::class,
     ],
 
 ];

@@ -28,8 +28,13 @@ export default function monitorCanvas({ cols = 12 } = {}) {
         floating: null,
         overCanvas: false,
         justDragged: false,
+        // Light / dark preview of the TV frame; the same localStorage key as the real monitor screens.
+        theme: 'dark',
 
         init() {
+            try {
+                this.theme = localStorage.getItem('monitorTheme') === 'light' ? 'light' : 'dark';
+            } catch (e) {}
             this.fit();
             const observer = new ResizeObserver(() => this.fit());
             observer.observe(this.$refs.stage);
@@ -57,6 +62,12 @@ export default function monitorCanvas({ cols = 12 } = {}) {
             const avail = (this.$refs.stage.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)) || this.frameW;
             // On a phone the whole screen is shown small (an overview); 75% / 100% in the zoom select give a scrollable close-up.
             this.scale = zoom === 'fit' ? clamp(avail / this.frameW, 0.2, 1.5) : parseFloat(zoom) || 1;
+        },
+
+        saveTheme() {
+            try {
+                localStorage.setItem('monitorTheme', this.theme);
+            } catch (e) {}
         },
 
         grid() {

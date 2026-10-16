@@ -61,6 +61,10 @@ class SampleDatasets extends Datasets
             'profit' => $this->profit(),
             'inventory' => $this->inventory(),
             'sync' => $this->sync(),
+            'assortment' => $this->assortment(),
+            'unsold' => $this->unsold(),
+            'wh_oos' => $this->warehouseOutOfStock(),
+            'customers' => $this->customers(),
             default => [],
         };
     }
@@ -300,6 +304,67 @@ class SampleDatasets extends Datasets
             'warehouse_name' => __('Warehouse'),
             'stock_as_of' => $this->sampleScope->now->copy()->subDay()->toDateString(),
         ];
+    }
+
+    private function assortment(): array
+    {
+        // Items and revenue share per ABC x XYZ cell (sums: 80 / 15 / 5 % of sales).
+        $cells = [
+            'A' => ['X' => [38, 52.0], 'Y' => [41, 21.0], 'Z' => [14, 7.0]],
+            'B' => ['X' => [62, 6.0], 'Y' => [118, 5.5], 'Z' => [64, 3.5]],
+            'C' => ['X' => [95, 1.6], 'Y' => [240, 1.9], 'Z' => [388, 1.5]],
+        ];
+        $matrix = [];
+        $abc = [];
+        foreach ($cells as $class => $cols) {
+            $abc[$class] = ['items' => 0, 'share' => 0.0];
+            foreach ($cols as $x => [$items, $share]) {
+                $matrix[$class][$x] = ['items' => $items, 'rev' => $share * 100_000, 'share' => $share];
+                $abc[$class]['items'] += $items;
+                $abc[$class]['share'] += $share;
+            }
+        }
+
+        return [
+            'items' => array_sum(array_column($abc, 'items')),
+            'weeks' => 12,
+            'xyz' => true,
+            'abc' => $abc,
+            'matrix' => $matrix,
+            'a_at_risk' => 6,
+            'stock_as_of' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+        ];
+    }
+
+    private function unsold(): array
+    {
+        $groups = [['Snacks', 46, 120], ['Drinks', 31, 140], ['Household', 28, 60], ['Sweets', 19, 95], ['Dairy', 9, 110], ['Bakery', 4, 40]];
+
+        return [
+            'days' => 60,
+            'kpi' => [
+                'stocked_items' => 565, 'unsold_items' => 137, 'unsold_share' => 137 / 565 * 100, 'unsold_units' => 4210.0,
+                'stock_as_of' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+            ],
+            'groups' => array_map(fn (array $g) => ['group' => $g[0], 'unsold' => $g[1], 'stocked' => $g[2], 'share' => $g[1] / $g[2] * 100], $groups),
+        ];
+    }
+
+    private function warehouseOutOfStock(): array
+    {
+        return [
+            'state' => 'ok',
+            'ref' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+            'chain' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+            'partial' => false,
+            'warehouse' => __('Warehouse'),
+            'kpi' => ['out' => 14, 'a' => 3, 'share' => 4.2, 'need' => 960.0, 'need_items' => 9, 'negative' => 0],
+        ];
+    }
+
+    private function customers(): array
+    {
+        return ['all' => 355, 'with' => 118];
     }
 
     private function sync(): array

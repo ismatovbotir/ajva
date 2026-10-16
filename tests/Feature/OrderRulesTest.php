@@ -146,7 +146,7 @@ class OrderRulesTest extends TestCase
 
         // The page: shop rules by default, a manual horizon applies to every shop, and back.
         $admin = User::factory()->create();
-        $component = Livewire::actingAs($admin)->test(Index::class)->call('selectShop', $this->a->id);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate")->call('selectShop', $this->a->id);
         $this->assertSame(6, $component->viewData('horizon'));            // shows the selected shop's own horizon
         $component->call('setHorizon', 2);
         $this->assertSame(2, $component->viewData('horizon'));
@@ -164,7 +164,7 @@ class OrderRulesTest extends TestCase
         $this->gapItem($this->a);
         $admin = User::factory()->create();
 
-        $component = Livewire::actingAs($admin)->test(Index::class);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate");
         $before = $component->viewData('active')['rows'][0];
         $this->assertSame('high', $before['confidence']);
 

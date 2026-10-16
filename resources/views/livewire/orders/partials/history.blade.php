@@ -20,6 +20,7 @@
                         'line_removed' => __('Removed :item (was :qty)', ['item' => $item, 'qty' => $fmtQty($event->old_qty)]),
                         'line_added' => __('Added :item (:qty)', ['item' => $item, 'qty' => $fmtQty($event->new_qty)]),
                         'confirmed' => __('Confirmed the order'),
+                        'comment' => __('Comment: :text', ['text' => $event->note]),
                         default => $event->action,
                     };
                 @endphp

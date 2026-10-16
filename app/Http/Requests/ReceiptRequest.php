@@ -71,6 +71,10 @@ class ReceiptRequest extends FormRequest
             'qtyPositions' => ['nullable', 'integer'],
             'session' => ['nullable', 'integer'],
             'type' => ['nullable', 'integer'],
+            // true / omitted = a sale, false = a refund (return) receipt; the job already honoured it but the rule was missing,
+            // so validated() dropped it and every receipt was stored as a sale.
+            'sell' => ['nullable', 'boolean'],
+            'client' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'string'],
             'sum' => ['nullable', 'numeric'],
             'sumWithDiscs' => ['nullable', 'numeric'],

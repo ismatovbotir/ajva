@@ -145,7 +145,7 @@
                     <x-ui.card>
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="font-medium text-slate-900">{{ $receipt->number }} <span class="ml-1 text-xs font-normal tabular-nums text-slate-500">{{ $receipt->created_at->format('H:i:s') }}</span></p>
+                                <p class="font-medium text-slate-900">{{ $receipt->number }} <span class="ml-1 text-xs font-normal tabular-nums text-slate-500">{{ $receipt->created_at->format('H:i:s') }}</span>@if($receipt->source !== \App\Models\Receipt::SOURCE_POS)<x-ui.badge class="ml-1">{{ __('History') }}</x-ui.badge>@endif</p>
                                 <p class="text-sm text-slate-500">{{ $receipt->shop->name }} &middot; {{ $receipt->pos->name }}</p>
                             </div>
                             <div class="text-right">

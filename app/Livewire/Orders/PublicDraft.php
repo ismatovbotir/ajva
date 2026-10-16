@@ -38,7 +38,7 @@ class PublicDraft extends Component
     public function mount(string $token): void
     {
         $this->token = $token;
-        $this->order();
+        $this->comment = (string) $this->order()->comment;
     }
 
     public function hydrate(): void
@@ -86,6 +86,12 @@ class PublicDraft extends Component
         if ($order->items()->count() === 0) {
             $this->addError('confirm', __('The order is empty. Add at least one item.'));
 
+            return;
+        }
+
+        // What is typed in the comment box counts even when the field was never blurred.
+        $this->persistComment($order);
+        if ($this->getErrorBag()->has('comment')) {
             return;
         }
 

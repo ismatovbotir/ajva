@@ -13,6 +13,9 @@
             ['label' => 'Receipts', 'route' => 'receipts.index', 'icon' => 'receipt'],
             ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
             ['label' => 'Receipt analytics', 'route' => 'receipt-analytics.index', 'icon' => 'receipt'],
+            ['label' => 'Assortment', 'route' => 'assortment.index', 'icon' => 'chart'],
+            ['label' => 'Stock without sales', 'route' => 'unsold-stock.index', 'icon' => 'archive'],
+            ['label' => 'Out of stock', 'route' => 'warehouse.out-of-stock', 'icon' => 'archive', 'roles' => ['admin']],
             ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'clipboard', 'roles' => ['admin']],
             ['label' => 'Orders', 'route' => 'orders.index', 'icon' => 'clipboard'],
             ['label' => 'AjvaAI', 'route' => 'ajva-ai.index', 'icon' => 'sparkles', 'roles' => ['admin']],
@@ -30,6 +33,7 @@
             ['label' => 'Monitors', 'route' => 'settings.monitors', 'icon' => 'monitor'],
             ['label' => 'Warehouse', 'route' => 'settings.warehouse', 'icon' => 'box'],
             ['label' => 'Order rules', 'route' => 'settings.order-rules', 'icon' => 'clipboard'],
+            ['label' => 'Receipts migration (1C)', 'route' => 'settings.receipts-sync', 'icon' => 'receipt'],
             ['label' => 'Users', 'route' => 'users.index', 'icon' => 'users'],
         ]],
     ])->map(function ($group) use ($currentRole) {

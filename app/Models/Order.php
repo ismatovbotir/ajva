@@ -34,6 +34,7 @@ class Order extends Model
         'telegram_sent_at',
         'telegram_note',
         'telegram_recipients_ok',
+        'comment',
     ];
 
     protected $casts = [

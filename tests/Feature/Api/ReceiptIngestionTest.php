@@ -404,6 +404,36 @@ class ReceiptIngestionTest extends TestCase
         $this->assertSame(2, Receipt::where('number', 'A-1024')->count());
     }
 
+    public function test_the_same_number_in_another_shift_is_a_different_receipt_and_a_resend_is_not(): void
+    {
+        $pos = Pos::factory()->create();
+        $send = fn (int $session, float $total) => $this->withToken('test-pos-token')
+            ->postJson('/api/receipts', array_merge($this->payload(['positions' => [], 'total' => $total, 'sum' => $total]), ['pos' => $pos->id, 'session' => $session]))
+            ->assertStatus(202);
+
+        $send(1, 1000);
+        $send(2, 2000);   // the number restarted in the next shift: must NOT overwrite the first one
+        $send(2, 2500);   // the same shift and number again: an update, not a duplicate
+
+        $rows = Receipt::where('pos_id', $pos->id)->where('number', 'A-1024')->orderBy('session')->get();
+        $this->assertSame([1, 2], $rows->pluck('session')->all());
+        $this->assertEquals([1000, 2500], $rows->pluck('total')->map(fn ($t) => (float) $t)->all());
+    }
+
+    public function test_a_receipt_without_a_session_is_stored_with_session_zero_and_stays_unique(): void
+    {
+        $pos = Pos::factory()->create();
+        $payload = $this->payload(['positions' => []]);
+        unset($payload['session']);
+        $payload['pos'] = $pos->id;
+
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)->assertStatus(202);
+        $this->withToken('test-pos-token')->postJson('/api/receipts', $payload)->assertStatus(202);
+
+        $this->assertSame(1, Receipt::where('pos_id', $pos->id)->count());
+        $this->assertSame(0, (int) Receipt::where('pos_id', $pos->id)->value('session'));
+    }
+
     public function test_validation_failure_returns_json(): void
     {
         $pos = Pos::factory()->create();

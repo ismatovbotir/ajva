@@ -478,7 +478,7 @@ class CustomMonitorDataTest extends TestCase
                 $this->assertNotContains(Diagram::Donut, $def->diagrams);
             }
             if (in_array(Diagram::Gauge, $def->diagrams, true)) {
-                $this->assertContains($def->key, ['refund_rate', 'cancelled_rate', 'discount_rate', 'tills_active', 'margin_pct', 'wh_cover'], 'gauge is for rates only');
+                $this->assertContains($def->key, ['refund_rate', 'cancelled_rate', 'discount_rate', 'tills_active', 'margin_pct', 'wh_cover', 'unsold_items', 'customer_share'], 'gauge is for rates only');
             }
         }
     }

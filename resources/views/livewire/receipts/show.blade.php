@@ -1,5 +1,5 @@
 <div>
-    <x-ui.page-header :title="__('Receipt').' '.$receipt->number" :subtitle="$receipt->shop->name.' · '.$receipt->pos->name">
+    <x-ui.page-header :title="__('Receipt').' '.$receipt->number" :subtitle="$receipt->shop->name.' · '.$receipt->pos->name.' · '.($receipt->source === \App\Models\Receipt::SOURCE_HISTORY ? __('Source: 1C history') : __('Source: till'))">
         <x-slot:actions>
             <x-ui.button variant="secondary" :href="route('receipts.index')">{{ __('Back to receipts') }}</x-ui.button>
         </x-slot:actions>

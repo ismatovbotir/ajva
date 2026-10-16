@@ -76,13 +76,20 @@
                 <option value="0.75">75%</option>
             </select>
         </label>
+        <label class="flex items-center gap-2 text-slate-700">
+            <span class="font-medium">{{ __('Theme') }}</span>
+            <select x-model="theme" @change="saveTheme()" aria-label="{{ __('Theme') }}" data-mon-select class="rounded-lg border-slate-300 text-sm focus:border-brand-600 focus:ring-brand-600">
+                <option value="dark">{{ __('Dark theme') }}</option>
+                <option value="light">{{ __('Light theme') }}</option>
+            </select>
+        </label>
         <span class="text-xs text-slate-500">{{ __('The frame is a 16:9 TV screen; the grid has :rows rows.', ['rows' => $rows]) }}</span>
     </div>
 
     {{-- Stage: the TV frame, scaled to the page --}}
     <div x-ref="stage" class="overflow-x-auto rounded-xl bg-slate-200 p-2" wire:ignore.self>
         <div :style="{ width: (frameW * scale) + 'px', height: (frameH * scale + 56) + 'px' }" wire:ignore.self>
-            <div x-ref="frame" wire:ignore.self
+            <div x-ref="frame" wire:ignore.self :data-mon-theme="theme"
                  :style="{ transform: 'scale(' + scale + ')', '--s': scale }"
                  class="mon-frame flex flex-col gap-[0.9rem] rounded-[1rem] border border-slate-700 bg-slate-950 p-[1rem] text-slate-100 antialiased" style="font-size: 16px;">
                 {{-- The header strip of the real screen (same height), so the grid below gets the same room --}}

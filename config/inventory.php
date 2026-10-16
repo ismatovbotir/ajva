@@ -34,4 +34,21 @@ return [
 
     'outlier_mad_factor' => (float) env('OUTLIER_MAD_FACTOR', 3),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Out of stock (main warehouse)
+    |--------------------------------------------------------------------------
+    |
+    | warehouse_sync_min_coverage  items reported by the latest warehouse sync / items reported by the
+    |                              previous one; below it the sync looks incomplete (partial) and the
+    |                              list is only a warning.
+    | warehouse_history_days       only items with a positive warehouse quantity within this many days
+    |                              of the latest warehouse sync are considered.
+    |
+    */
+
+    'warehouse_sync_min_coverage' => (float) env('WAREHOUSE_SYNC_MIN_COVERAGE', 0.7),
+
+    'warehouse_history_days' => (int) env('WAREHOUSE_HISTORY_DAYS', 60),
+
 ];

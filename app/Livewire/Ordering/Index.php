@@ -54,6 +54,12 @@ class Index extends Component
     /** Changes on every Refresh press; part of the cache key. */
     public string $runKey = 'initial';
 
+    /**
+     * false until the admin presses Generate (or Refresh): opening the page calculates nothing, the forecast is heavy
+     * and the admin may want to pick the cover days first.
+     */
+    public bool $generated = false;
+
     public int $horizon = 0;
 
     /**
@@ -102,8 +108,15 @@ class Index extends Component
         $this->horizon = ForecastService::horizon();
     }
 
+    /** The Generate button (always shown): every press recalculates from fresh data (same work as refresh()). */
+    public function generate(): void
+    {
+        $this->refresh();
+    }
+
     public function refresh(): void
     {
+        $this->generated = true;
         $this->runKey = bin2hex(random_bytes(4));
         $this->notice = null;
 
@@ -137,6 +150,9 @@ class Index extends Component
     public function prepareOrder(int $shopId): void
     {
         ShopAccess::authorize($shopId);
+        if (! $this->generated) {
+            return;
+        }
 
         $this->notice = $this->prepare([$shopId]);
     }
@@ -144,6 +160,9 @@ class Index extends Component
     /** One separate draft per shop that has something to order. */
     public function prepareAllOrders(): void
     {
+        if (! $this->generated) {
+            return;
+        }
         $this->notice = $this->prepare(null);
     }
 
@@ -173,7 +192,8 @@ class Index extends Component
         $noShops = ShopAccess::hasNone();
         $this->horizon = ForecastService::horizon($this->horizon ?: null);
 
-        $plan = $noShops ? $this->emptyPlan() : $this->plan();
+        $ready = ! $noShops && $this->generated;
+        $plan = $ready ? $this->plan() : $this->emptyPlan();
         $shops = collect($plan['shops'])->sortBy('name')->values()->map(function (array $s) {
             $s['out'] = $s['counts']['out'];
 
@@ -190,13 +210,14 @@ class Index extends Component
             // With the shops' own rules the control shows the selected shop's horizon (the plan itself ignores this value).
             $this->horizon = ForecastService::horizon($active['horizon']);
         }
-        $charts = $this->charts($noShops || $shops->isEmpty(), $shops, $active);
+        $charts = $this->charts(! $ready || $shops->isEmpty(), $shops, $active);
 
         return view('livewire.ordering.index', [
             'heat' => $charts['heat'],
             'detail' => $charts['detail'],
             'openItem' => $this->openItem,
             'noShops' => $noShops,
+            'generated' => $this->generated,
             'horizon' => $this->horizon,
             'custom' => $this->custom,
             'horizons' => range(1, ForecastService::MAX_HORIZON),

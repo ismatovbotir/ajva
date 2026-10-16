@@ -26,6 +26,10 @@ class WidgetCatalog
 
     public const TOP_N_DEFAULT = 10;
 
+    private const ASSORTMENT_RULE = 'Rule: the last 12 whole weeks of successful sales (ABC by revenue share, XYZ by weekly variation). Stock as of the last sync.';
+
+    private const UNSOLD_RULE = 'Rule: current stock above 0 and no successful sale in the last 60 days. Items that just arrived also appear.';
+
     private const INVENTORY_RULE = 'Rule: the Ordering forecast (items with an order rule, horizon :days days). Stock as of the last 1C sync.';
 
     /** @var array<string, Widget>|null */
@@ -105,6 +109,20 @@ class WidgetCatalog
                 ttl: 120, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::INVENTORY_RULE),
             self::make('wh_cover', 'Warehouse coverage', 'Inventory', 'Share of the needed units the main warehouse can send.', 'single', ['kpi', 'gauge'], 'inventory',
                 ttl: 120, cost: 'medium', rule: self::INVENTORY_RULE),
+            self::make('abc_mix', 'ABC classes', 'Assortment', 'Share of sales of the A (first 80 %), B (next 15 %) and C (the rest) items over the last 12 weeks.', 'parts', ['donut', 'stacked_bar'], 'assortment',
+                ttl: 600, cost: 'medium', size: [4, 3], min: [3, 2], max: [8, 6], rule: self::ASSORTMENT_RULE),
+            self::make('abc_xyz_matrix', 'ABC x XYZ matrix', 'Assortment', 'Items per class: ABC by sales share, XYZ by steadiness of weekly sales (last 12 weeks).', 'by_shop', ['heatmap', 'table'], 'assortment',
+                ttl: 600, cost: 'medium', size: [6, 3], min: [4, 3], max: [12, 6], rule: self::ASSORTMENT_RULE),
+            self::make('a_items_out', 'A items out of stock', 'Assortment', 'Class A items (the 80 % of sales) that are out of stock in at least one shop. Red above 0.', 'single', ['kpi'], 'assortment',
+                ttl: 600, cost: 'medium', rule: self::ASSORTMENT_RULE),
+            self::make('unsold_items', 'Stock without sales', 'Assortment', 'Items in stock that did not sell at all in the last 60 days. Amber from 20 % of the stocked items.', 'single', ['kpi', 'gauge'], 'unsold',
+                ttl: 600, cost: 'medium', rule: self::UNSOLD_RULE),
+            self::make('unsold_by_group', 'Unsold by group', 'Assortment', 'Groups with the most items in stock that did not sell in the last 60 days.', 'by_item', ['table', 'bar'], 'unsold',
+                ttl: 600, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::UNSOLD_RULE),
+            self::make('wh_out_of_stock', 'Warehouse out of stock', 'Inventory', 'Items the main warehouse has run out of (from the daily 1C stock). Red when a class A item is out.', 'single', ['kpi'], 'wh_oos',
+                ttl: 120, cost: 'medium'),
+            self::make('customer_share', 'Receipts with a customer', 'Receipts', 'Share of today\'s sale receipts that carry a customer / loyalty card. Live, no baseline.', 'single', ['kpi', 'gauge'], 'customers',
+                ttl: 60),
             self::make('sync_freshness', 'Stock sync', 'System', 'Age of the last 1C stock sync. Amber after 24 h, red after 48 h.', 'single', ['kpi'], 'sync',
                 ttl: 300, size: [4, 3]),
         ];

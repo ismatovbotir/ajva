@@ -2,6 +2,7 @@
 
 namespace App\Monitor;
 
+use App\Services\AssortmentAnalysis;
 use App\Services\SalesMetrics;
 use App\Support\MonitorScope;
 use Illuminate\Support\Str;
@@ -632,6 +633,159 @@ class WidgetPayloads
             'gauge' => ['value' => $pct, 'min' => 0, 'max' => 100, 'marks' => [70, 95], 'inverse' => true],
             'footer' => $this->inventoryFooter(),
         ];
+    }
+
+    // ---------------------------------------------------------------- assortment
+
+    private function abcMix(array $o, string $diagram): array
+    {
+        $set = $this->data->get('assortment');
+        $abc = $set['abc'];
+        if ($set['items'] === 0 || $abc === []) {
+            return $this->empty();
+        }
+
+        $colors = ['A' => '#1baf7a', 'B' => '#eda100', 'C' => '#898781'];
+        $parts = [];
+        foreach (['A' => __('A: top sales'), 'B' => __('B: middle'), 'C' => __('C: tail')] as $class => $label) {
+            $parts[] = ['label' => $label.' · '.$abc[$class]['items'].' '.__('items'), 'value' => (float) $abc[$class]['share'], 'text' => $this->dec($abc[$class]['share'], 1).'%', 'color' => $colors[$class], 'detail' => ''];
+        }
+
+        return ['parts' => $parts, 'footer' => __('Last :w weeks. Stock as of last sync: :date', ['w' => $set['weeks'], 'date' => $set['stock_as_of'] ?? '-'])];
+    }
+
+    private function abcXyzMatrix(array $o, string $diagram): array
+    {
+        $set = $this->data->get('assortment');
+        if (! $set['xyz'] || $set['matrix'] === null || $set['items'] === 0) {
+            return $this->empty(['footer' => __('XYZ needs at least :w full weeks of sales.', ['w' => AssortmentAnalysis::MIN_WEEKS_XYZ])]);
+        }
+
+        $max = 0.0;
+        foreach ($set['matrix'] as $cols) {
+            foreach ($cols as $cell) {
+                $max = max($max, (float) $cell['share']);
+            }
+        }
+        $items = [];
+        foreach (['A' => __('A: top sales'), 'B' => __('B: middle'), 'C' => __('C: tail')] as $class => $label) {
+            $cells = [];
+            $heat = [];
+            $sum = 0.0;
+            foreach (['X', 'Y', 'Z'] as $x) {
+                $c = $set['matrix'][$class][$x];
+                $cells[] = $c['items'].' · '.$this->dec($c['share'], 0).'%';
+                $heat[] = $max > 0 ? $c['share'] / $max : 0.0;
+                $sum += $c['share'];
+            }
+            $items[] = ['label' => $label, 'value' => $sum, 'text' => $this->dec($sum, 0).'%', 'cells' => $cells, 'heat' => $heat, 'status' => $class === 'C' && $set['matrix']['C']['Z']['items'] > 0 ? 'warn' : 'none'];
+        }
+
+        return [
+            'columns' => [__('X: steady demand'), __('Y: some swings'), __('Z: erratic')],
+            'kinds' => ['seq', 'seq', 'seq'],
+            'items' => $items,
+            'footer' => __('Items · share of sales. Last :w weeks.', ['w' => $set['weeks']]),
+        ];
+    }
+
+    private function aItemsOut(array $o, string $diagram): array
+    {
+        $set = $this->data->get('assortment');
+        if ($set['items'] === 0) {
+            return $this->empty();
+        }
+
+        return [
+            'value' => (string) $set['a_at_risk'],
+            'status' => $set['a_at_risk'] > 0 ? 'bad' : 'ok',
+            'note' => __('in at least one shop now'),
+            'footer' => __('Stock as of last sync: :date', ['date' => $set['stock_as_of'] ?? '-']),
+        ];
+    }
+
+    private function unsoldItems(array $o, string $diagram): array
+    {
+        $set = $this->data->get('unsold');
+        $k = $set['kpi'];
+        if ($k['stocked_items'] === 0) {
+            return $this->empty();
+        }
+
+        $status = $k['unsold_items'] === 0 ? 'ok' : ($k['unsold_share'] >= 20 ? 'warn' : 'none');
+        $p = [
+            'value' => $this->money($k['unsold_items']),
+            'status' => $status,
+            'note' => __(':p % of the items in stock · :u units', ['p' => $this->dec($k['unsold_share'], 1), 'u' => $this->qty((float) $k['unsold_units'])]),
+            'footer' => __('No sale in :d days. Stock as of last sync: :date', ['d' => $set['days'], 'date' => $k['stock_as_of'] ?? '-']),
+        ];
+
+        return $diagram === 'gauge' ? $p + ['gauge' => ['value' => (float) $k['unsold_share'], 'min' => 0, 'max' => 50, 'marks' => [20]]] : $p;
+    }
+
+    private function unsoldByGroup(array $o, string $diagram): array
+    {
+        $set = $this->data->get('unsold');
+        if ($set['groups'] === []) {
+            return $this->empty();
+        }
+
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+        $items = [];
+        foreach (array_slice($set['groups'], 0, $n) as $g) {
+            $items[] = [
+                'label' => $g['group'] !== '' ? $g['group'] : __('No group'),
+                'value' => (float) $g['unsold'],
+                'text' => (string) $g['unsold'],
+                'cells' => [(string) $g['unsold'], (string) $g['stocked'], $this->dec($g['share'], 0).'%'],
+                'status' => $g['share'] >= 50 ? 'bad' : ($g['share'] >= 20 ? 'warn' : 'none'),
+            ];
+        }
+
+        return [
+            'columns' => [__('Unsold items'), __('In stock'), __('Share')],
+            'items' => $items,
+            'footer' => __('No sale in :d days. Stock as of last sync: :date', ['d' => $set['days'], 'date' => $set['kpi']['stock_as_of'] ?? '-']),
+        ];
+    }
+
+    private function whOutOfStock(array $o, string $diagram): array
+    {
+        $d = $this->data->get('wh_oos');
+        if ($d['state'] === 'unconfigured') {
+            return $this->empty(['footer' => __('The main warehouse is not set (Settings > Warehouse).')]);
+        }
+        if ($d['state'] === 'empty') {
+            return $this->empty(['footer' => __('1C has not sent any stock for the main warehouse.')]);
+        }
+        if ($d['state'] === 'not_synced') {
+            return ['value' => '—', 'status' => 'bad', 'note' => __('Warehouse not synced since :date', ['date' => $d['ref']]), 'footer' => __('Other shops have newer stock (:date), so no item is listed as out of stock.', ['date' => $d['chain']])];
+        }
+
+        $k = $d['kpi'];
+        if ($d['partial'] || $k === null) {
+            return ['value' => '—', 'status' => 'warn', 'note' => __('The latest warehouse sync looks incomplete. The list below is only a warning, check the sync in 1C.'), 'footer' => __('Warehouse stock as of :date.', ['date' => $d['ref']])];
+        }
+
+        return [
+            'value' => (string) $k['out'],
+            'status' => $k['a'] > 0 ? 'bad' : ($k['out'] > 0 ? 'warn' : 'ok'),
+            'note' => __('A-class: :a', ['a' => $k['a']]),
+            'footer' => __('Warehouse stock as of :date.', ['date' => $d['ref']]),
+        ];
+    }
+
+    private function customerShare(array $o, string $diagram): array
+    {
+        $set = $this->data->get('customers');
+        if ($set['all'] === 0) {
+            return $this->empty();
+        }
+
+        $pct = $set['with'] / $set['all'] * 100;
+        $p = ['value' => $this->dec($pct, 1).'%', 'status' => 'none', 'note' => __(':n of :m sale receipts today', ['n' => $set['with'], 'm' => $set['all']])];
+
+        return $diagram === 'gauge' ? $p + ['gauge' => ['value' => $pct, 'min' => 0, 'max' => 100, 'marks' => []]] : $p;
     }
 
     private function syncFreshness(array $o, string $diagram): array

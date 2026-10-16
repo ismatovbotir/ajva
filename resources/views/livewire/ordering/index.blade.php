@@ -54,7 +54,8 @@
                 <span class="mt-1 block text-xs text-slate-500" data-rules-note>{{ __('Each shop uses the days set in Order rules.') }}</span>
             @endif
         </div>
-        <x-ui.button type="button" variant="secondary" wire:click="refresh" wire:loading.attr="disabled" wire:target="refresh">{{ __('Refresh') }}</x-ui.button>
+        {{-- Always visible: every press builds a fresh calculation (several versions can be generated one after another). --}}
+        <x-ui.button type="button" wire:click="generate" wire:loading.attr="disabled" wire:target="refresh,generate" data-generate>{{ __('Generate') }}</x-ui.button>
         @if($kpi['lines'] > 0)
             <x-ui.button type="button" wire:click="prepareAllOrders" wire:loading.attr="disabled" wire:target="prepareOrder,prepareAllOrders"
                          wire:confirm="{{ __('Prepare a separate draft for every shop?') }}">{{ __('Prepare orders for all shops') }} ({{ $kpi['shops'] }})</x-ui.button>
@@ -86,6 +87,8 @@
 
     @if($noShops)
         <x-ui.no-shops />
+    @elseif(! $generated)
+        <x-ui.empty-state :title="__('No calculation yet')" :description="__('Choose the cover days if you want, then press Generate. The calculation can take a few seconds.')" />
     @elseif($shops->isEmpty())
         <x-ui.empty-state :title="__('No shops yet')" :description="__('Shops will appear here once 1C sends stock data for them.')" />
     @else
@@ -448,7 +451,7 @@
 
     {{-- Shown only while Refresh recalculates; closes by itself. Hidden explicitly because Livewire's
          stylesheet does not hide combined wire:loading modifiers before the first request. --}}
-    <div wire:loading.flex.delay.shorter wire:target="refresh" style="display: none;"
+    <div wire:loading.flex.delay.shorter wire:target="refresh,generate" style="display: none;"
          class="fixed inset-0 z-50 items-center justify-center px-4 py-6"
          role="alertdialog" aria-modal="true" aria-labelledby="ordering-title" aria-describedby="ordering-text">
         <div class="modal-backdrop fixed inset-0 bg-slate-900/50"></div>

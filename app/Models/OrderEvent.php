@@ -29,6 +29,8 @@ class OrderEvent extends Model
 
     public const CONFIRMED = 'confirmed';
 
+    public const COMMENT = 'comment';
+
     public $timestamps = false;
 
     protected $fillable = ['order_id', 'user_id', 'channel', 'action', 'item_id', 'old_qty', 'new_qty', 'note', 'created_at'];

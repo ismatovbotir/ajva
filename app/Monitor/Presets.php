@@ -152,6 +152,15 @@ class Presets
                     ['sync_freshness', 4, 3], ['margin_pct', 4, 3], ['profit_by_shop', 4, 3],
                 ],
             ],
+            'assortment' => [
+                'name' => fn () => __('Assortment and stock'),
+                'description' => fn () => __('ABC x XYZ, class A items out of stock, stock without sales and the main warehouse out-of-stock list.'),
+                'widgets' => [
+                    ['a_items_out', 3, 2], ['unsold_items', 3, 2], ['wh_out_of_stock', 3, 2], ['customer_share', 3, 2],
+                    ['abc_mix', 4, 4], ['abc_xyz_matrix', 8, 4],
+                    ['unsold_by_group', 12, 4],
+                ],
+            ],
             'blank' => [
                 'name' => fn () => __('Blank'),
                 'description' => fn () => __('An empty screen: add the widgets you need.'),

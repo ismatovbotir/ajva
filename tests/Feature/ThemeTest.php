@@ -18,8 +18,8 @@ class ThemeTest extends TestCase
 
         $this->assertStringNotContainsString('data-theme', $html);
         $this->assertStringNotContainsString("localStorage.getItem('theme')", $html);
-        $this->assertStringContainsString("localStorage.getItem('monitorTheme')", $html);
-        $this->assertStringContainsString(':aria-pressed="light.toString()"', $html);
+        $this->assertStringNotContainsString('monitorTheme', $html);
+        $this->assertStringNotContainsString('aria-pressed', $html);
         $this->assertStringContainsString('md:bg-brand-700', $html);   // green sidebar
         $this->assertStringContainsString('bg-brand-700', $html);      // green mobile bar
     }

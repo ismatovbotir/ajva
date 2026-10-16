@@ -46,6 +46,12 @@ return [
         'token' => env('POS_API_TOKEN'),
     ],
 
+    // Extra IPs / CIDR ranges allowed on the local-network-only endpoints (1C items sync, 1C receipts history),
+    // comma separated, e.g. "203.0.113.5, 100.64.0.0/10". Loopback and private ranges are always allowed.
+    'local_api' => [
+        'allowed' => env('LOCAL_API_ALLOWED_IPS', ''),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],

@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Services\AssortmentAnalysis;
+
 /**
  * Rule-based observations over a tool result. Runs entirely inside the app:
  * AjvaAI never sends business data to the AI service, so the advice that
@@ -23,8 +25,126 @@ class LocalAdvisor
             'stock_levels' => self::stockLevels($data['rows'] ?? []),
             'item_prices' => self::itemPrices($data['items'] ?? []),
             'list_orders' => self::orders($data['orders'] ?? []),
+            'assortment_analysis' => self::assortment($data['report'] ?? null),
+            'unsold_stock' => self::unsoldStock($data['report'] ?? null),
             default => [],
         };
+    }
+
+    /**
+     * Conclusions of the assortment analysis (ABC x XYZ, dead / slow stock, A items out of stock). Thresholds are fixed
+     * and only counts and shares are used; every note names what to do, not just what is wrong.
+     */
+    private static function assortment(?array $report): array
+    {
+        if (! $report || empty($report['kpi']) || ($report['kpi']['items'] ?? 0) === 0) {
+            return [];
+        }
+
+        $k = $report['kpi'];
+        $w = $report['window'];
+        $notes = [];
+
+        $notes[] = ['level' => 'info', 'text' => __(':n items (:p % of the items sold) bring 80 % of sales (class A). Keep them in stock every day and never let them run out.', ['n' => $k['a_items'], 'p' => self::fmt($k['a_items_share'])])];
+
+        if ($k['a_items_share'] < 10 && $k['items'] >= 50) {
+            $notes[] = ['level' => 'info', 'text' => __('Sales are very concentrated: fewer than 10 % of the items carry 80 % of the revenue. Protect those items first, the rest of the range matters much less.')];
+        }
+
+        if ($k['a_at_risk'] > 0) {
+            $notes[] = ['level' => 'warn', 'text' => __(':n class A items are out of stock in at least one shop right now. Replenish these first: every day without them is lost sales (see the list below).', ['n' => $k['a_at_risk']])];
+        }
+
+        if ($w['xyz']) {
+            if (($k['az_items'] ?? 0) > 0) {
+                $notes[] = ['level' => 'info', 'text' => __(':n important items (class A) sell erratically (Z). Check promotions, price changes and out-of-stock weeks before changing their stock, and keep a safety stock instead of cutting them.', ['n' => $k['az_items']])];
+            }
+            if (($k['cz_items'] ?? 0) > 0 && ($k['cz_share_items'] ?? 0) >= 10) {
+                $notes[] = ['level' => 'warn', 'text' => __(':n items (:p % of the items sold) give only :r % of sales and sell erratically (class C, Z). Candidates to delist, to order only on demand, or to stop restocking.', ['n' => $k['cz_items'], 'p' => self::fmt($k['cz_share_items']), 'r' => self::fmt($k['cz_share_revenue'] ?? 0)])];
+            }
+        } else {
+            $notes[] = ['level' => 'info', 'text' => __('XYZ needs at least :w full weeks of sales, this period has :n. Choose a longer period (12 weeks is recommended) to see demand stability.', ['w' => AssortmentAnalysis::MIN_WEEKS_XYZ, 'n' => $w['weeks']])];
+        }
+
+        if ($k['dead'] > 0) {
+            $text = __(':n items have stock but no sale in :d days. Check the price and display, run a promotion, return them to the supplier or write them off. Items that only just arrived also appear here.', ['n' => $k['dead'], 'd' => $w['days']]);
+            if (! empty($k['stock_value'])) {
+                $text .= ' '.__('They tie up :v at cost price.', ['v' => self::fmt($k['stock_value']['dead'], 0)]);
+                if ($k['stock_value']['dead_without_cost'] > 0) {
+                    $text .= ' '.__(':n of them have no cost price and are left out of that figure.', ['n' => $k['stock_value']['dead_without_cost']]);
+                }
+            }
+            $notes[] = ['level' => 'warn', 'text' => $text];
+        }
+
+        if ($k['slow'] > 0) {
+            $notes[] = ['level' => 'info', 'text' => __(':n items have more than :d days of cover at the current sales speed. Do not reorder them; a promotion or a transfer to a faster shop would release the cash.', ['n' => $k['slow'], 'd' => $k['slow_days']])];
+        }
+
+        if ($k['stock_stale'] && $k['stock_as_of']) {
+            $notes[] = ['level' => 'warn', 'text' => __('The stock figures are from :date, which is old. Dead stock and out-of-stock conclusions may be out of date until 1C syncs again.', ['date' => $k['stock_as_of']])];
+        }
+
+        if (($k['sold_without_stock_row'] ?? 0) > 0) {
+            $notes[] = ['level' => 'info', 'text' => __(':n items sold in this period have no stock record in the selected shops, so their cover cannot be judged.', ['n' => $k['sold_without_stock_row']])];
+        }
+
+        if (($k['negative_stock_rows'] ?? 0) > 0) {
+            $notes[] = ['level' => 'info', 'text' => __(':n stock records are negative (counted as zero). Check receiving and write-offs in 1C.', ['n' => $k['negative_stock_rows']])];
+        }
+
+        return $notes;
+    }
+
+    /**
+     * Conclusions of "stock without sales": how much of the stock does not move, where it concentrates and what to do.
+     * Fixed thresholds, counts and shares only.
+     */
+    private static function unsoldStock(?array $report): array
+    {
+        if (! $report || empty($report['kpi']) || ($report['kpi']['stocked_items'] ?? 0) === 0) {
+            return [];
+        }
+
+        $k = $report['kpi'];
+        $w = $report['window'];
+        $notes = [];
+
+        if ($k['unsold_items'] === 0) {
+            return [['level' => 'info', 'text' => __('Every item in stock sold at least once in :d days. Nothing is lying around.', ['d' => $w['days']])]];
+        }
+
+        $text = __(':n items (:p % of the items in stock) did not sell at all in :d days, :u units in total. Check the price and the display, run a promotion, transfer them to a shop where they sell, return them to the supplier or write them off.', [
+            'n' => $k['unsold_items'], 'p' => self::fmt($k['unsold_share']), 'd' => $w['days'], 'u' => self::fmt($k['unsold_units'], 0),
+        ]);
+        $notes[] = ['level' => $k['unsold_share'] >= 20 ? 'warn' : 'info', 'text' => $text];
+
+        if (! empty($k['value']) && $k['value']['unsold'] > 0) {
+            $line = __('This stock ties up :v at cost price.', ['v' => self::fmt($k['value']['unsold'], 0)]);
+            if ($k['value']['without_cost'] > 0) {
+                $line .= ' '.__(':n of them have no cost price and are left out of that figure.', ['n' => $k['value']['without_cost']]);
+            }
+            $notes[] = ['level' => 'warn', 'text' => $line];
+        }
+
+        $top = $report['groups'][0] ?? null;
+        if ($top !== null && $top['group'] !== '' && $top['unsold'] >= 3) {
+            $notes[] = ['level' => 'info', 'text' => __('The group :g has the most unsold items: :n (:p % of its stock). Start the review there.', ['g' => $top['group'], 'n' => $top['unsold'], 'p' => self::fmt($top['share'])])];
+        }
+
+        if ($k['unsold_pairs'] > $k['unsold_items']) {
+            $notes[] = ['level' => 'info', 'text' => __(':n stock lines sit in shops where the item did not sell. Open the view "Per item and shop": the same item may sell in another shop, so a transfer can release the stock.', ['n' => $k['unsold_pairs']])];
+        }
+
+        if ($w['short']) {
+            $notes[] = ['level' => 'info', 'text' => __('The period is only :d days, so slow items can look dead. For a safe decision use 60 to 90 days.', ['d' => $w['days']])];
+        }
+
+        if ($k['stock_stale'] && $k['stock_as_of']) {
+            $notes[] = ['level' => 'warn', 'text' => __('The stock figures are from :date, which is old. Dead stock and out-of-stock conclusions may be out of date until 1C syncs again.', ['date' => $k['stock_as_of']])];
+        }
+
+        return $notes;
     }
 
     private static function pct(float $part, float $whole): float

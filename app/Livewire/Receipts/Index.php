@@ -116,7 +116,7 @@ class Index extends Component
         $receiptRows = ShopAccess::restrictTo(DB::table('receipts'), 'shop_id', $ids)
             ->where('active', true)
             ->whereBetween('created_at', [$from, $to])
-            ->get(['id', 'number', 'shop_id', 'sell', 'total', 'created_at']);
+            ->get(['id', 'number', 'shop_id', 'sell', 'total', 'created_at', 'source']);
 
         foreach ($receiptRows as $r) {
             $amount = $sign($r->sell) * (float) $r->total;

@@ -22,7 +22,8 @@ class ProcessReceiptIngestion implements ShouldQueue
     /**
      * @param  array<string, mixed>  $data
      */
-    public function __construct(protected array $data, protected int $posId) {}
+    /** @param  bool  $bumpVersion  false inside a history batch: the caller invalidates the sales caches once per batch */
+    public function __construct(protected array $data, protected int $posId, protected bool $bumpVersion = true, protected string $source = Receipt::SOURCE_POS) {}
 
     public function handle(): void
     {
@@ -56,11 +57,11 @@ class ProcessReceiptIngestion implements ShouldQueue
                 ? $this->parseDateTime($this->data['closeDate'], $this->data['openTime'])
                 : $openedAt;
 
-            // Idempotent on (pos_id, number): a POS retrying a submission
+            // Idempotent on (pos_id, session, number) - numbers restart with every shift, so the session is part of the key: a POS retrying a submission
             // after a network blip updates the existing receipt instead of
             // creating a duplicate.
             $receipt = Receipt::query()->updateOrCreate(
-                ['pos_id' => $pos->id, 'number' => $this->data['number']],
+                ['pos_id' => $pos->id, 'session' => (int) ($this->data['session'] ?? 0), 'number' => $this->data['number']],
                 [
                     'shop_id' => $pos->shop_id ?? $shopId,
                     'client' => $this->data['client'] ?? null,
@@ -73,7 +74,6 @@ class ProcessReceiptIngestion implements ShouldQueue
                     'card' => $this->data['card'] ?? null,
                     'qty_buys' => $this->data['qtyBuys'] ?? null,
                     'qty_positions' => $this->data['qtyPositions'] ?? null,
-                    'session' => $this->data['session'] ?? null,
                     'type' => $this->data['type'] ?? null,
                     'status' => $status,
                     'gross_total' => $grossTotal,
@@ -82,6 +82,7 @@ class ProcessReceiptIngestion implements ShouldQueue
                     'pos_user_name' => $user['name'] ?? null,
                     'pos_user_text' => $user['text'] ?? null,
                     'aos' => $this->data['aos'] ?? null,
+                    'source' => $this->source,
                 ]
             );
 
@@ -162,7 +163,15 @@ class ProcessReceiptIngestion implements ShouldQueue
         // Sales caches (board, monitor, receipts analytics) are keyed by shop
         // scope as well as day, so bump the shared version instead of
         // forgetting keys: every scope variant is invalidated at once.
-        ShopAccess::bumpSalesVersion();
+        if ($this->bumpVersion) {
+            ShopAccess::bumpSalesVersion();
+        }
+    }
+
+    /** The receipt time (openDate + openTime, shop-local as sent) of a validated payload. */
+    public static function receiptTime(array $data): Carbon
+    {
+        return Carbon::createFromFormat('d.m.y H:i:s', $data['openDate'].' '.$data['openTime']);
     }
 
     protected function parseDateTime(string $date, string $time): Carbon

@@ -44,7 +44,9 @@
  * The admin panel is light-only and never sets this attribute.
  */
 html.monitor-root { color-scheme: dark; }
-html.monitor-root[data-monitor-theme="light"] {
+html.monitor-root[data-monitor-theme="light"],
+/* the constructor canvas previews the same light variant on its TV frame */
+.mon-frame[data-mon-theme="light"] {
     color-scheme: light;
     --color-white: #141413;
     --color-slate-50: #0d0d0c;
@@ -69,7 +71,9 @@ html.monitor-root[data-monitor-theme="light"] {
 }
 /* Text that sits on coloured fills must stay white in the light variant */
 html.monitor-root[data-monitor-theme="light"] .bg-red-500,
-html.monitor-root[data-monitor-theme="light"] .bg-brand-600 {
+html.monitor-root[data-monitor-theme="light"] .bg-brand-600,
+.mon-frame[data-mon-theme="light"] .bg-red-500,
+.mon-frame[data-mon-theme="light"] .bg-brand-600 {
     color: #fff;
 }
 
