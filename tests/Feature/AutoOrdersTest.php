@@ -219,7 +219,8 @@ class AutoOrdersTest extends TestCase
             return $request->url() === 'https://api.telegram.org/botBOT:TOKEN/sendMessage'
                 && $request['chat_id'] === '4242'
                 && str_contains($request['text'], 'Alpha')
-                && str_contains($request['text'], 'Cola')
+                && ! str_contains($request['text'], 'Cola')
+                && str_contains($request['text'], 'open the link')
                 && ! str_contains($request['text'], 'BOT:TOKEN')
                 && $request['reply_markup']['inline_keyboard'][0][0]['url'] === 'https://panel.test/o/'.$link->token;
         });
@@ -256,7 +257,7 @@ class AutoOrdersTest extends TestCase
         Http::assertSent(function ($request) use (&$chats) {
             $chats[] = $request['chat_id'];
 
-            return str_contains($request['text'], 'Cola');
+            return str_contains($request['text'], 'open the link');
         });
         sort($chats);
         $this->assertSame(['4242', '5555'], $chats);

@@ -1272,5 +1272,12 @@
     "New messages": "Yangi xabarlar",
     "Send order links": "Buyurtma havolalarini yuborish",
     "Pull messages": "Xabarlarni olish",
-    "Send the links of all drafts that were not delivered yet?": "Hali yetkazilmagan barcha qoralamalar havolalari yuborilsinmi?"
+    "Send the links of all drafts that were not delivered yet?": "Hali yetkazilmagan barcha qoralamalar havolalari yuborilsinmi?",
+    "You have an order draft for :shop": ":shop uchun sizda buyurtma qoralamasi bor",
+    "Please open the link to edit or confirm the order.": "Buyurtmani tahrirlash yoki tasdiqlash uchun havolani oching.",
+    "By manager": "Menejer tomonidan",
+    "By system": "Tizim tomonidan",
+    "Code, GTIN or name (at least 3 characters)": "Kod, GTIN yoki nomi (kamida 3 ta belgi)",
+    "Nothing found.": "Hech narsa topilmadi.",
+    "Code": "Kod"
 }

@@ -4,10 +4,8 @@ namespace App\Livewire\Orders;
 
 use App\Livewire\Concerns\EditsDraftOrder;
 use App\Livewire\Ordering\Index as OrderingIndex;
-use App\Models\Item;
 use App\Models\Order;
 use App\Models\OrderEvent;
-use App\Models\OrderItem;
 use App\Models\OrderLink;
 use App\Services\OrderSync;
 use Livewire\Attributes\Layout;
@@ -108,16 +106,8 @@ class PublicDraft extends Component
 
         $link = $this->link();
         $order = $link->order->load('shop');
-        $items = $order->items()->with('item')->get()
-            ->sortBy(fn (OrderItem $i) => [$i->added_manually ? 1 : 0, $i->item?->name])->values();
-
-        $results = collect();
-        if (mb_strlen(trim($this->search)) >= 2) {
-            $results = Item::query()
-                ->where('name', 'like', '%'.trim($this->search).'%')
-                ->whereNotIn('id', $items->pluck('item_id'))
-                ->orderBy('name')->limit(8)->get(['id', 'name']);
-        }
+        $items = $this->sortLines($order->items()->with('item')->get());
+        $results = $this->searchItems($items->pluck('item_id'));
 
         return view('livewire.orders.public-draft', ['done' => false, 'order' => $order, 'items' => $items, 'results' => $results, 'meId' => $link->user_id, 'userName' => $link->user->name, 'events' => $this->events($order)]);
     }

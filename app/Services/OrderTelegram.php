@@ -22,8 +22,6 @@ use Throwable;
  */
 class OrderTelegram
 {
-    private const TOP_ITEMS = 8;
-
     public function __construct(private readonly Telegram $telegram) {}
 
     /** The personal link of one user to the draft (created on first use). */
@@ -208,80 +206,16 @@ class OrderTelegram
         return $this->telegram->configured();
     }
 
+    /** Short notice only: which shop and date, and to open the link (the button) to edit or confirm. No item list. */
     public function message(Order $order): string
     {
         $order->loadMissing('shop');
-        $items = $order->items()->with('item')->get();
-        $fmt = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ' '), '0'), '.');
-        $flagsOf = fn ($line) => array_filter(explode(',', (string) $line->flags));
 
-        $sorted = $items->sortBy(fn ($l) => [
-            in_array('out', $flagsOf($l), true) ? 0 : 1,
-            $l->cover_days === null ? PHP_INT_MAX : (float) $l->cover_days,
-            -(float) $l->qty,
-        ])->values();
-
-        $out = [];
-        $out[] = __('Order draft for :shop', ['shop' => $order->shop?->name]);
-        $out[] = __('Date: :date', ['date' => now()->format('d.m.Y')]);
-        $out[] = __(':lines lines, total quantity :qty', ['lines' => $items->count(), 'qty' => $fmt($items->sum('qty'))]);
-        $out[] = '';
-        $out[] = __('Most important items:');
-        foreach ($sorted->take(self::TOP_ITEMS) as $i => $line) {
-            $markers = [];
-            $flags = $flagsOf($line);
-            in_array('out', $flags, true) && $markers[] = __('out of stock');
-            in_array('short', $flags, true) && $markers[] = __('warehouse is short');
-            in_array('understated', $flags, true) && $markers[] = __('demand understated');
-            $out[] = __(':n. :name: :qty (stock :est, cover :cover)', [
-                'n' => $i + 1,
-                'name' => $line->item?->name,
-                'qty' => $fmt($line->qty),
-                'est' => $line->est === null ? '-' : $fmt($line->est),
-                'cover' => $line->cover_days === null ? '-' : __(':days d', ['days' => $fmt($line->cover_days)]),
-            ]).($markers === [] ? '' : ' ['.implode(', ', $markers).']');
-        }
-        if ($sorted->count() > self::TOP_ITEMS) {
-            $out[] = __('+ :count more lines', ['count' => $sorted->count() - self::TOP_ITEMS]);
-        }
-
-        $short = $items->filter(fn ($l) => in_array('short', $flagsOf($l), true))->count();
-        if ($short > 0) {
-            $out[] = '';
-            $out[] = __('The warehouse cannot cover :count items in full.', ['count' => $short]);
-        }
-
-        $warnings = $this->warnings($order, $items->filter(fn ($l) => in_array('low', $flagsOf($l), true))->count());
-        if ($warnings !== []) {
-            $out[] = '';
-            $out[] = __('Warnings:');
-            foreach ($warnings as $w) {
-                $out[] = '- '.$w;
-            }
-        }
-
-        $out[] = '';
-        $out[] = __('Review the order and confirm it with the button below. The link stops working once the order is confirmed.');
-
-        return implode("\n", $out);
-    }
-
-    /** @return array<int, string> */
-    private function warnings(Order $order, int $low): array
-    {
-        $kept = [];
-        foreach (array_filter(explode(',', (string) $order->warnings)) as $pair) {
-            [$key, $count] = array_pad(explode('=', $pair, 2), 2, '0');
-            $kept[$key] = (int) $count;
-        }
-
-        $out = [];
-        ($kept['stale'] ?? 0) > 0 && $out[] = __(':count items left out: their stock data is out of date.', ['count' => $kept['stale']]);
-        ($kept['none'] ?? 0) > 0 && $out[] = __(':count items left out: not enough sales history.', ['count' => $kept['none']]);
-        ($kept['capped'] ?? 0) > 0 && $out[] = __(':count quantities were capped at 3 x the maximum.', ['count' => $kept['capped']]);
-        ($kept['truncated'] ?? 0) > 0 && $out[] = __(':count more lines were left out (limit :limit lines).', ['count' => $kept['truncated'], 'limit' => ReplenishmentOrders::AUTO_MAX_LINES]);
-        $low > 0 && $out[] = __(':count items are based on only a few days of sales.', ['count' => $low]);
-
-        return $out;
+        return implode("\n", [
+            __('You have an order draft for :shop', ['shop' => $order->shop?->name]),
+            __('Date: :date', ['date' => now()->format('d.m.Y')]),
+            '',
+            __('Please open the link to edit or confirm the order.'),
+        ]);
     }
 }

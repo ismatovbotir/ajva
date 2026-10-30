@@ -25,6 +25,10 @@
     @endif
     @error('qty')<p class="mb-3 text-sm text-red-600" data-qty-error>{{ $message }}</p>@enderror
 
+    @if($canEdit)
+        @include('livewire.orders.partials.item-search', ['phone' => false])
+    @endif
+
     <x-ui.card padding="p-0">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200">
@@ -42,7 +46,7 @@
                 <tbody class="divide-y divide-slate-100">
                     @forelse($items as $line)
                         <tr wire:key="line-{{ $line->id }}">
-                            <td class="px-3 py-3 text-sm font-medium text-slate-900">{{ $line->item?->name }}@if($line->added_manually)<x-ui.badge class="ml-1">{{ __('Added manually') }}</x-ui.badge>@endif</td>
+                            <td class="px-3 py-3 text-sm font-medium text-slate-900">{{ $line->item?->name }}@include('livewire.orders.partials.line-source', ['line' => $line])</td>
                             <td class="px-3 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($line->suggested_qty) }}</td>
                             <td class="px-3 py-3 text-right text-sm font-bold tabular-nums text-brand-700">
                                 @if($canEdit)
@@ -66,28 +70,6 @@
             </table>
         </div>
     </x-ui.card>
-
-    @if($canEdit)
-        <x-ui.card class="mt-4">
-            <h3 class="mb-2 text-sm font-semibold text-slate-700">{{ __('Add an item') }}</h3>
-            <div class="flex flex-wrap items-end gap-3">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search items') }}"
-                       class="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:ring-brand-600" />
-                <input type="number" min="0" step="any" wire:model="addQty" aria-label="{{ __('Order') }}"
-                       class="w-24 rounded-lg border border-slate-300 px-2 py-2 text-right text-sm focus:border-brand-600 focus:ring-brand-600" />
-            </div>
-            @if($results->isNotEmpty())
-                <ul class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                    @foreach($results as $found)
-                        <li class="flex items-center justify-between gap-2 px-3 py-2 text-sm" wire:key="found-{{ $found->id }}">
-                            <span>{{ $found->name }}</span>
-                            <x-ui.button type="button" variant="secondary" wire:click="addItem({{ $found->id }})">{{ __('Add') }}</x-ui.button>
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
-        </x-ui.card>
-    @endif
 
     @if($canShare)
         <x-ui.card class="mt-4" data-share>

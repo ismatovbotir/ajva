@@ -33,13 +33,16 @@
             @error('qty')<p class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" data-qty-error>{{ $message }}</p>@enderror
             @error('confirm')<p class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ $message }}</p>@enderror
 
+            {{-- Add an item: search by code, GTIN or name; new lines appear at the top of the list --}}
+            @include('livewire.orders.partials.item-search', ['phone' => true])
+
             {{-- Items --}}
             <ul class="space-y-2" data-lines>
                 @forelse($items as $line)
                     <li wire:key="line-{{ $line->id }}" class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                         <div class="flex items-center gap-3">
                             <div class="min-w-0 flex-1">
-                                <p class="text-[0.95rem] font-medium leading-snug text-slate-900">{{ $line->item?->name }}@if($line->added_manually)<x-ui.badge class="ml-1">{{ __('Added manually') }}</x-ui.badge>@endif</p>
+                                <p class="text-[0.95rem] font-medium leading-snug text-slate-900">{{ $line->item?->name }}@include('livewire.orders.partials.line-source', ['line' => $line])</p>
                                 <p class="mt-0.5 text-xs text-slate-500">{{ __('Suggested') }} {{ $fmt($line->suggested_qty) }} · {{ __('Estimated') }} {{ $fmt($line->est) }} · {{ __('Min') }} {{ $fmt($line->min) }}</p>
                             </div>
                             <input type="number" inputmode="decimal" min="0" step="any" value="{{ $fmt($line->qty) }}" aria-label="{{ __('Order') }}: {{ $line->item?->name }}"
@@ -53,27 +56,6 @@
                     <li class="rounded-xl border border-slate-200 bg-white px-3 py-6 text-center text-sm text-slate-500">{{ __('No items in this order.') }}</li>
                 @endforelse
             </ul>
-
-            {{-- Add an item --}}
-            <details class="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" @if($results->isNotEmpty() || trim($search) !== '') open @endif>
-                <summary class="cursor-pointer text-sm font-semibold text-slate-700">{{ __('Add an item') }}</summary>
-                <div class="mt-3 flex items-end gap-2">
-                    <input type="search" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search items') }}"
-                           class="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-base focus:border-brand-600 focus:ring-brand-600" />
-                    <input type="number" inputmode="decimal" min="0" step="any" wire:model="addQty" aria-label="{{ __('Order') }}" onfocus="this.select()"
-                           class="h-11 w-20 rounded-xl border border-slate-300 px-2 text-right text-base focus:border-brand-600 focus:ring-brand-600" />
-                </div>
-                @if($results->isNotEmpty())
-                    <ul class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                        @foreach($results as $found)
-                            <li class="flex items-center justify-between gap-2 px-3 py-2 text-sm" wire:key="found-{{ $found->id }}">
-                                <span>{{ $found->name }}</span>
-                                <x-ui.button type="button" variant="secondary" wire:click="addItem({{ $found->id }})">{{ __('Add') }}</x-ui.button>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </details>
 
             {{-- Changes (collapsed) --}}
             <details class="mt-4">

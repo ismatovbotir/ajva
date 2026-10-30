@@ -5,10 +5,8 @@ namespace App\Livewire\Orders;
 use App\Enums\OrderStatus;
 use App\Livewire\Concerns\EditsDraftOrder;
 use App\Livewire\Ordering\Index as OrderingIndex;
-use App\Models\Item;
 use App\Models\Order;
 use App\Models\OrderEvent;
-use App\Models\OrderItem;
 use App\Models\OrderLink;
 use App\Models\TelegramMessage;
 use App\Models\User;
@@ -148,15 +146,8 @@ class Show extends Component
     public function render()
     {
         $order = $this->order()->load('shop');
-        $items = $order->items()->with('item')->get()->sortBy(fn (OrderItem $i) => [$i->added_manually ? 1 : 0, $i->item?->name])->values();
-
-        $results = collect();
-        if ($order->status === OrderStatus::Draft && mb_strlen(trim($this->search)) >= 2) {
-            $results = Item::query()
-                ->where('name', 'like', '%'.trim($this->search).'%')
-                ->whereNotIn('id', $items->pluck('item_id'))
-                ->orderBy('name')->limit(8)->get(['id', 'name']);
-        }
+        $items = $this->sortLines($order->items()->with('item')->get());
+        $results = $order->status === OrderStatus::Draft ? $this->searchItems($items->pluck('item_id')) : collect();
 
         // Personal links shown on the page: the admin sees every responsible person's link, an assigned operator his own
         // (created on first view; what is done through a link is recorded for its owner).

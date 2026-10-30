@@ -53,8 +53,8 @@ class OrderPhonePageTest extends TestCase
         $this->assertStringContainsString('inputmode="decimal"', $html, 'a numeric keypad for the quantities');
         $this->assertStringNotContainsString('nav-list', $html, 'no side menu');
 
-        $positions = [strpos($html, 'data-accept'), strpos($html, 'data-lines'), strpos($html, 'Add an item'), strpos($html, 'id="order-comment"')];
-        $this->assertSame($positions, collect($positions)->sort()->values()->all(), 'top bar, items, add box, then the comment at the end');
+        $positions = [strpos($html, 'data-accept'), strpos($html, 'data-item-search'), strpos($html, 'data-lines'), strpos($html, 'id="order-comment"')];
+        $this->assertSame($positions, collect($positions)->sort()->values()->all(), 'top bar, search box, items, then the comment at the end');
         $this->assertSame(strrpos($html, '<textarea'), strpos($html, '<textarea'), 'the comment is the only text field after the items');
     }
 

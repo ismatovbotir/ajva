@@ -98,7 +98,12 @@ class SyncOrderTo1C implements ShouldQueue
             'created_at' => $order->created_at?->toIso8601String(),
             // Free text of the shop's responsible person (additive field; null when none).
             'comment' => $order->comment,
-            'lines' => $order->items->map(fn ($l) => ['item_id' => $l->item_id, 'qty' => (float) $l->qty])->values()->all(),
+            // `source` (additive): "system" = the suggestion of the system, "manager" = added by hand by the shop's person.
+            'lines' => $order->items->map(fn ($l) => [
+                'item_id' => $l->item_id,
+                'qty' => (float) $l->qty,
+                'source' => $l->added_manually ? 'manager' : 'system',
+            ])->values()->all(),
         ];
     }
 }

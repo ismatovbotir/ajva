@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Concerns;
 
+use App\Models\Barcode;
 use App\Models\Item;
 use App\Models\Order;
 use App\Models\OrderEvent;
+use App\Models\OrderItem;
+use Illuminate\Support\Collection;
 
 /**
  * The draft-editing actions shared by the signed-in order page (Orders\Show, policy `edit`) and the public
@@ -98,6 +101,51 @@ trait EditsDraftOrder
             $line->delete();
             $this->logEvent($order, OrderEvent::LINE_REMOVED, $itemId, (float) $line->qty);
         }
+    }
+
+    /**
+     * Items matching the typed text by code (mark / 1C id), GTIN (barcode) or name; needs at least
+     * MIN_SEARCH_CHARS characters. Items already in the order are left out.
+     *
+     * @param  Collection<int, int>  $excludeIds
+     * @return Collection<int, Item>
+     */
+    protected function searchItems(Collection $excludeIds): Collection
+    {
+        $term = trim($this->search);
+        if (mb_strlen($term) < static::minSearchChars()) {
+            return collect();
+        }
+
+        $escaped = addcslashes($term, '%_\\');
+        $like = '%'.$escaped.'%';
+
+        return Item::query()
+            ->with('barcodes:id,item_id,gtin')
+            ->whereNotIn('id', $excludeIds)
+            ->where(function ($q) use ($term, $like, $escaped) {
+                $q->where('name', 'like', $like)
+                    ->orWhere('mark', 'like', $like)
+                    ->orWhereIn('id', Barcode::query()->where('gtin', 'like', $escaped.'%')->select('item_id'));
+                if (ctype_digit($term)) {
+                    $q->orWhere('id', (int) $term);
+                }
+            })
+            ->orderBy('name')->limit(8)->get(['id', 'name', 'mark']);
+    }
+
+    /** Characters needed before the item dropdown appears. */
+    public static function minSearchChars(): int
+    {
+        return 3;
+    }
+
+    /** Lines added by the manager first (newest on top), then the system's lines by name. */
+    protected function sortLines(Collection $lines): Collection
+    {
+        return $lines->sortBy(fn (OrderItem $i) => $i->added_manually
+            ? [0, -$i->id, '']
+            : [1, 0, (string) $i->item?->name])->values();
     }
 
     public function addItem(int $itemId): void

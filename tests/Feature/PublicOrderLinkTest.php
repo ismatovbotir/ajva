@@ -315,26 +315,62 @@ class PublicOrderLinkTest extends TestCase
         $this->assertSame('panel', $this->draft->events()->where('action', 'confirmed')->firstOrFail()->channel);
     }
 
-    public function test_the_telegram_message_has_the_summary_markers_and_no_prices(): void
+    public function test_the_telegram_message_is_a_short_notice_without_the_item_list(): void
     {
         config(['app.url' => 'https://panel.test']);
         foreach (range(1, 9) as $i) {
             $item = Item::factory()->create(['name' => 'Item '.$i]);
-            $this->draft->items()->create(['item_id' => $item->id, 'qty' => $i, 'suggested_qty' => $i + 2, 'est' => 3, 'cover_days' => $i, 'flags' => $i === 1 ? 'short,understated' : null]);
+            $this->draft->items()->create(['item_id' => $item->id, 'qty' => $i, 'suggested_qty' => $i + 2, 'est' => 3, 'cover_days' => $i]);
         }
-        $this->draft->update(['warnings' => 'stale=2,capped=1']);
 
         $text = app(OrderTelegram::class)->message($this->draft->fresh());
 
         $this->assertStringContainsString('Alpha', $text);
-        $this->assertStringContainsString('10 lines', $text);
-        $this->assertStringContainsString('Cola', $text);                       // out of stock goes first
-        $this->assertStringContainsString('out of stock', $text);
-        $this->assertStringContainsString('warehouse is short', $text);
-        $this->assertStringContainsString('demand understated', $text);
-        $this->assertStringContainsString('+ 2 more lines', $text);             // only the top 8 are listed
-        $this->assertStringContainsString('2 items left out', $text);
-        $this->assertStringContainsString('stops working once the order is confirmed', $text);
+        $this->assertStringContainsString(now()->format('d.m.Y'), $text);
+        $this->assertStringContainsString('open the link to edit or confirm', $text);
+        $this->assertStringNotContainsString('Cola', $text);                    // no item list, no quantities
+        $this->assertStringNotContainsString('Item 1', $text);
+        $this->assertStringNotContainsString('lines', $text);
         $this->assertStringNotContainsString('/o/', $text);                     // the link is the button, not part of the text
+    }
+
+    public function test_item_search_needs_three_characters_and_finds_by_code_gtin_or_name(): void
+    {
+        $water = Item::factory()->create(['name' => 'Spring water', 'mark' => 'SKU-7788']);
+        \App\Models\Barcode::query()->create(['item_id' => $water->id, 'gtin' => '4780001234567']);
+
+        $page = Livewire::test(PublicDraft::class, ['token' => $this->token()]);
+
+        $page->set('search', 'Sp')->assertDontSeeHtml('data-search-results');   // under 3 characters: no dropdown
+        $page->set('search', 'wat')->assertSeeHtml('data-search-results')->assertSee('Spring water');   // name
+        $page->set('search', 'SKU-77')->assertSee('Spring water');                                       // code
+        $page->set('search', '478000')->assertSee('Spring water')->assertSee('GTIN 4780001234567');       // GTIN
+        $page->set('search', 'zzzz')->assertSeeHtml('data-search-empty');
+        $page->set('search', 'Col')->assertSeeHtml('data-search-empty')         // already in the order: not offered again
+            ->assertDontSeeHtml('wire:key="found-'.$this->cola->id.'"');
+    }
+
+    public function test_added_items_go_to_the_top_newest_first_and_each_line_shows_who_added_it(): void
+    {
+        $water = Item::factory()->create(['name' => 'Water']);
+        $juice = Item::factory()->create(['name' => 'Juice']);
+
+        $page = Livewire::test(PublicDraft::class, ['token' => $this->token()])
+            ->set('search', 'Water')->call('addItem', $water->id)
+            ->set('search', 'Juice')->call('addItem', $juice->id);
+
+        $page->assertSeeInOrder(['Juice', 'Water', 'Cola'])
+            ->assertSeeHtml('data-line-source="manager"')
+            ->assertSeeHtml('data-line-source="system"')
+            ->assertSee('By manager')->assertSee('By system');
+
+        // The quantity of an added line is edited in the list; the source stays "manager" in the 1C payload.
+        $page->call('saveQty', $juice->id, '9');
+        $this->assertEquals(9, $this->draft->items()->where('item_id', $juice->id)->value('qty'));
+        $method = new \ReflectionMethod(\App\Jobs\SyncOrderTo1C::class, 'payload');
+        $method->setAccessible(true);
+        $lines = collect($method->invoke(new \App\Jobs\SyncOrderTo1C($this->draft->id), $this->draft->fresh('items'))['lines'])->keyBy('item_id');
+        $this->assertSame('manager', $lines[$juice->id]['source']);
+        $this->assertSame('system', $lines[$this->cola->id]['source']);
     }
 }
