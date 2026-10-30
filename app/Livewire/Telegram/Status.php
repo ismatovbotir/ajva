@@ -24,10 +24,32 @@ class Status extends Component
         abort_unless(auth()->user()?->isAdmin(), 403);
     }
 
+    /** Output of the command the admin ran last from this page. */
+    public string $output = '';
+
     /** Runs one poll right now (the same command the scheduler runs every minute). */
     public function pollNow(): void
     {
         Artisan::call('telegram:poll');
+        $run = TelegramStatus::get('poll');
+
+        $this->output = match ($run['status'] ?? null) {
+            'ok' => __('New messages').': '.($run['messages'] ?? 0),
+            'no_token' => __('The Telegram bot token (TELEGRAM_BOT_TOKEN) is not set.'),
+            'error' => (string) ($run['error'] ?? 'error'),
+            default => __('Another poll is running.'),
+        };
+    }
+
+    /** Sends the links of the drafts that were not delivered yet (same command as the Send buttons, all such drafts). */
+    public function sendNow(): void
+    {
+        Artisan::call('orders:send-telegram');
+        $run = TelegramStatus::get('send');
+
+        $this->output = ($run['orders'] ?? 0) === 0
+            ? __('No draft orders to send.')
+            : __('Orders').': '.$run['orders'].' · '.__('Sent').': '.$run['sent'].(($run['failed'] ?? false) ? ' · '.__('Failed') : '');
     }
 
     /** ok | stale | error | never, from the last recorded run and how often the scheduler should run it. */

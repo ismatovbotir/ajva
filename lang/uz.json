@@ -1269,5 +1269,8 @@
     "Working": "Ishlayapti",
     "Not running": "Ishlamayapti",
     "Never ran": "Hali ishlamagan",
-    "New messages": "Yangi xabarlar"
+    "New messages": "Yangi xabarlar",
+    "Send order links": "Buyurtma havolalarini yuborish",
+    "Pull messages": "Xabarlarni olish",
+    "Send the links of all drafts that were not delivered yet?": "Hali yetkazilmagan barcha qoralamalar havolalari yuborilsinmi?"
 }

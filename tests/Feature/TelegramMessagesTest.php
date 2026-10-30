@@ -136,6 +136,9 @@ class TelegramMessagesTest extends TestCase
         Livewire::actingAs($admin)->test(\App\Livewire\Telegram\Status::class)
             ->call('pollNow')->assertSee('Error')->assertSee('boom');
 
+        Livewire::actingAs($admin)->test(\App\Livewire\Telegram\Status::class)
+            ->call('sendNow')->assertSee('No draft orders to send.');
+
         $this->app['auth']->forgetGuards();
         $this->actingAs(User::factory()->operator()->create())->get(route('telegram.status'))->assertForbidden();
     }

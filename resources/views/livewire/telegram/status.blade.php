@@ -1,9 +1,14 @@
 <div wire:poll.15s>
     <x-ui.page-header :title="__('Telegram status')" :subtitle="__('Is the bot connected and are the Telegram commands running?')">
         <x-slot:actions>
-            <x-ui.button wire:click="pollNow" wire:loading.attr="disabled" wire:target="pollNow">{{ __('Run poll now') }}</x-ui.button>
+            <x-ui.button variant="secondary" wire:click="sendNow" wire:loading.attr="disabled" wire:target="sendNow" wire:confirm="{{ __('Send the links of all drafts that were not delivered yet?') }}" data-confirm-tone="primary">{{ __('Send order links') }}</x-ui.button>
+            <x-ui.button wire:click="pollNow" wire:loading.attr="disabled" wire:target="pollNow">{{ __('Pull messages') }}</x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
+
+    @if($output !== '')
+        <pre class="mb-4 overflow-x-auto whitespace-pre-wrap rounded-lg bg-sand-50 px-3 py-2 text-xs text-slate-700" data-command-output>{{ $output }}</pre>
+    @endif
 
     <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <x-ui.card>

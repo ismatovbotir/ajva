@@ -32,6 +32,7 @@ class SendOrderTelegram extends Command
         $orders = $query->get();
         if ($orders->isEmpty()) {
             $this->line('No draft orders to send.');
+            TelegramStatus::record('send', ['orders' => 0, 'sent' => 0, 'failed' => false]);
 
             return self::SUCCESS;
         }
