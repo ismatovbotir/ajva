@@ -28,6 +28,8 @@ use App\Livewire\Settings\ReceiptsSync as ReceiptsSyncSettings;
 use App\Livewire\Settings\Warehouse as WarehouseSettings;
 use App\Livewire\Shops\Index as ShopsIndex;
 use App\Livewire\Shops\Show as ShopsShow;
+use App\Livewire\Telegram\Messages as TelegramMessages;
+use App\Livewire\Telegram\Users as TelegramUsers;
 use App\Livewire\Users\Index as UsersIndex;
 use App\Livewire\Warehouse\OutOfStock as WarehouseOutOfStock;
 use Illuminate\Support\Facades\Auth;
@@ -115,5 +117,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings/order-rules', OrderRulesSettings::class)->name('settings.order-rules');
         Route::get('/settings/warehouse', WarehouseSettings::class)->name('settings.warehouse');
         Route::get('/settings/users', UsersIndex::class)->name('users.index');
+        Route::get('/telegram/users', TelegramUsers::class)->name('telegram.users');
+        Route::get('/telegram/messages', TelegramMessages::class)->name('telegram.messages');
     });
 });

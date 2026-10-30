@@ -28,6 +28,10 @@
             ['label' => 'Categories', 'route' => 'categories.index', 'icon' => 'category'],
             ['label' => 'Prices', 'route' => 'prices.index', 'icon' => 'currency'],
         ]],
+        ['label' => 'Telegram', 'roles' => ['admin'], 'items' => [
+            ['label' => 'Telegram users', 'route' => 'telegram.users', 'icon' => 'users'],
+            ['label' => 'Telegram messages', 'route' => 'telegram.messages', 'icon' => 'clipboard'],
+        ]],
         ['label' => 'Settings', 'roles' => ['admin'], 'items' => [
             ['label' => 'MCP server', 'route' => 'settings.mcp', 'icon' => 'adjustments'],
             ['label' => 'Monitors', 'route' => 'settings.monitors', 'icon' => 'monitor'],

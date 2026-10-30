@@ -50,6 +50,31 @@ class Telegram
         return ['ok' => false, 'error' => $this->clean($detail)];
     }
 
+    /**
+     * One getUpdates call (messages only, no long polling).
+     *
+     * @return array{ok: bool, updates: array<int, array<string, mixed>>, error: ?string}
+     */
+    public function getUpdates(?int $offset, int $limit = 100): array
+    {
+        $payload = ['timeout' => 0, 'limit' => $limit, 'allowed_updates' => ['message']];
+        if ($offset !== null) {
+            $payload['offset'] = $offset;
+        }
+
+        try {
+            $response = Http::asJson()->timeout(20)->post($this->url('getUpdates'), $payload);
+        } catch (Throwable $e) {
+            return ['ok' => false, 'updates' => [], 'error' => $this->clean($e->getMessage())];
+        }
+
+        if ($response->successful() && $response->json('ok') === true) {
+            return ['ok' => true, 'updates' => (array) $response->json('result', []), 'error' => null];
+        }
+
+        return ['ok' => false, 'updates' => [], 'error' => $this->clean((string) ($response->json('description') ?? 'HTTP '.$response->status()))];
+    }
+
     private function url(string $method): string
     {
         return 'https://api.telegram.org/bot'.$this->token().'/'.$method;
