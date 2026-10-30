@@ -50,41 +50,6 @@ class Telegram
         return ['ok' => false, 'error' => $this->clean($detail)];
     }
 
-    /**
-     * Long-poll getUpdates (private messages only). 409 = a webhook is set (or another poller is running).
-     *
-     * @return array{ok: bool, updates: array<int, array<string, mixed>>, status: int, error: ?string}
-     */
-    public function getUpdates(?int $offset, int $timeout = 0): array
-    {
-        $payload = ['timeout' => $timeout, 'allowed_updates' => ['message']];
-        if ($offset !== null) {
-            $payload['offset'] = $offset;
-        }
-
-        try {
-            $response = Http::asJson()->timeout($timeout + 10)->post($this->url('getUpdates'), $payload);
-        } catch (Throwable $e) {
-            return ['ok' => false, 'updates' => [], 'status' => 0, 'error' => $this->clean($e->getMessage())];
-        }
-
-        if ($response->successful() && $response->json('ok') === true) {
-            return ['ok' => true, 'updates' => (array) $response->json('result', []), 'status' => 200, 'error' => null];
-        }
-
-        return ['ok' => false, 'updates' => [], 'status' => $response->status(), 'error' => $this->clean((string) ($response->json('description') ?? 'HTTP '.$response->status()))];
-    }
-
-    /** getUpdates only works without a webhook. */
-    public function deleteWebhook(): bool
-    {
-        try {
-            return Http::asJson()->timeout(10)->post($this->url('deleteWebhook'), ['drop_pending_updates' => false])->successful();
-        } catch (Throwable) {
-            return false;
-        }
-    }
-
     private function url(string $method): string
     {
         return 'https://api.telegram.org/bot'.$this->token().'/'.$method;

@@ -125,67 +125,9 @@
                 @endif
             </div>
 
-            <div class="space-y-3 rounded-lg border border-slate-200 p-3" data-telegram-section @if($linkCode !== null) wire:poll.3s="checkTelegram" @endif>
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <x-ui.label>{{ __('Telegram') }}</x-ui.label>
-                    @php $chat = (string) ($editing?->telegram_chat_id ?? ''); @endphp
-                    @if($chat !== '')
-                        <span class="inline-flex items-center gap-2" data-telegram-connected>
-                            <x-ui.badge variant="success">{{ __('Connected') }}</x-ui.badge>
-                            <span class="text-xs text-slate-500">{{ str_repeat('•', max(strlen($chat) - 3, 0)).substr($chat, -3) }}</span>
-                        </span>
-                    @else
-                        <x-ui.badge data-telegram-not-connected>{{ __('Not connected') }}</x-ui.badge>
-                    @endif
-                </div>
-
-                @if($justLinked)
-                    <p class="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800" data-telegram-linked>{{ __('Telegram is connected.') }}</p>
-                @endif
-                @if($linkExpired)
-                    <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-telegram-expired>{{ __('The code has expired. Create a new one.') }}</p>
-                @endif
-                @error('telegram')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
-
-                @if($linkCode !== null)
-                    <div class="space-y-2" data-telegram-code x-data="{ copied: false }">
-                        @if($linkUrl !== '')
-                            <p class="text-xs text-slate-600">{{ __('Send this link to the user and ask him to open it and press Start. It works once and expires in :minutes minutes.', ['minutes' => 15]) }}</p>
-                            <div class="flex items-center gap-2">
-                                <input type="text" readonly value="{{ $linkUrl }}" onfocus="this.select()" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-sand-50 px-3 py-2 text-xs text-slate-600" />
-                                <x-ui.button type="button" variant="secondary" x-on:click="navigator.clipboard.writeText(@js($linkUrl)).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
-                                    <span x-show="! copied">{{ __('Copy') }}</span><span x-show="copied" x-cloak>{{ __('Copied') }}</span>
-                                </x-ui.button>
-                            </div>
-                        @else
-                            <p class="text-xs text-slate-600">{{ __('The bot username is not set (TELEGRAM_BOT_USERNAME). Ask the user to open your bot in Telegram and send this message:') }}</p>
-                            <code class="block rounded-lg bg-sand-50 px-3 py-2 text-xs text-slate-700" data-telegram-manual>/start {{ $linkCode }}</code>
-                        @endif
-                        <p class="text-xs text-slate-400">{{ __('Waiting for the user to press Start...') }}</p>
-                    </div>
-                @endif
-
-                <div class="flex flex-wrap gap-2">
-                    @if(! $userId)
-                        <x-ui.button type="button" variant="secondary" wire:click="saveAndConnect" wire:loading.attr="disabled" wire:target="saveAndConnect">{{ __('Save and connect Telegram') }}</x-ui.button>
-                    @elseif($editing && $editing->is_active)
-                        <x-ui.button type="button" variant="secondary" wire:click="connectTelegram">{{ $linkCode !== null ? __('New code') : __('Connect Telegram') }}</x-ui.button>
-                    @endif
-                    @if($chat !== '')
-                        <x-ui.button type="button" variant="danger" wire:click="disconnectTelegram" wire:confirm="{{ __('Disconnect Telegram from this user?') }}">{{ __('Disconnect') }}</x-ui.button>
-                    @endif
-                </div>
-                @unless($botConfigured)
-                    <p class="text-xs text-amber-700">{{ __('The Telegram bot token (TELEGRAM_BOT_TOKEN) is not set.') }}</p>
-                @endunless
-
-                <details class="text-xs text-slate-500">
-                    <summary class="cursor-pointer font-medium text-slate-600">{{ __('Enter the chat id by hand') }}</summary>
-                    <div class="mt-2">
-                        <x-ui.input name="telegramChatId" :label="__('Telegram chat id')" wire:model="telegramChatId" maxlength="40" placeholder="123456789" />
-                        <p class="mt-1">{{ __('Optional. Order drafts of the user\'s shops are sent to this chat. The user must press Start in the bot first; to find the number write to @userinfobot in Telegram.') }}</p>
-                    </div>
-                </details>
+            <div>
+                <x-ui.input name="telegramChatId" :label="__('Telegram chat id')" wire:model="telegramChatId" maxlength="40" placeholder="123456789" />
+                <p class="mt-1 text-xs text-slate-500">{{ __('Optional. Order drafts of the user's shops are sent to this chat. The user must press Start in the bot first; to find the number write to @userinfobot in Telegram.') }}</p>
             </div>
 
             <div>
