@@ -22,7 +22,7 @@ class Telegram
     }
 
     /**
-     * @return array{ok: bool, error: ?string}
+     * @return array{ok: bool, error: ?string, message_id?: ?int}
      */
     public function send(string $chatId, string $text, ?string $buttonText = null, ?string $buttonUrl = null): array
     {
@@ -42,7 +42,7 @@ class Telegram
         }
 
         if ($response->successful() && $response->json('ok') === true) {
-            return ['ok' => true, 'error' => null];
+            return ['ok' => true, 'error' => null, 'message_id' => $response->json('result.message_id')];
         }
 
         $detail = (string) ($response->json('description') ?? 'HTTP '.$response->status());

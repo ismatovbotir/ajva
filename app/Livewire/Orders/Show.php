@@ -10,8 +10,11 @@ use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderItem;
 use App\Models\OrderLink;
+use App\Models\TelegramMessage;
+use App\Models\User;
 use App\Services\OrderSync;
 use App\Services\OrderTelegram;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -100,10 +103,12 @@ class Show extends Component
         $order = $this->order();
         abort_unless($order->status === OrderStatus::Draft, 404);
 
-        $result = app(OrderTelegram::class)->send($order);
+        // Same code path as the console command; the outcome is read back from the order.
+        Artisan::call('orders:send-telegram', ['order' => $order->id]);
+        $order = $order->fresh();
         $this->generatedLink = '';
-        $this->telegramStatus = $result['status'];
-        $this->telegramNote = $result['note'];
+        $this->telegramStatus = (string) $order->telegram_status;
+        $this->telegramNote = (string) $order->telegram_note;
     }
 
     public function confirm(): void
@@ -166,7 +171,24 @@ class Show extends Component
             }
         }
 
+        // Telegram delivery per responsible person (admin only): the latest attempt, and whether the personal link was opened.
+        $deliveries = collect();
+        if (Gate::allows('generate', Order::class)) {
+            $latest = TelegramMessage::query()->where('order_id', $order->id)->whereNotNull('user_id')
+                ->orderBy('id')->get(['user_id', 'status', 'error', 'sent_at'])->keyBy('user_id');
+            $opened = OrderLink::query()->where('order_id', $order->id)->pluck('last_used_at', 'user_id');
+            $people = User::query()->whereIn('id', $latest->keys()->merge($opened->keys())->unique())->orderBy('name')->get(['id', 'name']);
+            $deliveries = $people->map(fn (User $u) => [
+                'name' => $u->name,
+                'status' => $latest->get($u->id)?->status,
+                'error' => $latest->get($u->id)?->error,
+                'sent_at' => $latest->get($u->id)?->sent_at,
+                'opened_at' => $opened->get($u->id),
+            ])->filter(fn ($d) => $d['status'] !== null)->values();
+        }
+
         return view('livewire.orders.show', [
+            'deliveries' => $deliveries,
             'links' => $links,
             'order' => $order,
             'items' => $items,

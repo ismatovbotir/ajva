@@ -1243,5 +1243,8 @@
     "Direction": "Yo'nalish",
     "Person": "Shaxs",
     "Chat id": "Chat id",
-    "From id": "Yuboruvchi id"
+    "From id": "Yuboruvchi id",
+    "Telegram delivery": "Telegram orqali yetkazish",
+    "Link opened": "Havola ochildi",
+    "Link not opened yet": "Havola hali ochilmagan"
 }

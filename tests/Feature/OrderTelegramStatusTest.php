@@ -85,6 +85,63 @@ class OrderTelegramStatusTest extends TestCase
         Http::assertSentCount(4);
     }
 
+    public function test_each_attempt_is_logged_per_person_and_shown_on_the_order_page(): void
+    {
+        $aziz = $this->operator('Aziz', '4242');
+        $this->operator('Bekzod', '5555');
+        $this->telegram(fn ($request) => $request['chat_id'] === '5555'
+            ? Http::response(['ok' => false, 'description' => 'Forbidden: bot was blocked by the user'], 403)
+            : Http::response(['ok' => true, 'result' => ['message_id' => 77]], 200));
+
+        Livewire::actingAs($this->admin)->test(Index::class)->call('sendTelegram', $this->draft->id);
+
+        $ok = \App\Models\TelegramMessage::query()->where('order_id', $this->draft->id)->where('user_id', $aziz->id)->first();
+        $this->assertSame('sent', $ok->status);
+        $this->assertSame(77, $ok->message_id);
+        $this->assertSame(4242, $ok->chat_id);
+        $this->assertSame('out', $ok->direction);
+        $bad = \App\Models\TelegramMessage::query()->where('order_id', $this->draft->id)->where('status', 'failed')->first();
+        $this->assertStringContainsString('blocked', $bad->error);
+
+        \App\Models\OrderLink::forUser($this->draft, $aziz)->forceFill(['last_used_at' => now()])->save();
+
+        Livewire::actingAs($this->admin)->test(\App\Livewire\Orders\Show::class, ['order' => $this->draft])
+            ->assertSeeHtml('data-telegram-deliveries')->assertSee('Aziz')->assertSee('Link opened')->assertSee('Bekzod')->assertSee('blocked');
+    }
+
+    public function test_the_send_command_sends_unsent_drafts_and_skips_sent_ones_unless_asked(): void
+    {
+        $this->operator('Aziz', '4242');
+
+        $this->artisan('orders:send-telegram')->assertExitCode(0);
+        $this->assertSame('sent', $this->draft->fresh()->telegram_status);
+        Http::assertSentCount(1);
+
+        // Already sent: nothing happens without an argument, --all or the order number resends.
+        $this->artisan('orders:send-telegram')->expectsOutput('No draft orders to send.')->assertExitCode(0);
+        Http::assertSentCount(1);
+        $this->artisan('orders:send-telegram', ['order' => $this->draft->number()])->assertExitCode(0);
+        Http::assertSentCount(2);
+        $this->artisan('orders:send-telegram', ['--all' => true])->assertExitCode(0);
+        Http::assertSentCount(3);
+    }
+
+    public function test_the_send_command_fails_when_telegram_rejects_and_retries_only_missing_people(): void
+    {
+        $this->operator('Aziz', '4242');
+        $this->operator('Bekzod', '5555');
+        $this->telegram(fn ($request) => $request['chat_id'] === '5555'
+            ? Http::response(['ok' => false, 'description' => 'chat not found'], 400)
+            : Http::response(['ok' => true], 200));
+
+        $this->artisan('orders:send-telegram')->assertExitCode(1);
+        Http::assertSentCount(2);
+
+        // The retry goes only to Bekzod, Aziz already has the message.
+        $this->artisan('orders:send-telegram')->assertExitCode(1);
+        Http::assertSentCount(3);
+    }
+
     public function test_a_failure_shows_failed_with_the_reason(): void
     {
         $this->operator('Aziz', '4242');

@@ -9,7 +9,7 @@ class TelegramMessage extends Model
 {
     protected $fillable = [
         'update_id', 'telegram_id', 'direction', 'chat_id', 'chat_type', 'from_id', 'message_id',
-        'type', 'text', 'sent_by', 'sent_at',
+        'type', 'status', 'error', 'text', 'sent_by', 'order_id', 'user_id', 'sent_at',
     ];
 
     protected $casts = [

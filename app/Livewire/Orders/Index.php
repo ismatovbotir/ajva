@@ -6,8 +6,8 @@ use App\Enums\OrderStatus;
 use App\Livewire\Ordering\Index as OrderingIndex;
 use App\Models\Order;
 use App\Services\OrderSync;
-use App\Services\OrderTelegram;
 use App\Support\ShopAccess;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -47,7 +47,8 @@ class Index extends Component
         $order = $this->find($orderId);
         abort_unless($order->status === OrderStatus::Draft, 404);
 
-        app(OrderTelegram::class)->send($order);
+        // Same code path as the console command; the outcome is stored on the order.
+        Artisan::call('orders:send-telegram', ['order' => $order->id]);
     }
 
     private function find(int $orderId): Order

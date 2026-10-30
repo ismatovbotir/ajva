@@ -147,6 +147,31 @@
         <p class="mt-4 text-xs text-slate-500">{{ __('Telegram') }}: @include('livewire.orders.partials.telegram-badge', ['order' => $order])</p>
     @endif
 
+    {{-- Telegram delivery per person: accepted by Telegram or failed, and whether the personal link was opened --}}
+    @if($deliveries->isNotEmpty())
+        <x-ui.card class="mt-4" data-telegram-deliveries>
+            <h3 class="mb-2 text-sm font-semibold text-slate-700">{{ __('Telegram delivery') }}</h3>
+            <ul class="space-y-1.5 text-sm">
+                @foreach($deliveries as $d)
+                    <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span class="w-40 shrink-0 truncate text-slate-700">{{ $d['name'] }}</span>
+                        @if($d['status'] === 'sent')
+                            <x-ui.badge variant="success">{{ __('Sent') }} {{ $d['sent_at']?->format('d.m H:i') }}</x-ui.badge>
+                        @else
+                            <x-ui.badge variant="danger">{{ __('Failed') }}</x-ui.badge>
+                            <span class="text-xs text-red-600">{{ $d['error'] }}</span>
+                        @endif
+                        @if($d['opened_at'])
+                            <x-ui.badge variant="info">{{ __('Link opened') }} {{ $d['opened_at']->format('d.m H:i') }}</x-ui.badge>
+                        @elseif($d['status'] === 'sent')
+                            <span class="text-xs text-slate-400">{{ __('Link not opened yet') }}</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </x-ui.card>
+    @endif
+
     {{-- Comment of the responsible person: editable while a draft, shown when set afterwards --}}
     @if($canEdit)
         <x-ui.card class="mt-4">

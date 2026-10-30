@@ -6,6 +6,8 @@ use App\Enums\OrderStatus;
 use App\Enums\UserRole;
 use App\Models\Order;
 use App\Models\OrderLink;
+use App\Models\Telegram as TelegramAccount;
+use App\Models\TelegramMessage;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +124,7 @@ class OrderTelegram
             } catch (Throwable $e) {
                 $res = ['ok' => false, 'error' => class_basename($e)];
             }
+            $this->log($order, $user, $res, $message);
             if ($res['ok']) {
                 $sent++;
                 $link->forceFill(['telegram_sent_at' => now()])->save();
@@ -140,6 +143,31 @@ class OrderTelegram
             'names' => collect($failed)->pluck('name')->implode(', '),
             'error' => implode('; ', array_keys($errors)),
         ]), collect($failed)->pluck('id')->map(fn ($id) => (int) $id)->all()), $sent);
+    }
+
+    /** One delivery row per attempt (the Bot API only says accepted or not; it has no delivered / read status). */
+    private function log(Order $order, User $user, array $res, string $message): void
+    {
+        $chatId = trim((string) $user->telegram_chat_id);
+
+        try {
+            TelegramMessage::query()->create([
+                'telegram_id' => TelegramAccount::query()->where('tg_id', $chatId)->value('id'),
+                'direction' => 'out',
+                'chat_id' => (int) $chatId,
+                'chat_type' => 'private',
+                'message_id' => $res['message_id'] ?? null,
+                'type' => 'text',
+                'status' => $res['ok'] ? 'sent' : 'failed',
+                'error' => $res['ok'] ? null : mb_substr((string) $res['error'], 0, 250),
+                'text' => mb_substr($message, 0, 4000),
+                'order_id' => $order->id,
+                'user_id' => $user->id,
+                'sent_at' => now(),
+            ]);
+        } catch (Throwable $e) {
+            report($e);   // a logging problem never fails the send
+        }
     }
 
     /** Records the outcome on the order: status, note, how many current recipients have the message, time of the last delivery. */
