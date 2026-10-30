@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\TelegramUpdates;
+use App\Support\TelegramStatus;
 use Illuminate\Console\Command;
 
 class TelegramPoll extends Command
@@ -14,6 +15,10 @@ class TelegramPoll extends Command
     public function handle(TelegramUpdates $updates): int
     {
         $result = $updates->poll();
+
+        if ($result['status'] !== 'skipped') {
+            TelegramStatus::record('poll', ['status' => $result['status'], 'messages' => $result['messages'], 'error' => $result['error']]);
+        }
 
         match ($result['status']) {
             'ok' => $this->line("Stored {$result['messages']} new message(s)."),

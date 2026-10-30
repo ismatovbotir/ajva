@@ -29,6 +29,7 @@
             ['label' => 'Prices', 'route' => 'prices.index', 'icon' => 'currency'],
         ]],
         ['label' => 'Telegram', 'roles' => ['admin'], 'items' => [
+            ['label' => 'Telegram status', 'route' => 'telegram.status', 'icon' => 'adjustments'],
             ['label' => 'Telegram users', 'route' => 'telegram.users', 'icon' => 'users'],
             ['label' => 'Telegram messages', 'route' => 'telegram.messages', 'icon' => 'clipboard'],
         ]],

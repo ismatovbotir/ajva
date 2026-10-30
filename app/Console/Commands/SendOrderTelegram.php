@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderLink;
 use App\Services\OrderTelegram;
+use App\Support\TelegramStatus;
 use Illuminate\Console\Command;
 
 class SendOrderTelegram extends Command
@@ -36,6 +37,7 @@ class SendOrderTelegram extends Command
         }
 
         $failed = false;
+        $sent = 0;
         foreach ($orders as $order) {
             // A previously failed order only goes to the people who still have no message; everything else is a full send.
             $onlyMissing = $arg === null && ! $this->option('all') && $order->telegram_status === 'failed';
@@ -48,7 +50,10 @@ class SendOrderTelegram extends Command
             $result = $telegram->send($order, $only);
             $this->line(sprintf('%s: %s - %s', $order->number(), $result['status'], $result['note']));
             $failed = $failed || in_array($result['status'], ['failed', 'no_token'], true);   // no_token is stored on the order too
+            $sent += $result['status'] === 'sent' ? 1 : 0;
         }
+
+        TelegramStatus::record('send', ['orders' => $orders->count(), 'sent' => $sent, 'failed' => $failed]);
 
         return $failed ? self::FAILURE : self::SUCCESS;
     }

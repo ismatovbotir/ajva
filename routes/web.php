@@ -117,6 +117,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings/order-rules', OrderRulesSettings::class)->name('settings.order-rules');
         Route::get('/settings/warehouse', WarehouseSettings::class)->name('settings.warehouse');
         Route::get('/settings/users', UsersIndex::class)->name('users.index');
+        Route::get('/telegram/status', \App\Livewire\Telegram\Status::class)->name('telegram.status');
         Route::get('/telegram/users', TelegramUsers::class)->name('telegram.users');
         Route::get('/telegram/messages', TelegramMessages::class)->name('telegram.messages');
     });

@@ -120,6 +120,26 @@ class TelegramMessagesTest extends TestCase
         $this->assertSame(0, TelegramMessage::query()->count());
     }
 
+    public function test_status_page_shows_the_last_command_runs(): void
+    {
+        $admin = User::factory()->create();
+
+        $this->actingAs($admin)->get(route('telegram.status'))->assertOk()->assertSee('telegram:poll')->assertSee('Never ran');
+
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => [$this->update(10, 555, 'hello')]])]);
+        Livewire::actingAs($admin)->test(\App\Livewire\Telegram\Status::class)
+            ->call('pollNow')
+            ->assertSee('Working')->assertSee('New messages: 1');
+
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => false, 'description' => 'boom'], 500)]);
+        Livewire::actingAs($admin)->test(\App\Livewire\Telegram\Status::class)
+            ->call('pollNow')->assertSee('Error')->assertSee('boom');
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAs(User::factory()->operator()->create())->get(route('telegram.status'))->assertForbidden();
+    }
+
     public function test_pages_are_admin_only_and_render(): void
     {
         $tu = TelegramAccount::query()->create(['tg_id' => 555, 'first_name' => 'Aziz']);
