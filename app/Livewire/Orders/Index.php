@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Livewire\Ordering\Index as OrderingIndex;
 use App\Models\Order;
 use App\Services\OrderSync;
+use App\Services\OrderTelegram;
 use App\Support\ShopAccess;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
@@ -67,7 +68,15 @@ class Index extends Component
             ->latest('id')
             ->paginate(20);
 
+        // Receivers per shop (active operators of the shop with a Telegram chat id): the Send / Resend button only
+        // appears for drafts whose shop has at least one.
+        $receivers = [];
+        foreach (OrderTelegram::responsibleByShop($orders->getCollection()->pluck('shop_id')->unique()->values()->all()) as $shopId => $people) {
+            $receivers[$shopId] = $people->filter(fn ($u) => trim((string) $u->telegram_chat_id) !== '')->count();
+        }
+
         return view('livewire.orders.index', [
+            'receivers' => $receivers,
             'noShops' => ShopAccess::hasNone(),
             'orders' => $orders,
             'isAdmin' => (bool) auth()->user()?->isAdmin(),

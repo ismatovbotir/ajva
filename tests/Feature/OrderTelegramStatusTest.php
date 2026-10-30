@@ -142,6 +142,19 @@ class OrderTelegramStatusTest extends TestCase
         Http::assertSentCount(3);
     }
 
+    public function test_resend_button_shows_only_for_drafts_whose_shop_has_a_receiver(): void
+    {
+        // Nobody with a chat id: no button, a muted hint instead.
+        $this->operator('Aziz', null);
+        Livewire::actingAs($this->admin)->test(Index::class)
+            ->assertDontSeeHtml('data-resend')->assertSeeHtml('data-no-receiver');
+
+        // A receiver exists: the button is there.
+        $this->operator('Bekzod', '5555');
+        Livewire::actingAs($this->admin)->test(Index::class)
+            ->assertSeeHtml('data-resend')->assertDontSeeHtml('data-no-receiver');
+    }
+
     public function test_a_failure_shows_failed_with_the_reason(): void
     {
         $this->operator('Aziz', '4242');

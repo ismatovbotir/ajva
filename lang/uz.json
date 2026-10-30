@@ -1279,5 +1279,13 @@
     "By system": "Tizim tomonidan",
     "Code, GTIN or name (at least 3 characters)": "Kod, GTIN yoki nomi (kamida 3 ta belgi)",
     "Nothing found.": "Hech narsa topilmadi.",
-    "Code": "Kod"
+    "Code": "Kod",
+    "No receiver": "Qabul qiluvchi yo'q",
+    "Assign to user": "Foydalanuvchiga biriktirish",
+    "Change user": "Foydalanuvchini o'zgartirish",
+    "Unassign": "Biriktirishni olib tashlash",
+    "Remove the link between this Telegram and the user?": "Bu Telegram va foydalanuvchi o'rtasidagi bog'lanish olib tashlansinmi?",
+    "This Telegram is already assigned to :name. Unassign it first.": "Bu Telegram allaqachon :name ga biriktirilgan. Avval biriktirishni olib tashlang.",
+    "has another Telegram": "boshqa Telegram biriktirilgan",
+    "Order messages for this user will be sent to this Telegram. The user must have pressed Start in the bot.": "Bu foydalanuvchining buyurtma xabarlari shu Telegramga yuboriladi. Foydalanuvchi botda Start bosgan bo'lishi kerak."
 }

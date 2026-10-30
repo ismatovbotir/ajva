@@ -120,6 +120,40 @@ class TelegramMessagesTest extends TestCase
         $this->assertSame(0, TelegramMessage::query()->count());
     }
 
+    public function test_admin_assigns_a_telegram_person_to_a_crm_user_and_can_unassign(): void
+    {
+        $admin = User::factory()->create();
+        $person = TelegramAccount::query()->create(['tg_id' => 555, 'first_name' => 'Aziz']);
+        $operator = User::factory()->operator()->create(['name' => 'Operator One']);
+        $other = User::factory()->operator()->create(['name' => 'Operator Two']);
+
+        $page = Livewire::actingAs($admin)->test(TelegramUsersPage::class)
+            ->call('openAssign', $person->id)
+            ->set('assignUserId', (string) $operator->id)
+            ->call('assign')
+            ->assertHasNoErrors()->assertSet('showAssign', false);
+        $this->assertSame('555', $operator->fresh()->telegram_chat_id);
+        $page->assertSee('Operator One');
+
+        // The same Telegram cannot belong to a second user, and an inactive user cannot get one.
+        $page->call('openAssign', $person->id)->set('assignUserId', (string) $other->id)->call('assign')
+            ->assertHasErrors('assignUserId');
+        $this->assertNull($other->fresh()->telegram_chat_id);
+        $other->forceFill(['is_active' => false])->save();
+        $page->set('assignUserId', (string) $other->id)->call('assign')->assertHasErrors('assignUserId');
+
+        // Moving the link: unassign first, then assign to the other user.
+        $other->forceFill(['is_active' => true])->save();
+        $page->call('closeAssign')->call('unassign', $person->id);
+        $this->assertNull($operator->fresh()->telegram_chat_id);
+        $page->call('openAssign', $person->id)->set('assignUserId', (string) $other->id)->call('assign')->assertHasNoErrors();
+        $this->assertSame('555', $other->fresh()->telegram_chat_id);
+
+        // Operators cannot use the page at all.
+        $this->app['auth']->forgetGuards();
+        Livewire::actingAs($operator)->test(TelegramUsersPage::class)->assertForbidden();
+    }
+
     public function test_status_page_shows_the_last_command_runs(): void
     {
         $admin = User::factory()->create();

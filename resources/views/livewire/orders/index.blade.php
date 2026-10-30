@@ -47,7 +47,11 @@
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                         <x-ui.button :href="route('orders.show', $order)" variant="secondary">{{ $order->status->value === 'draft' ? __('Edit') : __('Open') }}</x-ui.button>
                         @if($isAdmin && $order->status->value === 'draft')
-                            <x-ui.button type="button" variant="secondary" wire:click="sendTelegram({{ $order->id }})" wire:loading.attr="disabled" wire:target="sendTelegram({{ $order->id }})">{{ $order->telegram_status === null ? __('Send') : __('Resend') }}</x-ui.button>
+                            @if(($receivers[$order->shop_id] ?? 0) > 0)
+                                <x-ui.button type="button" variant="secondary" wire:click="sendTelegram({{ $order->id }})" wire:loading.attr="disabled" wire:target="sendTelegram({{ $order->id }})" data-resend>{{ $order->telegram_status === null ? __('Send') : __('Resend') }}</x-ui.button>
+                            @else
+                                <span class="text-xs text-slate-400" data-no-receiver>{{ __('No receiver') }}</span>
+                            @endif
                         @endif
                         @if($isAdmin && in_array($order->status->value, ['pending_approval', 'approved'], true))
                             <x-ui.button type="button" wire:click="confirm({{ $order->id }})" wire:confirm="{{ __('Confirm this order and send it to 1C?') }}">{{ __('Confirm') }}</x-ui.button>
@@ -104,7 +108,11 @@
                                 <td class="px-3 py-3 text-right text-sm">
                                     <a href="{{ route('orders.show', $order) }}" class="mr-2 font-medium text-brand-700 hover:underline">{{ $order->status->value === 'draft' ? __('Edit') : __('Open') }}</a>
                                     @if($isAdmin && $order->status->value === 'draft')
-                                        <x-ui.button type="button" variant="secondary" wire:click="sendTelegram({{ $order->id }})" wire:loading.attr="disabled" wire:target="sendTelegram({{ $order->id }})">{{ $order->telegram_status === null ? __('Send') : __('Resend') }}</x-ui.button>
+                                        @if(($receivers[$order->shop_id] ?? 0) > 0)
+                                            <x-ui.button type="button" variant="secondary" wire:click="sendTelegram({{ $order->id }})" wire:loading.attr="disabled" wire:target="sendTelegram({{ $order->id }})" data-resend>{{ $order->telegram_status === null ? __('Send') : __('Resend') }}</x-ui.button>
+                                        @else
+                                            <span class="text-xs text-slate-400" data-no-receiver>{{ __('No receiver') }}</span>
+                                        @endif
                                     @endif
                                     @if($isAdmin && in_array($order->status->value, ['pending_approval', 'approved'], true))
                                         <x-ui.button type="button" wire:click="confirm({{ $order->id }})" wire:confirm="{{ __('Confirm this order and send it to 1C?') }}">{{ __('Confirm') }}</x-ui.button>

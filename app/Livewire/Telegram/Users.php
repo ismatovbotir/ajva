@@ -56,6 +56,65 @@ class Users extends Component
         $this->telegramId = null;
     }
 
+    /** The assign form: which Telegram person, and the CRM user chosen for them. */
+    public bool $showAssign = false;
+
+    public ?int $assignTelegramId = null;
+
+    public string $assignUserId = '';
+
+    public function openAssign(int $id): void
+    {
+        $account = TelegramAccount::query()->findOrFail($id);
+
+        $this->resetErrorBag();
+        $this->assignTelegramId = $account->id;
+        $this->assignUserId = (string) (User::query()->where('telegram_chat_id', (string) $account->tg_id)->value('id') ?? '');
+        $this->showAssign = true;
+    }
+
+    public function closeAssign(): void
+    {
+        $this->showAssign = false;
+        $this->assignTelegramId = null;
+        $this->assignUserId = '';
+    }
+
+    /**
+     * Links the Telegram person to a CRM user: the user's telegram_chat_id becomes the person's Telegram id (that
+     * is where order messages go). A person belongs to one user, and a user has one Telegram.
+     */
+    public function assign(): void
+    {
+        $data = $this->validate(['assignUserId' => ['required', 'integer', 'exists:users,id']]);
+        $account = TelegramAccount::query()->findOrFail($this->assignTelegramId);
+        $user = User::query()->findOrFail((int) $data['assignUserId']);
+        $chat = (string) $account->tg_id;
+
+        if (! $user->is_active) {
+            $this->addError('assignUserId', __('Activate the user first.'));
+
+            return;
+        }
+
+        $holder = User::query()->where('telegram_chat_id', $chat)->whereKeyNot($user->id)->first();
+        if ($holder !== null) {
+            $this->addError('assignUserId', __('This Telegram is already assigned to :name. Unassign it first.', ['name' => $holder->name]));
+
+            return;
+        }
+
+        $user->forceFill(['telegram_chat_id' => $chat])->save();
+        $this->closeAssign();
+    }
+
+    /** Removes the link: the CRM user no longer gets Telegram messages. */
+    public function unassign(int $id): void
+    {
+        $account = TelegramAccount::query()->findOrFail($id);
+        User::query()->where('telegram_chat_id', (string) $account->tg_id)->update(['telegram_chat_id' => null]);
+    }
+
     public function send(Telegram $telegram): void
     {
         $data = $this->validate(['text' => ['required', 'string', 'max:4000']]);
@@ -115,6 +174,10 @@ class Users extends Component
             ->pluck('name', 'telegram_chat_id');
 
         return view('livewire.telegram.users', [
+            'assignable' => $this->showAssign
+                ? User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'role', 'telegram_chat_id'])
+                : collect(),
+            'assignTarget' => $this->assignTelegramId ? TelegramAccount::query()->find($this->assignTelegramId) : null,
             'users' => $users,
             'panelUsers' => $panelUsers,
             'target' => $this->telegramId ? TelegramAccount::query()->find($this->telegramId) : null,

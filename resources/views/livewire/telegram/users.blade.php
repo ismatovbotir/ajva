@@ -20,7 +20,10 @@
                                 <x-ui.badge variant="info" class="mt-1">{{ $panelUsers[(string) $tu->tg_id] }}</x-ui.badge>
                             @endif
                         </div>
-                        <x-ui.button variant="secondary" wire:click="compose({{ $tu->id }})">{{ __('Send message') }}</x-ui.button>
+                        <div class="flex shrink-0 flex-col gap-2">
+                            <x-ui.button variant="secondary" wire:click="compose({{ $tu->id }})">{{ __('Send message') }}</x-ui.button>
+                            <x-ui.button variant="secondary" wire:click="openAssign({{ $tu->id }})">{{ isset($panelUsers[(string) $tu->tg_id]) ? __('Change user') : __('Assign to user') }}</x-ui.button>
+                        </div>
                     </div>
                 </x-ui.card>
             @endforeach
@@ -51,6 +54,10 @@
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $tu->last_message_at?->format('d.m.Y H:i') ?? '—' }}</td>
                             <td class="px-4 py-3 text-right text-sm">
                                 <x-ui.button variant="secondary" wire:click="compose({{ $tu->id }})">{{ __('Send message') }}</x-ui.button>
+                                <x-ui.button variant="secondary" wire:click="openAssign({{ $tu->id }})">{{ isset($panelUsers[(string) $tu->tg_id]) ? __('Change user') : __('Assign to user') }}</x-ui.button>
+                                @if(isset($panelUsers[(string) $tu->tg_id]))
+                                    <x-ui.button variant="danger" wire:click="unassign({{ $tu->id }})" wire:confirm="{{ __('Remove the link between this Telegram and the user?') }}">{{ __('Unassign') }}</x-ui.button>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
@@ -73,6 +80,25 @@
             <div class="flex justify-end gap-2">
                 <x-ui.button type="button" variant="secondary" wire:click="closeModal">{{ __('Close') }}</x-ui.button>
                 <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="send">{{ __('Send') }}</x-ui.button>
+            </div>
+        </form>
+    </x-ui.modal>
+
+    <x-ui.modal :show="$showAssign" :title="__('Assign to user')">
+        <form wire:submit="assign" class="space-y-4">
+            @if($assignTarget)
+                <p class="text-sm text-slate-600">{{ __('Telegram') }}: <span class="font-medium text-slate-900">{{ $assignTarget->displayName() }}</span> <span class="text-slate-400">({{ $assignTarget->tg_id }})</span></p>
+            @endif
+            <x-ui.select name="assignUserId" :label="__('User')" wire:model="assignUserId">
+                <option value="">{{ __('Choose a user') }}</option>
+                @foreach($assignable as $person)
+                    <option value="{{ $person->id }}">{{ $person->name }} ({{ $person->role->label() }})@if(filled($person->telegram_chat_id) && (string) $person->telegram_chat_id !== (string) $assignTarget?->tg_id) - {{ __('has another Telegram') }}@endif</option>
+                @endforeach
+            </x-ui.select>
+            <p class="text-xs text-slate-500">{{ __('Order messages for this user will be sent to this Telegram. The user must have pressed Start in the bot.') }}</p>
+            <div class="flex justify-end gap-2">
+                <x-ui.button type="button" variant="secondary" wire:click="closeAssign">{{ __('Close') }}</x-ui.button>
+                <x-ui.button type="submit">{{ __('Save') }}</x-ui.button>
             </div>
         </form>
     </x-ui.modal>
