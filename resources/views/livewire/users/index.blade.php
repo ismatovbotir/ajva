@@ -127,7 +127,7 @@
 
             <div>
                 <x-ui.input name="telegramChatId" :label="__('Telegram chat id')" wire:model="telegramChatId" maxlength="40" placeholder="123456789" />
-                <p class="mt-1 text-xs text-slate-500">{{ __('Optional. Order drafts of the user's shops are sent to this chat. The user must press Start in the bot first; to find the number write to @userinfobot in Telegram.') }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ __('Optional. Order drafts of the user\'s shops are sent to this chat. The user must press Start in the bot first; to find the number write to @userinfobot in Telegram.') }}</p>
             </div>
 
             <div>
