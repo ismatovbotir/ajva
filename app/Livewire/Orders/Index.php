@@ -11,6 +11,7 @@ use App\Support\ShopAccess;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -24,12 +25,28 @@ class Index extends Component
 {
     use WithPagination;
 
-    public function confirm(int $orderId): void
+    /** '' = all, 'approval' = only orders waiting for an admin's approval. */
+    #[Url]
+    public string $filter = '';
+
+    /**
+     * Older pending_approval orders: the admin confirms. An order waiting for approval is approved (same as the
+     * order page). A draft is confirmed on its own page, where its exceptions are checked and shown.
+     */
+    public function confirm(int $orderId)
     {
         $order = $this->find($orderId);
         Gate::authorize('confirm', $order);
 
-        app(OrderSync::class)->confirm($order, auth()->user());
+        if ($order->status === OrderStatus::Draft) {
+            return $this->redirectRoute('orders.show', $order);
+        }
+        if ($order->isAwaitingApproval()) {
+            Gate::authorize('approve', $order);
+            app(OrderSync::class)->approve($order, auth()->user());
+        } else {
+            app(OrderSync::class)->confirm($order, auth()->user());
+        }
         OrderingIndex::bumpOrdersVersion();
     }
 
@@ -65,8 +82,11 @@ class Index extends Component
         $orders = ShopAccess::restrict(Order::query(), 'orders.shop_id')
             ->with('shop')
             ->withCount('items')
+            ->when($this->filter === 'approval', fn ($q) => $q->where('status', OrderStatus::PendingApproval->value)->where('review_status', Order::REVIEW_PENDING))
             ->latest('id')
             ->paginate(20);
+        $waiting = ShopAccess::restrict(Order::query(), 'orders.shop_id')
+            ->where('status', OrderStatus::PendingApproval->value)->where('review_status', Order::REVIEW_PENDING)->count();
 
         // Receivers per shop (active operators of the shop with a Telegram chat id): the Send / Resend button only
         // appears for drafts whose shop has at least one.
@@ -77,6 +97,7 @@ class Index extends Component
 
         return view('livewire.orders.index', [
             'receivers' => $receivers,
+            'waiting' => $waiting,
             'noShops' => ShopAccess::hasNone(),
             'orders' => $orders,
             'isAdmin' => (bool) auth()->user()?->isAdmin(),

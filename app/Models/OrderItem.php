@@ -19,11 +19,14 @@ class OrderItem extends Model
         'cover_days',
         'added_manually',
         'flags',
+        'qty_received',
+        'discrepancy_reason',
     ];
 
     protected $casts = [
         'qty' => 'decimal:3',
         'suggested_qty' => 'decimal:3',
+        'qty_received' => 'decimal:3',
         'added_manually' => 'boolean',
     ];
 

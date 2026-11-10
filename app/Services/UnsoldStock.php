@@ -200,7 +200,8 @@ class UnsoldStock
             return [];
         }
 
-        $rows = Stock::applyCurrent(DB::table('stocks'))
+        // Explicit zero: a pair the shop's latest 1C sync did not report is not "stock on hand" (unknown, not counted).
+        $rows = Stock::applyReported(Stock::applyCurrent(DB::table('stocks')))
             ->whereIn('stocks.shop_id', $shopIds)
             ->where('stocks.qty', '>', 0)
             ->get(['stocks.item_id', 'stocks.shop_id', 'stocks.qty']);

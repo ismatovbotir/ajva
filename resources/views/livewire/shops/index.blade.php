@@ -18,7 +18,7 @@
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="font-medium text-slate-900">{{ $shop->name }}</p>
-                                <p class="text-sm text-slate-500">#{{ $shop->id }}</p>
+                                <p class="text-sm text-slate-500">#{{ $shop->id }}@if($shop->area_m2 !== null) · {{ rtrim(rtrim(number_format((float) $shop->area_m2, 2, '.', ' '), '0'), '.') }} m²@endif</p>
                             </div>
                             <div class="text-right">
                                 <p class="font-medium text-slate-900">{{ number_format((float) $shop->qty_total) }} {{ __('qty') }}</p>
@@ -54,6 +54,8 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('ID') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Name') }}</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Area, m²') }}</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Map') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Items') }}</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Total qty') }}</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Sell today') }}</th>
@@ -70,6 +72,14 @@
                             <td class="px-4 py-3 text-sm tabular-nums text-slate-500">{{ $shop->id }}</td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">
                                 <a href="{{ route('shops.show', $shop) }}" class="hover:text-brand-700 hover:underline">{{ $shop->name }}</a>
+                            </td>
+                            <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $shop->area_m2 !== null ? rtrim(rtrim(number_format((float) $shop->area_m2, 2, '.', ' '), '0'), '.') : '—' }}</td>
+                            <td class="px-4 py-3 text-sm" onclick="event.stopPropagation()">
+                                @if($shop->map_url)
+                                    <a href="{{ $shop->map_url }}" target="_blank" rel="noopener noreferrer" class="font-medium text-primary-700 hover:underline">{{ __('Yandex Maps') }}</a>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $shop->item_count }}</td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ number_format((float) $shop->qty_total) }}</td>

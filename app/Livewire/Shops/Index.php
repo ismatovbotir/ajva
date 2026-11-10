@@ -17,8 +17,9 @@ class Index extends Component
     public function render()
     {
         $shops = ShopAccess::restrict(Shop::query(), 'shops.id')
-            ->withCount('currentStocks as item_count')
-            ->withSum('currentStocks as qty_total', 'qty')
+            // Explicit zero: pairs not reported by the shop's latest sync are neither counted nor summed.
+            ->withCount('reportedStocks as item_count')
+            ->withSum('reportedStocks as qty_total', 'qty')
             ->orderBy('name')
             ->paginate(20);
 

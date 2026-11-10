@@ -41,7 +41,7 @@
                     <tr class="border-b border-slate-200">
                         <td class="py-1 pr-2">{{ $r['name'] }} <span class="text-slate-500">{{ $r['sku'] }}</span></td>
                         <td class="pr-2">{{ $r['abc'] }}</td>
-                        <td class="pr-2">{{ $r['reason'] === 'missing' ? __('Missing') : __('Zero') }}</td>
+                        <td class="pr-2">{{ $r['reason'] === 'zero' ? __('Zero') : ($r['reason'] === 'no_data' ? __('Not reported') : __('Missing')) }}</td>
                         <td class="pr-2 text-right tabular-nums">{{ $fmt($r['last_qty']) }}</td>
                         <td class="pr-2 text-right tabular-nums">{{ $r['days_out'] }}</td>
                         <td class="pr-2 text-right tabular-nums">{{ $r['shops'] }}</td>

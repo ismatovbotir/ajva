@@ -18,6 +18,8 @@ use Throwable;
  * The daily automatic DRAFT orders (command orders:auto-generate, every 5 minutes). Per enabled shop, once a day, when
  * its run_time has passed on an allowed weekday (rules: App\Models\OrderRule, shop value or chain default):
  *
+ *  Pairs 1C did not report in the shop's latest sync are never planned (explicit zero, see App\Models\Stock); their
+ *  count goes to orders.warnings as no_data=N and to the run note.
  *  1. today's stock snapshot (stocks.stock_date = today) must exist. Missing: status waiting_stock and the next tick
  *     tries again; 4 hours after run_time the day is given up (skipped_no_stock).
  *  2. the run is claimed atomically (OrderRule::claim: last_run_date empty or before today), so two overlapping
@@ -144,15 +146,18 @@ class AutoOrders
         }
         if ($result['status'] !== 'created') {
             $left = $result['stale'] + $result['none'];
-
-            return ['skipped_empty', $left > 0
+            $note = $left > 0
                 ? __('Nothing to order. :count items were left out (stale stock or too little sales history).', ['count' => $left])
-                : __('Nothing to order.')];
+                : __('Nothing to order.');
+            $result['no_data'] > 0 && $note .= ' '.__(':count items not reported by 1C were left out.', ['count' => $result['no_data']]);
+
+            return ['skipped_empty', $note];
         }
 
         /** @var Order $order */
         $order = $result['order'];
         $parts = [__(':lines lines, total quantity :qty.', ['lines' => $result['lines'], 'qty' => rtrim(rtrim(number_format($result['pieces'], 3, '.', ''), '0'), '.')])];
+        $result['no_data'] > 0 && $parts[] = __(':count items left out: not reported by 1C.', ['count' => $result['no_data']]);
         $result['stale'] > 0 && $parts[] = __(':count items left out: stale stock.', ['count' => $result['stale']]);
         $result['none'] > 0 && $parts[] = __(':count items left out: too little sales history.', ['count' => $result['none']]);
         $result['capped'] > 0 && $parts[] = __(':count quantities capped at 3 x max.', ['count' => $result['capped']]);

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Enums\OrderStatus;
 use App\Models\OrderRule;
 use App\Models\Stock;
+use App\Support\InTransit;
 use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +20,14 @@ use Illuminate\Support\Facades\DB;
  * -----------------
  * est (estimated)   snapshot qty (Stock::applyCurrent) minus net sold since the snapshot DAY, never below 0.
  *                   Net sold = sales - refunds on active receipts, storno lines excluded.
- * in_transit        quantity on open orders (pending_approval / approved, not fulfilled) of that shop and item:
+ * no_data           EXPLICIT ZERO (inventory.explicit_zero_stock, default; see App\Models\Stock): 1C reports zero itself, so a pair
+ *                   whose current row is older than its shop's latest sync date R (or that never had a row) is "not reported
+ *                   by 1C": unknown stock, NOT out of stock. Such pairs are never listed or planned; build() returns them as
+ *                   result['no_data'] = {count, by_shop, items (first 200: shop_id, item_id, item, last_date)}. Rows carry
+ *                   `no_data` (false for every returned row) and `stale` (= no_data OR the whole sync older than the 31-day
+ *                   lookback; kept so consumers keep working). Flag off: legacy, `stale` = row older than the lookback only.
+ * in_transit        quantity on open orders (pending_approval / approved / confirmed, not received) of that shop and item,
+ *                   only while the order is at most inventory.in_transit_max_days old (App\Support\InTransit):
  *                   goods that are on their way. position = est + in_transit; cover, stock-out, level, listing
  *                   and the order quantity all work on the position, so an item that was just ordered is not
  *                   suggested again.
@@ -29,23 +36,45 @@ use Illuminate\Support\Facades\DB;
  *                   (out of stock) when the stock snapshot of that date exists and is <= 0: censored days are
  *                   left out of every mean. Daily values are floored at 0 (refund-heavy days) and clipped at
  *                   median + 3 x MAD per pair (flag `clipped`; the MAD is floored at 10 % of the median, and
- *                   nothing is clipped for intermittent items whose median is 0).
- * speed (flat)      mean daily net sales over the non-censored days of the last 7 complete days; when fewer than
+ *                   nothing is clipped for intermittent items whose median is 0). clip_mode 'weekday' (default)
+ *                   lifts the cap of a day to max(median + k x MAD, 2 x the mean of the OTHER days with the same
+ *                   weekday), so genuine weekend / pay-day peaks survive; `spike` = a day was clipped to <= 1/3 of its
+ *                   value (typo / bulk one-off, worth a look). 'legacy' = median + k x MAD only.
+ * refunds           inventory.refund_netting 'same_day' (default): the DAILY DEMAND is sales minus refunds of the SAME day only,
+ *                   clamped at 0 per day (abs(qty) on refund lines); a refund of goods sold on an earlier day does not
+ *                   lower the day it arrives. The same clamped series feeds the stock estimate (a refund-only day does not raise est) and the ABC revenue. 'legacy' = old netting.
+ * silent_days       shop-days whose receipt feed was silent (sale receipts < 20 % of the usual weekday median, usual >= 20
+ *                   receipts, median of the other same-weekday days of 28 days, >= 3 of them) are MISSING data, left out of
+ *                   every mean like stock-out days; > 25 % of the window silent = confidence one step lower (not below low).
+ *                   inventory.feed_aware_censoring=false restores the old behaviour.
+ * speed (flat)      the LEVEL: mean daily net sales over the non-censored days of the last 7 complete days; when fewer than
  *                   3 usable days, the last 14, then the last N (the ladder [7, 14, N] is cut at N). Fewer than 3
  *                   usable days in N = no speed.
- * weekday forecast  for a future day with weekday w: f = wd_mean[w] x L + flat x (1 - L), L = n_w / (n_w + 2),
- *                   wd_mean/n_w over the usable days of the chosen window with that weekday; floor 0.
+ * weekday forecast  weekday_shape 'window' (default): f = speed x shape(w), shape(w) = (mean of the usable days with weekday w
+ *                   / mean of all usable days of the N-day window) x L + (1 - L), L = n_w / (n_w + 2); floor 0.
+ *                   'legacy': f = wd_mean[w] x L + speed x (1 - L) with wd_mean over the speed window only.
  * f[1..7], F[1..7]  f[d] = forecast of the day d days from today (1 = tomorrow). F[H] = today_rem + f[1] + .. + f[H],
  *                   today_rem = max(f(today) - net sold today so far, 0) (the rest of today's demand).
- * order[1..7]       max(0, ceil(min + F[H] - position)): whole pieces when stock, min and max are whole, else up to
- *                   0.1. Rules-only items (no speed): max - position. Never decreases with H.
- * cover_days        position / speed (null without speed or with speed 0)
+ * sigma             daily demand standard deviation: sample SD of the usable (clipped) days around their expectation
+ *                   (window mean x weekday shape), so a regular weekend peak is not counted as noise.
+ * ss[1..7]          safety stock = z x sigma x sqrt(H + L): z per ABC class (inventory.service_z: A 1.65, B 1.28, C 0.84),
+ *                   L = inventory.lead_time_days (0 = same-day delivery). null when not applied (see below).
+ * target[1..7]      stock wanted after the order: max(min, ss) + F(H + L), lifted by safety stock at most to
+ *                   max x inventory.max_overshoot (never below the rule target min + F(H)); only for confidence
+ *                   ok / high with inventory.safety_stock on. Otherwise min + F(H); rules-only items: max.
+ * order[1..7]       max(0, ceil(target[H] - position)): whole pieces when stock, min and max are whole, else up to
+ *                   0.1. Never decreases with H.
+ * cover_days        days until the position is used up when walking the weekday forecast (rest of today as a fraction
+ *                   of a day, then f[1], f[2] ..); legacy shape: position / speed. null without speed or with speed 0.
  * stockout_in/_date first d (0 = today, up to 7) where F[d] exceeds the position; today when position <= 0; else null
  * confidence        none (< 3 usable days: rules only) | low (3-9) | ok (>= 10) | high (>= 14 and every weekday >= 2)
  * level             out (position <= 0) | critical (cover < 1) | soon (cover < 3) | low (at/below min or cover < 7)
  *                   | over (above max or cover > 14) | ok
  * abc               per shop, items by 28-day net revenue (always 28 days, whatever the history window): A while the cumulative share is <= 80 %, B <= 95 %, else C
  * xyz               coefficient of variation of the daily demand: X < 0.5, Y < 1, else Z (null without speed)
+ * spike, sigma     see above (spike: boolean flag, sigma: daily SD used for the safety stock)
+ * Future work (not implemented): same-day snapshot sync time, pack / case rounding, Croston for intermittent items,
+ * imputing censored (out-of-stock) days.
  * listed[H]         position <= min OR cover < H OR stockout_in <= H, and order[H] > 0. Only pairs listed for the
  *                   largest horizon (7) are returned: listed[H] implies listed[7].
  */
@@ -93,6 +122,7 @@ class ForecastService
             'today' => $today->toDateString(),
             'shops' => $shops->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name])->all(),
             'rows' => [],
+            'no_data' => ['count' => 0, 'by_shop' => [], 'items' => []],
         ];
 
         if ($scope === []) {
@@ -113,14 +143,59 @@ class ForecastService
 
         $this->classifyAbc($all);
 
+        $noData = ['count' => 0, 'by_shop' => [], 'items' => []];
         foreach ($all as $row) {
+            $row = $this->finalize($row);
             unset($row['revenue']);
+            if ($row['no_data']) {
+                // Not reported by 1C: unknown stock, never listed, never planned (surfaced as a count and a short list).
+                $this->noteNoData($noData, $row['shop_id'], $row['item_id'], $row['item'], $row['stock_date']);
+
+                continue;
+            }
             if ($row['listed'][self::MAX_HORIZON]) {
                 $result['rows'][] = $row;
             }
         }
+        if (Stock::explicitZero()) {
+            $this->neverReported($scope, $noData);
+        }
+        $result['no_data'] = $noData;
 
         return $result;
+    }
+
+    public const NO_DATA_LIST_CAP = 200;
+
+    /** @param  array{count: int, by_shop: array<int, int>, items: array<int, array<string, mixed>>}  $noData */
+    private function noteNoData(array &$noData, int $shopId, int $itemId, string $item, ?string $lastDate): void
+    {
+        $noData['count']++;
+        $noData['by_shop'][$shopId] = ($noData['by_shop'][$shopId] ?? 0) + 1;
+        if (count($noData['items']) < self::NO_DATA_LIST_CAP) {
+            $noData['items'][] = ['shop_id' => $shopId, 'item_id' => $itemId, 'item' => $item, 'last_date' => $lastDate];
+        }
+    }
+
+    /**
+     * Rule pairs (max > 0) of the shops that never had a stock row at all: also "not reported by 1C".
+     *
+     * @param  array<int, int>  $scope
+     * @param  array{count: int, by_shop: array<int, int>, items: array<int, array<string, mixed>>}  $noData
+     */
+    private function neverReported(array $scope, array &$noData): void
+    {
+        $rows = DB::table('item_order_rules as r')
+            ->join('items', 'items.id', '=', 'r.item_id')
+            ->whereIn('r.shop_id', $scope)->where('r.max', '>', 0)
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))->from('stocks as s_any')
+                    ->whereColumn('s_any.item_id', 'r.item_id')->whereColumn('s_any.shop_id', 'r.shop_id');
+            })
+            ->get(['r.shop_id', 'r.item_id', 'items.name']);
+        foreach ($rows as $r) {
+            $this->noteNoData($noData, (int) $r->shop_id, (int) $r->item_id, (string) $r->name, null);
+        }
     }
 
     /**
@@ -138,6 +213,7 @@ class ForecastService
 
         $sales = $this->dailySales($scope, $pairs, $today);
         $censored = $this->censoredDays($scope, $today);
+        $silent = config('inventory.feed_aware_censoring', true) ? $this->silentShopDays($scope, $today) : [];
         $transit = $this->inTransit($scope);
 
         // Calendar: yesterday .. $days back (index 0 = yesterday) and the 7 future days.
@@ -160,7 +236,12 @@ class ForecastService
             'abcFrom' => $today->copy()->subDays(self::HISTORY_DAYS)->toDateString(),
             'windows' => array_values(array_unique(array_filter([...self::WINDOWS, $days], fn (int $w) => $w <= $days))),
             'staleBefore' => $today->copy()->subDays(self::LOOKBACK_DAYS)->toDateString(),
+            // R per shop (explicit zero): a pair whose current row is older than its shop's latest sync is not reported.
+            'latest' => Stock::explicitZero() ? Stock::latestDates($scope) : [],
             'factor' => (float) config('inventory.outlier_mad_factor', 3),
+            'clipMode' => config('inventory.clip_mode', 'weekday') === 'legacy' ? 'legacy' : 'weekday',
+            'shapeMode' => config('inventory.weekday_shape', 'window') === 'legacy' ? 'legacy' : 'window',
+            'lead' => max(0, min(self::MAX_HORIZON, (int) config('inventory.lead_time_days', 0))),
         ];
 
         $rows = [];
@@ -171,6 +252,7 @@ class ForecastService
                 $censored[$p->shop_id][$p->item_id] ?? [],
                 $transit[$p->shop_id][$p->item_id] ?? 0.0,
                 $ctx,
+                $silent[$p->shop_id] ?? [],
             );
         }
 
@@ -180,12 +262,14 @@ class ForecastService
     /**
      * @param  array<string, array{0: float, 1: float}>  $sales  [net qty, net revenue] per day
      * @param  array<string, true>  $censoredDays
+     * @param  array<string, true>  $silentDays  shop-days whose receipt feed was silent (missing data, not zero demand)
      * @return array<string, mixed>
      */
-    private function pair(object $p, array $sales, array $censoredDays, float $transit, array $ctx): array
+    private function pair(object $p, array $sales, array $censoredDays, float $transit, array $ctx, array $silentDays = []): array
     {
         $stock = (float) $p->qty;
         $stockDate = substr((string) $p->stock_date, 0, 10);
+        $noData = Stock::explicitZero() && ! Stock::isReported($stockDate, $ctx['latest'][$p->shop_id] ?? null);
         $min = (float) $p->min;
         $max = (float) $p->max;
 
@@ -211,12 +295,21 @@ class ForecastService
 
         $obs = [];       // usable days: [idx, weekday, value]
         $censoredCount = 0;
+        $silentCount = 0;
+        $spanDays = 0;
         foreach ($ctx['history'] as $day => $meta) {
             if ($day < $start) {
                 continue;
             }
+            $spanDays++;
             if (isset($censoredDays[$day])) {
                 $censoredCount++;
+
+                continue;
+            }
+            if (isset($silentDays[$day])) {
+                // The shop's feed was silent: unknown demand, left out of every mean like a stock-out day.
+                $silentCount++;
 
                 continue;
             }
@@ -225,6 +318,7 @@ class ForecastService
 
         $usable = count($obs);
         $clipped = false;
+        $spike = false;
         if ($usable >= self::MIN_USABLE_DAYS) {
             $values = array_column($obs, 2);
             $median = $this->median($values);
@@ -233,9 +327,25 @@ class ForecastService
             // nothing is clipped for intermittent items (median 0), whose sporadic sales are real demand.
             $scale = max($mad, 0.1 * $median);
             if ($scale > 0) {
-                $cap = $median + $ctx['factor'] * $scale;
-                foreach ($obs as &$o) {
+                $base = $median + $ctx['factor'] * $scale;
+                $byWd = [];
+                foreach ($obs as $i => $o) {
+                    $byWd[$o[1]][$i] = $values[$i];
+                }
+                foreach ($obs as $i => &$o) {
+                    $cap = $base;
+                    if ($ctx['clipMode'] === 'weekday') {
+                        // Same-weekday baseline: 2 x the mean of the OTHER days with this weekday (the day itself is
+                        // left out so a typo cannot raise its own cap). A weekday seen once keeps the base cap.
+                        $others = array_diff_key($byWd[$o[1]], [$i => true]);
+                        if ($others !== []) {
+                            $cap = max($cap, 2 * (array_sum($others) / count($others)));
+                        }
+                    }
                     if ($o[2] > $cap) {
+                        if ($o[2] >= 3 * $cap) {
+                            $spike = true;
+                        }
                         $o[2] = $cap;
                         $clipped = true;
                     }
@@ -243,6 +353,25 @@ class ForecastService
                 unset($o);
             }
         }
+
+        // Weekday statistics over ALL usable days of the history window (after clipping).
+        $allSum = array_fill(0, 7, 0.0);
+        $allCnt = array_fill(0, 7, 0);
+        foreach ($obs as [, $wd, $v]) {
+            $allSum[$wd] += $v;
+            $allCnt[$wd]++;
+        }
+        $allMean = $usable > 0 ? array_sum($allSum) / $usable : 0.0;
+        $shape = function (int $wd) use ($allSum, $allCnt, $allMean): float {
+            $n = $allCnt[$wd];
+            if ($n === 0 || $allMean <= 0) {
+                return 1.0;
+            }
+            $lambda = $n / ($n + 2);
+
+            return ($allSum[$wd] / $n / $allMean) * $lambda + (1 - $lambda);
+        };
+        $legacyShape = $ctx['shapeMode'] === 'legacy';
 
         $flat = null;
         $wdSum = array_fill(0, 7, 0.0);
@@ -267,25 +396,47 @@ class ForecastService
         }
         $confidence = $flat === null ? 'none'
             : ($usable >= 14 && min($weekdaysSeen) >= 2 ? 'high' : ($usable >= self::OK_USABLE_DAYS ? 'ok' : 'low'));
+        // More than a quarter of the window had no feed: one confidence step down (never below low while a speed exists).
+        if ($silentCount > 0 && $spanDays > 0 && $silentCount / $spanDays > 0.25) {
+            $confidence = $confidence === 'high' ? 'ok' : ($confidence === 'ok' ? 'low' : $confidence);
+        }
 
+        $lead = $ctx['lead'];
         $f = [];
         $cum = [];
+        $cumFull = [];   // cumulative forecast up to MAX_HORIZON + lead time (safety-stock horizon H + L)
         $todayRem = 0.0;
+        $sigma = null;
+        $forecast = null;
         if ($flat !== null) {
-            $forecast = function (int $wd) use ($flat, $wdSum, $wdCnt): float {
-                $n = $wdCnt[$wd];
-                $lambda = $n / ($n + 2);
-                $mean = $n > 0 ? $wdSum[$wd] / $n : 0.0;
+            $forecast = $legacyShape
+                ? function (int $wd) use ($flat, $wdSum, $wdCnt): float {
+                    $n = $wdCnt[$wd];
+                    $lambda = $n / ($n + 2);
+                    $mean = $n > 0 ? $wdSum[$wd] / $n : 0.0;
 
-                return max($mean * $lambda + $flat * (1 - $lambda), 0.0);
-            };
+                    return max($mean * $lambda + $flat * (1 - $lambda), 0.0);
+                }
+            : fn (int $wd): float => max($flat * $shape($wd), 0.0);
             $todayRem = max($forecast($ctx['todayWd']) - $soldToday, 0.0);
             $running = $todayRem;
-            for ($d = 1; $d <= self::MAX_HORIZON; $d++) {
-                $f[$d] = $forecast($ctx['future'][$d]['wd']);
-                $running += $f[$d];
-                $cum[$d] = $running;
+            for ($d = 1; $d <= self::MAX_HORIZON + $lead; $d++) {
+                $fd = $forecast(($ctx['todayWd'] + $d) % 7);
+                $running += $fd;
+                $cumFull[$d] = $running;
+                if ($d <= self::MAX_HORIZON) {
+                    $f[$d] = $fd;
+                    $cum[$d] = $running;
+                }
             }
+
+            // sigma_daily: sample standard deviation of the usable (clipped) days around their weekday
+            // expectation (window mean x shrunk weekday shape), so a normal weekend peak is not "noise".
+            $ss = 0.0;
+            foreach ($obs as [, $wd, $v]) {
+                $ss += ($v - $allMean * $shape($wd)) ** 2;
+            }
+            $sigma = sqrt($ss / max($usable - 1, 1));
         } else {
             for ($d = 1; $d <= self::MAX_HORIZON; $d++) {
                 $f[$d] = 0.0;
@@ -294,13 +445,12 @@ class ForecastService
         }
 
         $piece = $this->isWhole($stock) && $this->isWhole($min) && $this->isWhole($max);
-        $order = [];
-        for ($d = 1; $d <= self::MAX_HORIZON; $d++) {
-            $need = $flat === null ? $max - $position : $min + $cum[$d] - $position;
-            $order[$d] = $this->roundUp($need, $piece);
-        }
 
-        $cover = $flat !== null && $flat > 0 ? $position / $flat : null;
+        // cover_days: legacy = position / flat speed; otherwise walk the weekday forecast like stockout_in.
+        $cover = null;
+        if ($flat !== null && $flat > 0) {
+            $cover = $legacyShape ? $position / $flat : $this->walkCover($position, $todayRem, $f, $forecast, $ctx['todayWd']);
+        }
 
         $stockoutIn = null;
         if ($position <= 0) {
@@ -323,12 +473,6 @@ class ForecastService
             : ($cover !== null && $cover < 3 ? 'soon'
             : ($position <= $min || ($cover !== null && $cover < 7) ? 'low'
             : ($position > $max || ($cover !== null && $cover > 14) ? 'over' : 'ok'))));
-
-        $listed = [];
-        for ($h = 1; $h <= self::MAX_HORIZON; $h++) {
-            $listed[$h] = ($position <= $min || ($cover !== null && $cover < $h) || ($stockoutIn !== null && $stockoutIn <= $h))
-                && $order[$h] > 0;
-        }
 
         $xyz = null;
         if ($flat !== null) {
@@ -357,8 +501,12 @@ class ForecastService
             'confidence' => $confidence,
             'usable_days' => $usable,
             'censored_days' => $censoredCount,
+            'silent_days' => $silentCount,
             'clipped' => $clipped,
-            'stale' => $stockDate < $ctx['staleBefore'],
+            'spike' => $spike,
+            'sigma' => $sigma === null ? null : round($sigma, 3),
+            'no_data' => $noData,
+            'stale' => $noData || $stockDate < $ctx['staleBefore'],
             'abc' => 'C',
             'xyz' => $xyz,
             'cover_days' => $cover === null ? null : round($cover, 1),
@@ -368,10 +516,111 @@ class ForecastService
             'today_rem' => round($todayRem, 3),
             'f' => array_map(fn ($v) => round($v, 3), $f),
             'F' => array_map(fn ($v) => round($v, 3), $cum),
-            'order' => $order,
-            'listed' => $listed,
+            'order' => [],
+            'ss' => null,
+            'target' => [],
+            'listed' => [],
             'revenue' => $revenue,
+            '_c' => ['cum' => $cum, 'cumFull' => $cumFull, 'sigma' => $sigma, 'position' => $position, 'lead' => $lead],
         ];
+    }
+
+    /**
+     * Order quantity, safety stock and listing per horizon; runs after the ABC class is known (z depends on it).
+     *
+     * target[H] = min + F(H) (rules) or, with safety stock on and confidence ok / high,
+     * max(min, SS) + F(H + L) with SS = z x sigma x sqrt(H + L), lifted at most to max x max_overshoot.
+     * order[H] = ceil(target[H] - position).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function finalize(array $row): array
+    {
+        $c = $row['_c'];
+        unset($row['_c']);
+
+        $min = $row['min'];
+        $max = $row['max'];
+        $position = $c['position'];
+        $flat = $row['speed'] === null ? null : true;
+        $useSs = $flat !== null && config('inventory.safety_stock', true)
+            && in_array($row['confidence'], ['ok', 'high'], true) && $c['sigma'] !== null;
+
+        $zMap = (array) config('inventory.service_z', []);
+        $z = (float) ($zMap[$row['abc']] ?? $zMap['default'] ?? 0.84);
+        $overshoot = (float) config('inventory.max_overshoot', 1.5);
+
+        $order = [];
+        $ss = [];
+        $target = [];
+        for ($h = 1; $h <= self::MAX_HORIZON; $h++) {
+            if ($flat === null) {
+                $t = $max;
+            } else {
+                $t = $min + $c['cum'][$h];
+                if ($useSs) {
+                    $s = $z * $c['sigma'] * sqrt($h + $c['lead']);
+                    $new = max($min, $s) + $c['cumFull'][$h + $c['lead']];
+                    if ($overshoot > 0) {
+                        $new = min($new, $max * $overshoot);
+                    }
+                    $t = max($t, $new);
+                    $ss[$h] = round($s, 3);
+                }
+            }
+            $target[$h] = round($t, 3);
+            $order[$h] = $this->roundUp($t - $position, $row['piece']);
+        }
+
+        $listed = [];
+        for ($h = 1; $h <= self::MAX_HORIZON; $h++) {
+            $listed[$h] = ($position <= $min || ($row['cover_days'] !== null && $row['cover_days'] < $h)
+                || ($row['stockout_in'] !== null && $row['stockout_in'] <= $h))
+                && $order[$h] > 0;
+        }
+
+        $row['order'] = $order;
+        $row['ss'] = $useSs ? $ss : null;
+        $row['target'] = $target;
+        $row['listed'] = $listed;
+
+        return $row;
+    }
+
+    /**
+     * Days until the position is used up, walking the weekday forecast: the rest of today counts as the
+     * fraction todayRem / f(today) of a day, then f[1], f[2] .. (7 days known, then the same weekday pattern
+     * repeats up to 28 days; beyond that the average daily forecast of the week is used).
+     *
+     * @param  array<int, float>  $f
+     */
+    private function walkCover(float $position, float $todayRem, array $f, \Closure $forecast, int $todayWd): ?float
+    {
+        $remaining = $position;
+        $t = 0.0;
+        $fToday = $forecast($todayWd);
+        if ($todayRem > 0) {
+            if ($remaining <= $todayRem) {
+                return $fToday > 0 ? $remaining / $todayRem * ($todayRem / $fToday) : 0.0;
+            }
+            $remaining -= $todayRem;
+            $t = $fToday > 0 ? $todayRem / $fToday : 0.0;
+        }
+        for ($d = 1; $d <= 28; $d++) {
+            $fd = $d <= self::MAX_HORIZON ? $f[$d] : $forecast(($todayWd + $d) % 7);
+            if ($fd > 0 && $remaining <= $fd) {
+                return $t + $remaining / $fd;
+            }
+            $remaining -= $fd;
+            $t += 1;
+        }
+        $week = 0.0;
+        for ($wd = 0; $wd < 7; $wd++) {
+            $week += $forecast($wd);
+        }
+
+        return $week > 0 ? $t + $remaining / ($week / 7) : null;
     }
 
     /**
@@ -488,15 +737,89 @@ class ForecastService
             ->groupBy('receipts.shop_id', 'ri.item_id', 'd')
             ->selectRaw('receipts.shop_id as shop_id, ri.item_id as item_id, DATE(receipts.created_at) as d, '
                 .'SUM(CASE WHEN receipts.sell = 1 THEN ri.qty ELSE -ri.qty END) as net, '
-                .'SUM(CASE WHEN receipts.sell = 1 THEN ri.total ELSE -ri.total END) as rev')
+                .'SUM(CASE WHEN receipts.sell = 1 THEN ri.total ELSE -ri.total END) as rev, '
+                .'SUM(CASE WHEN receipts.sell = 1 THEN ri.qty ELSE 0 END) as sold_qty, '
+                .'SUM(CASE WHEN receipts.sell = 1 THEN 0 ELSE ABS(ri.qty) END) as ret_qty, '
+                .'SUM(CASE WHEN receipts.sell = 1 THEN ri.total ELSE 0 END) as sold_rev, '
+                .'SUM(CASE WHEN receipts.sell = 1 THEN 0 ELSE ABS(ri.total) END) as ret_rev')
             ->get();
+
+        $legacy = config('inventory.refund_netting', 'same_day') === 'legacy';
 
         $byDay = [];
         foreach ($rows as $r) {
-            $byDay[(int) $r->shop_id][(int) $r->item_id][(string) $r->d] = [(float) $r->net, (float) $r->rev];
+            if ($legacy) {
+                $byDay[(int) $r->shop_id][(int) $r->item_id][(string) $r->d] = [(float) $r->net, (float) $r->rev];
+
+                continue;
+            }
+            // same_day: a refund is netted only against the sales of its own day and a day never goes below 0, so a
+            // refund of goods sold earlier cannot push this day, the stock estimate or the ABC revenue below 0.
+            $byDay[(int) $r->shop_id][(int) $r->item_id][(string) $r->d] = [
+                max((float) $r->sold_qty - (float) $r->ret_qty, 0.0),
+                max((float) $r->sold_rev - (float) $r->ret_rev, 0.0),
+            ];
         }
 
         return $byDay;
+    }
+
+    /**
+     * Shop-days (inside the history window) on which the shop's receipt feed was silent: the day's sale receipts are
+     * below inventory.feed_silence_min_ratio x the usual weekday median (the other same-weekday days of the last 28
+     * days, needs inventory.feed_silence_min_weekdays of them) AND the usual median is at least
+     * inventory.feed_silence_min_median receipts. One grouped query for all shops.
+     *
+     * @param  array<int, int>  $scope
+     * @return array<int, array<string, true>> shop id => date => true
+     */
+    private function silentShopDays(array $scope, Carbon $today): array
+    {
+        $from = $today->copy()->subDays(self::HISTORY_DAYS);
+        $rows = DB::table('receipts')
+            ->where('active', true)->where('sell', true)
+            ->where('created_at', '>=', $from->toDateString().' 00:00:00')
+            ->where('created_at', '<', $today->toDateString().' 00:00:00')
+            ->whereIn('shop_id', $scope)
+            ->groupBy('shop_id', 'd')
+            ->selectRaw('shop_id, DATE(created_at) as d, COUNT(*) as n')
+            ->get();
+
+        $count = [];
+        foreach ($rows as $r) {
+            $count[(int) $r->shop_id][(string) $r->d] = (int) $r->n;
+        }
+
+        $ratio = (float) config('inventory.feed_silence_min_ratio', 0.2);
+        $minMedian = (int) config('inventory.feed_silence_min_median', 20);
+        $minDays = max(1, (int) config('inventory.feed_silence_min_weekdays', 3));
+
+        $out = [];
+        foreach ($scope as $shopId) {
+            if (empty($count[$shopId])) {
+                continue;   // no receipts at all in 28 days: nothing to compare with
+            }
+            $byWd = [];
+            $days = [];
+            for ($i = 1; $i <= self::HISTORY_DAYS; $i++) {
+                $day = $today->copy()->subDays($i);
+                $date = $day->toDateString();
+                $days[$date] = $day->dayOfWeek;
+                $byWd[$day->dayOfWeek][$date] = $count[$shopId][$date] ?? 0;
+            }
+            foreach ($days as $date => $wd) {
+                $others = array_values(array_diff_key($byWd[$wd], [$date => true]));
+                if (count($others) < $minDays) {
+                    continue;
+                }
+                $median = $this->median(array_map('floatval', $others));
+                if ($median >= $minMedian && ($count[$shopId][$date] ?? 0) < $ratio * $median) {
+                    $out[$shopId][$date] = true;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -527,16 +850,16 @@ class ForecastService
     }
 
     /**
-     * Quantities on open orders (not yet fulfilled) per shop and item.
+     * Quantities on open orders per shop and item: confirmed, not received and confirmed within
+     * inventory.in_transit_max_days (see App\Support\InTransit).
      *
      * @param  array<int, int>  $scope
      * @return array<int, array<int, float>>
      */
     private function inTransit(array $scope): array
     {
-        $rows = DB::table('order_items as ol')
-            ->join('orders as o', 'o.id', '=', 'ol.order_id')
-            ->whereIn('o.status', OrderStatus::open())
+        $rows = InTransit::apply(DB::table('order_items as ol')
+            ->join('orders as o', 'o.id', '=', 'ol.order_id'))
             ->whereIn('o.shop_id', $scope)
             ->groupBy('o.shop_id', 'ol.item_id')
             ->selectRaw('o.shop_id as shop_id, ol.item_id as item_id, SUM(ol.qty) as qty')

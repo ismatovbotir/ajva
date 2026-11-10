@@ -54,6 +54,23 @@ class OrderPolicy
         };
     }
 
+    /** Approve / send back an order that the shop sent with exceptions: admin only, only while it waits. */
+    public function approve(User $user, Order $order): bool
+    {
+        return $this->isAdmin($user) && $order->isAwaitingApproval();
+    }
+
+    public function reject(User $user, Order $order): bool
+    {
+        return $this->approve($user, $order);
+    }
+
+    /** A confirmed order that has not been received yet is received by its shop's person or an admin. */
+    public function receive(User $user, Order $order): bool
+    {
+        return $order->isAwaitingReceipt() && $this->manages($user, $order);
+    }
+
     /** Only an admin deletes, and only before confirmation. */
     public function delete(User $user, Order $order): bool
     {

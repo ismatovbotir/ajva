@@ -29,7 +29,7 @@ class OrderSyncTest extends TestCase
     {
         parent::setUp();
 
-        config(['services.onec.orders_url' => 'https://onec.test/orders', 'services.onec.token' => 'secret']);
+        config(['services.onec.orders_url' => 'https://onec.test/orders', 'services.onec.user' => 'ajwa', 'services.onec.password' => 'secret']);
         $shop = Shop::factory()->create();
         $this->item = Item::factory()->create();
         $this->order = Order::query()->create(['shop_id' => $shop->id, 'status' => OrderStatus::PendingApproval, 'horizon_days' => 3]);
@@ -56,30 +56,51 @@ class OrderSyncTest extends TestCase
 
     public function test_http_200_marks_the_order_synced_and_sends_the_documented_payload(): void
     {
-        Http::fake(['onec.test/*' => Http::response(['ok' => true], 200)]);
+        Http::fake(['onec.test/*' => Http::response(['status' => 'ok', 'message' => '00-00002495'], 200)]);
 
         Livewire::actingAs($this->admin())->test(Index::class)->call('confirm', $this->order->id);
 
         $order = $this->order->fresh();
         $this->assertSame(OrderSyncStatus::Synced, $order->sync_status);
+        $this->assertSame('00-00002495', $order->onec_number);   // 1C's own number from the answer
         $this->assertNotNull($order->synced_at);
         $this->assertSame(1, $order->sync_attempts);
         $this->assertNull($order->sync_error);
         Http::assertSent(function (Request $request) use ($order) {
             return $request->url() === 'https://onec.test/orders'
-                && $request->hasHeader('Authorization', 'Bearer secret')
+                && $request->hasHeader('Authorization', 'Basic '.base64_encode('ajwa:secret'))
                 && $request->hasHeader('Idempotency-Key', $order->number())
-                && $request['id'] === $order->id
-                && $request['number'] === $order->number()
-                && $request['shop_id'] === $order->shop_id
-                && $request['horizon_days'] === 3
-                && $request['lines'] === [['item_id' => $this->item->id, 'qty' => 7.0]];
+                && $request->data() === ['wareCode' => $order->shop_id, 'goods' => [['itemCode' => $this->item->id, 'itemQty' => 7]]];
         });
+    }
+
+    public function test_http_200_with_status_error_or_no_status_is_a_failure_and_keeps_1cs_reason(): void
+    {
+        $this->order->forceFill(['status' => OrderStatus::Confirmed, 'sync_status' => OrderSyncStatus::Queued])->save();
+
+        foreach ([
+            ['body' => ['status' => 'error', 'message' => 'Unknown shop'], 'expect' => 'Unknown shop'],
+            ['body' => ['message' => '00-00000009'], 'expect' => 'missing'],
+            ['body' => 'plain text', 'expect' => 'missing'],
+        ] as $case) {
+            Http::swap(new \Illuminate\Http\Client\Factory);   // a fresh fake per case: the first stub registered wins
+            Http::fake(['onec.test/*' => Http::response($case['body'], 200)]);
+            try {
+                (new SyncOrderTo1C($this->order->id))->handle();
+                $this->fail('A 200 without status ok must throw.');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString($case['expect'], $e->getMessage());
+            }
+            $order = $this->order->fresh();
+            $this->assertNotSame(OrderSyncStatus::Synced, $order->sync_status);
+            $this->assertNull($order->onec_number);
+            $this->assertStringContainsString($case['expect'], $order->sync_error);
+        }
     }
 
     public function test_an_error_answer_is_retried_then_failed_and_can_be_requeued(): void
     {
-        Http::fake(['onec.test/*' => Http::sequence()->push('boom', 500)->push('', 200)]);   // 1C recovers later
+        Http::fake(['onec.test/*' => Http::sequence()->push('boom', 500)->push(['status' => 'ok', 'message' => '00-00000002'], 200)]);   // 1C recovers later
 
         // Under a real worker the job throws, the queue retries it with backoff and calls failed() after the last try.
         $this->order->forceFill(['status' => OrderStatus::Confirmed, 'sync_status' => OrderSyncStatus::Queued])->save();
@@ -118,7 +139,7 @@ class OrderSyncTest extends TestCase
 
         $this->assertSame(OrderSyncStatus::Queued, $this->order->fresh()->sync_status);
         Http::assertNothingSent();
-        $component->assertSee('ONEC_ORDERS_URL');
+        $component->assertSee('ADINES_URL');
     }
 
     public function test_a_synced_order_is_never_sent_again(): void

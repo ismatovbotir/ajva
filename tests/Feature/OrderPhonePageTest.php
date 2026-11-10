@@ -79,7 +79,7 @@ class OrderPhonePageTest extends TestCase
     public function test_pressing_accept_saves_a_comment_that_was_never_blurred_and_1c_gets_it(): void
     {
         config(['services.onec.orders_url' => 'https://onec.test/orders', 'services.onec.token' => 'secret']);
-        Http::fake(['onec.test/*' => Http::response(['ok' => true], 200)]);
+        Http::fake(['onec.test/*' => Http::response(['status' => 'ok', 'message' => '00-00000001'], 200)]);
 
         Livewire::test(PublicDraft::class, ['token' => $this->link->token])
             ->set('comment', 'Call before delivery')->call('confirm');
@@ -88,7 +88,7 @@ class OrderPhonePageTest extends TestCase
         $this->assertSame(OrderStatus::Confirmed, $order->status);
         $this->assertSame('Call before delivery', $order->comment);
 
-        Http::assertSent(fn ($request) => $request->url() === 'https://onec.test/orders' && $request['comment'] === 'Call before delivery' && count($request['lines']) === 2);
+        Http::assertSent(fn ($request) => $request->url() === 'https://onec.test/orders' && count($request['goods']) === 2 && ! isset($request['comment']));
     }
 
     public function test_a_confirmed_order_ignores_a_late_comment(): void

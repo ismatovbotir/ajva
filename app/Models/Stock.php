@@ -51,6 +51,81 @@ class Stock extends Model
     }
 
     /**
+     * EXPLICIT ZERO (config inventory.explicit_zero_stock, env EXPLICIT_ZERO_STOCK, default true).
+     *
+     * 1C reports a zero quantity explicitly, so the app never guesses from a missing row:
+     *  - OUT of stock = a REAL quantity <= 0 in the shop's latest sync.
+     *  - REPORTED pair = its current row (applyCurrent) has stock_date = R(shop), the shop's latest stock_date
+     *    (latestDates()). A pair whose current row is older than R, or that has no row, is NOT REPORTED
+     *    (state `no_data`): not in stock, not out of stock, not counted as zero, no order suggested from it.
+     * Every reader uses applyReported() (SQL), latestDates() / isReported() (PHP): ONE definition.
+     * With the flag off all three are no-ops / "reported" and the legacy inference (a pair keeps its last quantity) returns.
+     */
+    public static function explicitZero(): bool
+    {
+        return (bool) config('inventory.explicit_zero_stock', true);
+    }
+
+    /**
+     * Restricts to pairs REPORTED by the shop's latest sync: use together with applyCurrent (stock_date = the greatest
+     * of the pair AND equal to the greatest of the shop). No-op with explicit zero off.
+     */
+    public static function applyReported($query, string $table = 'stocks')
+    {
+        if (! static::explicitZero()) {
+            return $query;
+        }
+
+        return $query->whereRaw(
+            "{$table}.stock_date = (select max(s_rep.stock_date) from stocks as s_rep where s_rep.shop_id = {$table}.shop_id)"
+        );
+    }
+
+    /**
+     * The opposite of applyReported (use with applyCurrent): pairs whose current row is older than the shop's latest
+     * sync = "not reported by 1C". Matches nothing with explicit zero off.
+     */
+    public static function applyNotReported($query, string $table = 'stocks')
+    {
+        if (! static::explicitZero()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereRaw(
+            "{$table}.stock_date < (select max(s_rep.stock_date) from stocks as s_rep where s_rep.shop_id = {$table}.shop_id)"
+        );
+    }
+
+    /**
+     * R per shop: the latest stock_date of the shop's own rows (one grouped query). Shops without rows are absent.
+     *
+     * @param  array<int, int>|null  $shopIds  null = every shop
+     * @return array<int, string> shop id => 'Y-m-d'
+     */
+    public static function latestDates(?array $shopIds = null, ?string $asOf = null): array
+    {
+        $query = \Illuminate\Support\Facades\DB::table('stocks')->groupBy('shop_id')->selectRaw('shop_id, max(stock_date) as latest');
+        if ($shopIds !== null) {
+            $query->whereIn('shop_id', $shopIds);
+        }
+        if ($asOf !== null) {
+            $query->where('stock_date', '<=', $asOf);
+        }
+
+        return $query->pluck('latest', 'shop_id')->map(fn ($d) => substr((string) $d, 0, 10))->all();
+    }
+
+    /** Is a current row dated $date reported by the sync whose latest day is $latest? Always true with explicit zero off. */
+    public static function isReported(?string $date, ?string $latest): bool
+    {
+        if (! static::explicitZero()) {
+            return true;
+        }
+
+        return $date !== null && $latest !== null && substr($date, 0, 10) >= $latest;
+    }
+
+    /**
      * Stock "as of" a day, for reports with a date picker: for each (item, shop)
      * the row with the greatest stock_date on or before $date (carry-forward, same
      * as applyCurrent but capped at the chosen day). A pair with no snapshot yet by
@@ -71,6 +146,12 @@ class Stock extends Model
     public function scopeCurrent($query)
     {
         return static::applyCurrent($query, $this->getTable());
+    }
+
+    /** Pairs reported by the shop's latest sync (explicit zero; no-op with the flag off). Use after current(). */
+    public function scopeReported($query)
+    {
+        return static::applyReported($query, $this->getTable());
     }
 
     public function item(): BelongsTo

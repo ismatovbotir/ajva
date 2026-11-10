@@ -7,7 +7,7 @@
         type="{{ $type }}"
         name="{{ $name }}"
         id="{{ $name }}"
-        {{ $attributes->merge(['class' => 'block w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-600 focus:ring-brand-600 sm:text-sm']) }}
+        {{ $attributes->merge(['class' => 'block h-11 w-full rounded-lg border-slate-300 bg-white px-3.5 text-[15px] shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500']) }}
     />
     <x-ui.error :name="$name" />
 </div>

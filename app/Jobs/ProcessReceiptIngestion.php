@@ -6,6 +6,7 @@ use App\Models\Pos;
 use App\Models\Receipt;
 use App\Models\ReceiptItem;
 use App\Models\ReceiptPayment;
+use App\Support\ReceiptChecks;
 use App\Support\ShopAccess;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -91,10 +92,19 @@ class ProcessReceiptIngestion implements ShouldQueue
             // marks them dirty) so Eloquent's automatic timestamp handling,
             // which only touches columns that aren't already dirty, doesn't
             // overwrite them back to now().
-            $receipt->forceFill([
+            $flags = ReceiptChecks::flags($this->data, $active, (bool) $sell, (int) ($pos->shop_id ?? $shopId));
+            $fill = [
                 'created_at' => $openedAt,
                 'updated_at' => $closedAt,
-            ])->save();
+                // Suspicious but accepted data (config/receipts.php); a resend recomputes it from the new payload.
+                'dq_flags' => $flags === [] ? null : implode(',', $flags),
+            ];
+            // First insert only: a resend never moves the ingestion time, and receipts stored before the column
+            // existed keep NULL (the time is unknown, never faked).
+            if ($receipt->wasRecentlyCreated) {
+                $fill['ingested_at'] = now();
+            }
+            $receipt->forceFill($fill)->save();
 
             // Re-ingesting the same receipt number replaces its line items
             // and payments rather than appending to them.

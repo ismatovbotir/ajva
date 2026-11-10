@@ -25,6 +25,15 @@ class MonitorScope
     ) {}
 
     /**
+     * True only for a signed-in administrator on a signed-in screen. Security widgets (cashier names, all-shop signals)
+     * exist only for this viewer: never on a public link, never for an operator or the monitor role.
+     */
+    public function viewerIsAdmin(): bool
+    {
+        return ! $this->public && (bool) auth()->user()?->isAdmin();
+    }
+
+    /**
      * Cache key unique per monitor, day, shop scope, profit variant and the
      * shared sales version (bumped on receipt ingestion, which therefore
      * invalidates every monitor at once).

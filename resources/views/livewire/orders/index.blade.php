@@ -6,7 +6,14 @@
     <x-ui.page-header :title="__('Orders')" :subtitle="__('Orders to the main warehouse and their sync with 1C.')" />
 
     @if(! $onecConfigured)
-        <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800" data-no-onec>{{ __('The 1C orders address is not set (ONEC_ORDERS_URL). Confirmed orders stay queued until it is set.') }}</p>
+        <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800" data-no-onec>{{ __('The 1C orders address is not set (ADINES_URL). Confirmed orders stay queued until it is set.') }}</p>
+    @endif
+
+    @if(! $noShops && ($waiting > 0 || $filter === 'approval'))
+        <div class="mb-4 flex flex-wrap items-center gap-2" data-approval-filter>
+            <x-ui.button type="button" :variant="$filter === '' ? 'primary' : 'secondary'" wire:click="$set('filter', '')">{{ __('All orders') }}</x-ui.button>
+            <x-ui.button type="button" :variant="$filter === 'approval' ? 'primary' : 'secondary'" wire:click="$set('filter', 'approval')" data-filter-approval>{{ __('Waiting for approval') }} ({{ $waiting }})</x-ui.button>
+        </div>
     @endif
 
     @if($noShops)
@@ -23,7 +30,10 @@
                             <p class="text-sm font-semibold text-slate-900">{{ $order->number() }}</p>
                             <p class="text-sm text-slate-600">{{ $order->shop?->name }} · {{ __(':count items', ['count' => $order->items_count]) }}</p>
                         </div>
-                        <x-ui.badge :variant="$statusVariant[$order->status->value] ?? 'default'">{{ $order->status->label() }}</x-ui.badge>
+                        <div class="flex flex-wrap justify-end gap-1">
+                            <x-ui.badge :variant="$statusVariant[$order->status->value] ?? 'default'">{{ $order->status->label() }}</x-ui.badge>
+                            @include('livewire.orders.partials.status-extras', ['order' => $order])
+                        </div>
                     </div>
                     <dl class="mt-3 space-y-1.5 text-sm">
                         @if($order->sync_status->value !== 'not_queued')
@@ -53,7 +63,7 @@
                                 <span class="text-xs text-slate-400" data-no-receiver>{{ __('No receiver') }}</span>
                             @endif
                         @endif
-                        @if($isAdmin && in_array($order->status->value, ['pending_approval', 'approved'], true))
+                        @if($isAdmin && ! $order->isAwaitingApproval() && in_array($order->status->value, ['pending_approval', 'approved'], true))
                             <x-ui.button type="button" wire:click="confirm({{ $order->id }})" wire:confirm="{{ __('Confirm this order and send it to 1C?') }}">{{ __('Confirm') }}</x-ui.button>
                         @elseif($isAdmin && $order->status->value === 'confirmed' && in_array($order->sync_status->value, ['failed', 'queued'], true))
                             <x-ui.button type="button" variant="secondary" wire:click="retrySync({{ $order->id }})">{{ __('Retry sync') }}</x-ui.button>
@@ -86,7 +96,12 @@
                                 <td class="px-3 py-3 text-sm font-medium text-slate-900">{{ $order->number() }}</td>
                                 <td class="px-3 py-3 text-sm text-slate-600">{{ $order->shop?->name }}</td>
                                 <td class="px-3 py-3 text-right text-sm tabular-nums">{{ $order->items_count }}</td>
-                                <td class="px-3 py-3 text-sm"><x-ui.badge :variant="$statusVariant[$order->status->value] ?? 'default'">{{ $order->status->label() }}</x-ui.badge></td>
+                                <td class="px-3 py-3 text-sm">
+                                    <div class="flex flex-wrap gap-1">
+                                        <x-ui.badge :variant="$statusVariant[$order->status->value] ?? 'default'">{{ $order->status->label() }}</x-ui.badge>
+                                        @include('livewire.orders.partials.status-extras', ['order' => $order])
+                                    </div>
+                                </td>
                                 <td class="px-3 py-3 text-sm">
                                     @if($order->sync_status->value !== 'not_queued')
                                         <x-ui.badge :variant="$order->sync_status->badgeVariant()">{{ $order->sync_status->label() }}</x-ui.badge>
@@ -114,7 +129,7 @@
                                             <span class="text-xs text-slate-400" data-no-receiver>{{ __('No receiver') }}</span>
                                         @endif
                                     @endif
-                                    @if($isAdmin && in_array($order->status->value, ['pending_approval', 'approved'], true))
+                                    @if($isAdmin && ! $order->isAwaitingApproval() && in_array($order->status->value, ['pending_approval', 'approved'], true))
                                         <x-ui.button type="button" wire:click="confirm({{ $order->id }})" wire:confirm="{{ __('Confirm this order and send it to 1C?') }}">{{ __('Confirm') }}</x-ui.button>
                                     @elseif($isAdmin && $order->status->value === 'confirmed' && in_array($order->sync_status->value, ['failed', 'queued'], true))
                                         <x-ui.button type="button" variant="secondary" wire:click="retrySync({{ $order->id }})">{{ __('Retry sync') }}</x-ui.button>

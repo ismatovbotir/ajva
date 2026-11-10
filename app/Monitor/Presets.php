@@ -161,6 +161,15 @@ class Presets
                     ['unsold_by_group', 12, 4],
                 ],
             ],
+            'security' => [
+                'name' => fn () => __('Security and loss prevention'),
+                'description' => fn () => __('Signals to review from the receipts: warnings by severity, refunds and discounts by cashier, cancelled receipts, silent shops, odd hours, receipt numbers and data integrity. Admins only.'),
+                'widgets' => [
+                    ['security_warnings_count', 3, 2], ['security_cancelled_rate', 3, 2], ['security_off_hours_today', 3, 2], ['security_number_gaps_duplicates', 3, 2],
+                    ['security_refund_by_cashier', 6, 4], ['security_discount_by_cashier', 6, 4],
+                    ['security_silent_shops', 4, 3], ['security_unusual_baskets', 5, 3], ['security_integrity_flags', 3, 2],
+                ],
+            ],
             'blank' => [
                 'name' => fn () => __('Blank'),
                 'description' => fn () => __('An empty screen: add the widgets you need.'),

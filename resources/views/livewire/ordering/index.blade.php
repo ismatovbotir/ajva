@@ -126,6 +126,17 @@
             </div>
         </div>
 
+        @if(($noData['count'] ?? 0) > 0)
+            <details class="mb-4 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700" data-no-data>
+                <summary class="cursor-pointer">{{ __(':count items were not reported by 1C in the latest stock sync. No order is suggested for them.', ['count' => $noData['count']]) }}</summary>
+                <ul class="mt-2 max-h-48 overflow-auto text-xs text-slate-600">
+                    @foreach($noData['items'] as $nd)
+                        <li>{{ $nd['item'] }} <span class="text-slate-400">#{{ $nd['shop_id'] }}@if($nd['last_date']) &middot; {{ __('Last reported') }} {{ $nd['last_date'] }}@endif</span></li>
+                    @endforeach
+                </ul>
+            </details>
+        @endif
+
         @if($kpi['lines'] > 0 || $heat)
             <div class="mb-4 grid grid-cols-1 items-start gap-4">
                 {{-- 2. Stacked bars of urgency levels per shop --}}

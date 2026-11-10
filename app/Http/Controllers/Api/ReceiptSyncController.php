@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ReceiptRequest;
 use App\Jobs\ProcessReceiptIngestion;
 use App\Models\Receipt;
+use App\Support\ReceiptChecks;
+use App\Support\ReceiptRejections;
 use App\Support\ReceiptsSync;
 use App\Support\ShopAccess;
 use Illuminate\Http\JsonResponse;
@@ -65,7 +67,9 @@ class ReceiptSyncController extends Controller
             }
 
             $validator = Validator::make($receipt, $rules);
+            ReceiptChecks::attach($validator, $receipt);
             if ($validator->fails()) {
+                ReceiptRejections::record(Receipt::SOURCE_HISTORY, $receipt, ReceiptRejections::reasons($validator, $receipt));
                 $rejected[] = $ident + ['reason' => implode(' ', array_slice($validator->errors()->all(), 0, 3))];
 
                 continue;
@@ -77,6 +81,7 @@ class ReceiptSyncController extends Controller
                 (new ProcessReceiptIngestion($data, (int) $data['pos'], false, Receipt::SOURCE_HISTORY))->handle();
             } catch (Throwable $e) {
                 Log::warning('Receipt batch: receipt rejected', ['pos' => $data['pos'], 'number' => $data['number'], 'error' => $e->getMessage()]);
+                ReceiptRejections::record(Receipt::SOURCE_HISTORY, $receipt, [['reason' => 'store_error', 'item_id' => null, 'detail' => mb_substr($e->getMessage(), 0, 200)]]);
                 $rejected[] = $ident + ['reason' => 'Could not be stored: '.mb_substr($e->getMessage(), 0, 160)];
 
                 continue;

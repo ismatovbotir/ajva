@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\TelegramMessage;
 use App\Models\Telegram as TelegramAccount;
+use App\Models\TelegramMessage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -18,9 +18,7 @@ class TelegramUpdates
 {
     private const OFFSET_KEY = 'telegram.offset';
 
-    public function __construct(private Telegram $telegram)
-    {
-    }
+    public function __construct(private Telegram $telegram) {}
 
     /**
      * @return array{status: string, messages: int, error: ?string} status: ok | skipped | no_token | error

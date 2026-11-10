@@ -171,6 +171,6 @@ class SalesProfitTest extends TestCase
             ->assertSee(__('Pricing health'))
             ->assertSee(__('Profit by shop'))
             ->assertSee(__('Last 7 days'))
-            ->assertSee(__('Entities'));
+            ->assertSee(__('Catalog'));
     }
 }

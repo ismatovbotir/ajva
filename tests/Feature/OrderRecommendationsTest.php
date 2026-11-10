@@ -253,8 +253,35 @@ class OrderRecommendationsTest extends TestCase
         $this->assertEqualsWithDelta(1.1, array_sum(OrderRecommendations::splitScarce(1.17, $tiers, 0.1)), 1e-9);
     }
 
-    public function test_an_item_the_warehouse_does_not_have_is_a_shortage_and_an_unset_warehouse_is_not_checked(): void
+    public function test_explicit_zero_unreported_warehouse_items_are_unknown_not_zero_and_a_reported_zero_is_a_shortage(): void
     {
+        $gone = $this->item('Gone', $this->a, 0, 5, 10, '2026-10-07');      // the warehouse never reported it
+        $zero = $this->item('Zero', $this->a, 0, 5, 10, '2026-10-07');      // the warehouse reported 0 today
+        $old = $this->item('Old', $this->a, 0, 5, 10, '2026-10-07');        // the warehouse reported it only yesterday
+        $this->warehouseHas($zero, 0);
+        Stock::query()->create(['shop_id' => $this->wh->id, 'item_id' => $old->id, 'qty' => 500, 'stock_date' => '2026-10-06']);
+
+        $rec = $this->build();
+        $rows = $this->rows($rec, $this->a);
+        $pick = collect($rec['pick'])->keyBy('item');
+
+        // Unknown: no cap, the need passes through, flagged; never a shortage and never "available 0".
+        foreach (['Gone', 'Old'] as $name) {
+            $this->assertEquals(10, $rows[$name]['send'], $name);
+            $this->assertEquals(0, $rows[$name]['short'], $name);
+            $this->assertTrue($pick[$name]['wh_unknown'], $name);
+            $this->assertNull($pick[$name]['available'], $name);
+        }
+        // A real zero reported by 1C is a shortage.
+        $this->assertEquals(0, $rows['Zero']['send']);
+        $this->assertEquals(10, $rows['Zero']['short']);
+        $this->assertFalse($pick['Zero']['wh_unknown']);
+        $this->assertEquals(0, $pick['Zero']['available']);
+    }
+
+    public function test_legacy_mode_an_item_the_warehouse_does_not_have_is_a_shortage_and_an_unset_warehouse_is_not_checked(): void
+    {
+        config(['inventory.explicit_zero_stock' => false]);
         $this->item('Gone', $this->a, 0, 5, 10, '2026-10-07');  // the warehouse has no row for it
 
         $withWarehouse = $this->build();

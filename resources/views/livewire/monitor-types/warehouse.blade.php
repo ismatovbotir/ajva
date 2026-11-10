@@ -138,6 +138,8 @@
                                     <span class="min-w-0 truncate">{{ collect($item['shops'])->map(fn ($s) => $s['shop'].' '.$qty($s['send']))->implode(' · ') }}</span>
                                     @if($item['short'] > 0)
                                         <span class="shrink-0 font-semibold text-red-300">⚠ {{ __('short') }} {{ $qty($item['short']) }} · {{ __('warehouse has') }} {{ $qty($item['available'] ?? 0) }}</span>
+                                    @elseif($configured && ($item['wh_unknown'] ?? false))
+                                        <span class="shrink-0">{{ __('warehouse stock') }}: {{ __('Not reported') }}</span>
                                     @elseif($configured)
                                         <span class="shrink-0">{{ __('warehouse has') }} {{ $qty($item['available'] ?? 0) }}</span>
                                     @endif

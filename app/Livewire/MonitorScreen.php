@@ -246,7 +246,8 @@ class MonitorScreen extends Component
      */
     private function stockAlerts(?array $ids = null): array
     {
-        $pairs = fn () => Stock::applyCurrent(ShopAccess::restrictTo(DB::table('stocks'), 'stocks.shop_id', $ids))->join('item_order_rules', function ($join) {
+        // Explicit zero: a pair not reported by the shop's latest sync is neither below min nor out of stock.
+        $pairs = fn () => Stock::applyReported(Stock::applyCurrent(ShopAccess::restrictTo(DB::table('stocks'), 'stocks.shop_id', $ids)))->join('item_order_rules', function ($join) {
             $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
                 ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
         });

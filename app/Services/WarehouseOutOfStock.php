@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Enums\OrderStatus;
 use App\Models\Stock;
+use App\Support\InTransit;
 use App\Support\ShopAccess;
 use App\Support\Warehouse;
 use Illuminate\Support\Carbon;
@@ -21,17 +21,21 @@ use Illuminate\Support\Facades\DB;
  *                not synced with the other shops, nothing is judged) | ok
  * candidate      an item with a positive warehouse quantity within config inventory.warehouse_history_days of R
  *                (never-stocked and long-dead items are not candidates; ruled items outside are only counted)
- * out            candidate whose latest warehouse row is older than R (reason "missing": 1C no longer reports
- *                it) OR whose row at R has qty <= 0 (reason "zero"); a negative qty is also out and carries the
- *                `negative` data-quality flag
- * partial        coverage = rows at R / rows at the previous warehouse sync date < inventory.warehouse_sync_min_coverage:
- *                the sync looks incomplete, the list is a warning only (the page shows no KPI figures)
+ * out            EXPLICIT ZERO (inventory.explicit_zero_stock, default): a candidate whose row at R has qty <= 0 (reason
+ *                "zero"); a negative qty is also out and carries the `negative` data-quality flag. 1C reports zero
+ *                itself, so nothing is inferred from a missing row.
+ * not reported   explicit zero: a candidate whose latest warehouse row is older than R (reason "no_data"): unknown, NOT
+ *                out of stock; counted in kpi.not_reported, listed only with the reason filter "no_data", never in
+ *                the out-of-stock KPI / histogram / need.
+ *                LEGACY (flag off): such a candidate is out with reason "missing"; partial = coverage (rows at R / rows
+ *                at the previous warehouse sync) < inventory.warehouse_sync_min_coverage: the sync looks incomplete,
+ *                the list is a warning only (the page shows no KPI figures). Neither exists in explicit mode.
  * in_stock_date  latest warehouse row with qty > 0; days_out = R - in_stock_date (missing: R - last row date)
  * speed          chain net sales per day over the last 7 COMPLETE days, shops only (successful sale receipts
  *                minus refunds); understated when shops were also out
  * shops/need     shops that have a line in the Ordering plan for the item (position <= min, cover or stock-out
  *                inside the shop's own horizon) and the sum of their order(H); the warehouse is never replenished
- * open_orders    quantity on orders in OrderStatus::open() (any shop)
+ * open_orders    quantity on recent open orders (App\Support\InTransit, any shop)
  * abc            28-day chain revenue share of complete days (A <= 80 %, B <= 95 %, else C)
  * min/max        sum of the shops' rules (max > 0), warehouse excluded
  */
@@ -57,6 +61,7 @@ class WarehouseOutOfStock
             'state' => 'unconfigured', 'warehouse' => $warehouse?->name, 'ref' => null, 'chain' => null, 'previous' => null,
             'coverage' => null, 'partial' => false, 'candidates' => 0, 'excluded' => 0, 'rows' => [], 'groups' => [],
             'kpi' => null, 'histogram' => [], 'history_days' => (int) config('inventory.warehouse_history_days'),
+            'explicit' => Stock::explicitZero(),
         ];
         if ($warehouse === null) {
             return $base;
@@ -84,7 +89,7 @@ class WarehouseOutOfStock
 
     private function cacheKey(int $warehouseId, string $ref, Carbon $now): string
     {
-        return 'wh-out-of-stock.v'.ShopAccess::salesVersion().'.w'.$warehouseId.'.r'.$ref.'.'.$now->toDateString();
+        return 'wh-out-of-stock.v'.ShopAccess::salesVersion().'.z'.(int) Stock::explicitZero().'.w'.$warehouseId.'.r'.$ref.'.'.$now->toDateString();
     }
 
     /** Drops the cached result of the current warehouse sync so the next data() call recalculates. */
@@ -106,8 +111,10 @@ class WarehouseOutOfStock
         $base['state'] = 'ok';
         $cutoff = Carbon::parse($ref)->subDays($base['history_days'])->toDateString();
 
-        // Coverage of the latest sync against the previous warehouse sync.
-        $previous = DB::table('stocks')->where('shop_id', $w)->where('stock_date', '<', $ref)->max('stock_date');
+        $explicit = Stock::explicitZero();
+
+        // Legacy only: coverage of the latest sync against the previous warehouse sync (an inference from missing rows).
+        $previous = $explicit ? null : DB::table('stocks')->where('shop_id', $w)->where('stock_date', '<', $ref)->max('stock_date');
         if ($previous !== null) {
             $previous = substr((string) $previous, 0, 10);
             $now = DB::table('stocks')->where('shop_id', $w)->where('stock_date', $ref)->count();
@@ -134,7 +141,8 @@ class WarehouseOutOfStock
             $curDate = substr((string) $cur->stock_date, 0, 10);
             $qty = (float) $cur->qty;
             if ($curDate < $ref) {
-                $reason = 'missing';
+                // Explicit zero: 1C would have reported a zero, so a missing row is "not reported", never "out".
+                $reason = $explicit ? 'no_data' : 'missing';
                 $since = $curDate;
             } elseif ($qty <= 0) {
                 $reason = 'zero';
@@ -145,7 +153,7 @@ class WarehouseOutOfStock
             $out[(int) $itemId] = [
                 'item_id' => (int) $itemId,
                 'reason' => $reason,
-                'negative' => $qty < 0,
+                'negative' => $reason !== 'no_data' && $qty < 0,
                 'last_qty' => $qty,
                 'last_date' => $curDate,
                 'in_stock_date' => substr((string) $posDate, 0, 10),
@@ -160,13 +168,15 @@ class WarehouseOutOfStock
         $base['excluded'] = $rules->keys()->diff(array_keys($positive))->count();
 
         if ($out === []) {
-            $base['kpi'] = ['out' => 0, 'a' => 0, 'share' => 0.0, 'need' => 0.0, 'need_items' => 0, 'negative' => 0];
+            $base['kpi'] = ['out' => 0, 'a' => 0, 'share' => 0.0, 'need' => 0.0, 'need_items' => 0, 'negative' => 0, 'not_reported' => 0];
             $base['histogram'] = $this->histogram([]);
 
             return $base;
         }
 
         $ids = array_keys($out);
+        // Items not reported by 1C take no part in the demand lookup: they are unknown, not out of stock.
+        $demandIds = array_keys(array_filter($out, fn (array $r) => $r['reason'] !== 'no_data'));
         $meta = collect();
         foreach (array_chunk($ids, 500) as $chunk) {
             $meta = $meta->concat(DB::table('items')->leftJoin('groups', 'groups.id', '=', 'items.group_id')
@@ -175,10 +185,10 @@ class WarehouseOutOfStock
         $meta = $meta->keyBy('id');
 
         [$speed, $abc] = $this->sales($w, $today);
-        $open = DB::table('order_items as ol')->join('orders as o', 'o.id', '=', 'ol.order_id')
-            ->whereIn('o.status', OrderStatus::open())->groupBy('ol.item_id')
+        $open = InTransit::apply(DB::table('order_items as ol')->join('orders as o', 'o.id', '=', 'ol.order_id'), 'o', InTransit::warehouseSince($w))
+            ->groupBy('ol.item_id')
             ->selectRaw('ol.item_id as item_id, SUM(ol.qty) as qty')->pluck('qty', 'item_id');
-        [$shops, $need] = $this->demand($w, $ids);
+        [$shops, $need] = $demandIds === [] ? [[], []] : $this->demand($w, $demandIds);
 
         $groups = [];
         $rows = [];
@@ -207,16 +217,19 @@ class WarehouseOutOfStock
         }
         asort($groups);
 
+        // KPI, histogram and the out-of-stock list never include items "not reported by 1C" (reason no_data).
+        $outRows = array_values(array_filter($rows, fn (array $r) => $r['reason'] !== 'no_data'));
         $base['rows'] = $rows;
         $base['groups'] = $groups;
-        $base['histogram'] = $this->histogram($rows);
+        $base['histogram'] = $this->histogram($outRows);
         $base['kpi'] = [
-            'out' => count($rows),
-            'a' => count(array_filter($rows, fn (array $r) => $r['abc'] === 'A')),
-            'share' => $base['candidates'] > 0 ? round(count($rows) / $base['candidates'] * 100, 1) : 0.0,
-            'need' => round(array_sum(array_column($rows, 'need')), 3),
-            'need_items' => count(array_filter($rows, fn (array $r) => $r['need'] > 0)),
-            'negative' => count(array_filter($rows, fn (array $r) => $r['negative'])),
+            'out' => count($outRows),
+            'a' => count(array_filter($outRows, fn (array $r) => $r['abc'] === 'A')),
+            'share' => $base['candidates'] > 0 ? round(count($outRows) / $base['candidates'] * 100, 1) : 0.0,
+            'need' => round(array_sum(array_column($outRows, 'need')), 3),
+            'need_items' => count(array_filter($outRows, fn (array $r) => $r['need'] > 0)),
+            'negative' => count(array_filter($outRows, fn (array $r) => $r['negative'])),
+            'not_reported' => count($rows) - count($outRows),
         ];
 
         return $base;
@@ -324,7 +337,7 @@ class WarehouseOutOfStock
         return [
             'group' => is_numeric($in['group'] ?? null) && (int) $in['group'] > 0 ? (int) $in['group'] : null,
             'abc' => in_array($in['abc'] ?? '', ['A', 'B', 'C'], true) ? $in['abc'] : '',
-            'reason' => in_array($in['reason'] ?? '', ['missing', 'zero'], true) ? $in['reason'] : '',
+            'reason' => in_array($in['reason'] ?? '', ['missing', 'zero', 'no_data'], true) ? $in['reason'] : '',
             'needed' => $needed === true || $needed === 1 || $needed === '1' || $needed === 'true' || $needed === 'on',
             'min_days' => max(0, (int) ($in['min_days'] ?? 0)),
             'q' => trim((string) ($in['q'] ?? '')),
@@ -350,8 +363,9 @@ class WarehouseOutOfStock
         $rows = array_values(array_filter($rows, function (array $r) use ($f, $barcodeIds) {
             return ($f['group'] === null || $r['group_id'] === $f['group'])
                 && ($f['abc'] === '' || $r['abc'] === $f['abc'])
-                && ($f['reason'] === '' || $r['reason'] === $f['reason'])
-                && (! $f['needed'] || $r['need'] > 0 || $r['shops'] > 0)
+                // Items not reported by 1C only show when asked for (reason "no_data"); they are not out of stock.
+                && ($f['reason'] === '' ? $r['reason'] !== 'no_data' : $r['reason'] === $f['reason'])
+                && (! $f['needed'] || $r['reason'] === 'no_data' || $r['need'] > 0 || $r['shops'] > 0)
                 && $r['days_out'] >= $f['min_days']
                 && ($f['q'] === '' || isset($barcodeIds[$r['item_id']])
                     || mb_stripos($r['name'], $f['q']) !== false || mb_stripos((string) $r['sku'], $f['q']) !== false);

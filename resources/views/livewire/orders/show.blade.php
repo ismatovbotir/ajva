@@ -7,9 +7,12 @@
 
     <div class="mb-4 flex flex-wrap items-center gap-3">
         <a href="{{ route('orders.index') }}" class="text-sm font-medium text-brand-700 hover:underline">← {{ __('Orders') }}</a>
-        <x-ui.badge :variant="$order->status === \App\Enums\OrderStatus::Draft ? 'warning' : 'info'">{{ $order->status->label() }}</x-ui.badge>
+        <x-ui.badge :variant="in_array($order->status, [\App\Enums\OrderStatus::Draft, \App\Enums\OrderStatus::PendingApproval], true) ? 'warning' : ($order->status === \App\Enums\OrderStatus::Fulfilled ? 'success' : 'info')">{{ $order->status->label() }}</x-ui.badge>
+        @if($overdue)<x-ui.badge variant="danger">{{ __('Overdue') }}</x-ui.badge>@endif
+        @if($order->close_reason === 'expired' && $order->isAwaitingReceipt())<x-ui.badge variant="warning">{{ __('Expired') }}</x-ui.badge>@endif
         @if($order->sync_status->value !== 'not_queued')
             <x-ui.badge :variant="$order->sync_status->badgeVariant()">{{ $order->sync_status->label() }}</x-ui.badge>
+            @if($order->onec_number)<span class="text-xs font-medium text-slate-700">{{ __('1C order No.') }}: {{ $order->onec_number }}</span>@endif
             @if($order->sync_attempts > 0)<span class="text-xs text-slate-400">{{ __(':count attempts', ['count' => $order->sync_attempts]) }}</span>@endif
             @if($order->sync_error)<span class="text-xs text-red-600">{{ $order->sync_error }}</span>@endif
         @endif
@@ -17,9 +20,43 @@
         @if($order->horizon_days)<span class="text-xs text-slate-500">{{ __('Cover, days') }}: {{ $order->horizon_days }}</span>@endif
     </div>
 
-    @if(! $onecConfigured && $order->status !== \App\Enums\OrderStatus::Draft)
-        <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{{ __('The 1C orders address is not set (ONEC_ORDERS_URL). Confirmed orders stay queued until it is set.') }}</p>
+    @if(! $onecConfigured && ! in_array($order->status, [\App\Enums\OrderStatus::Draft, \App\Enums\OrderStatus::PendingApproval], true))
+        <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{{ __('The 1C orders address is not set (ADINES_URL). Confirmed orders stay queued until it is set.') }}</p>
     @endif
+    {{-- Exceptions: waiting for an admin / sent back / the admin's confirm-anyway step --}}
+    @if($order->isAwaitingApproval())
+        <x-ui.card class="mb-4 border-amber-300 bg-amber-50" data-awaiting-approval>
+            <h3 class="text-sm font-semibold text-amber-900">{{ __('Sent for approval') }}</h3>
+            <p class="mt-1 text-sm text-amber-800">{{ $canApprove ? __('The shop sent this order with exceptions. Check them, then approve (it is sent to 1C) or send it back with a reason.') : __('Some quantities look unusual, so an administrator must approve the order before it is sent. The order is locked meanwhile.') }}</p>
+            @include('livewire.orders.partials.exceptions', ['reasons' => $reasons])
+            @if($canApprove)
+                <div class="mt-3 space-y-2">
+                    <x-ui.button type="button" wire:click="approve" wire:loading.attr="disabled" wire:target="approve"
+                                 wire:confirm="{{ __('Approve this order and send it to 1C?') }}" data-approve>{{ __('Approve and send') }}</x-ui.button>
+                    <label for="reject-reason" class="block text-sm font-semibold text-slate-700">{{ __('Reason for sending it back') }}</label>
+                    <textarea id="reject-reason" rows="2" maxlength="1000" wire:model="rejectReason" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-600 focus:ring-brand-600"></textarea>
+                    @error('rejectReason')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+                    <x-ui.button type="button" variant="danger" wire:click="reject" wire:loading.attr="disabled" wire:target="reject" data-reject>{{ __('Send back to the shop') }}</x-ui.button>
+                </div>
+            @endif
+        </x-ui.card>
+    @elseif($order->review_status === 'rejected' && $order->status === \App\Enums\OrderStatus::Draft)
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2" data-rejected>
+            <p class="text-sm font-semibold text-red-800">{{ __('Sent back by the administrator') }}</p>
+            <p class="whitespace-pre-line text-sm text-red-700">{{ $order->review_note }}</p>
+            <p class="mt-1 text-xs text-red-700">{{ __('Correct the order and confirm it again.') }}</p>
+        </div>
+    @endif
+    @if($order->status === \App\Enums\OrderStatus::Draft && $decision !== [])
+        <x-ui.card class="mb-4 border-amber-300 bg-amber-50" data-decision>
+            <h3 class="text-sm font-semibold text-amber-900">{{ __('This order has exceptions') }}</h3>
+            <p class="mt-1 text-sm text-amber-800">{{ __('Review them. You can fix the order, or confirm it anyway (recorded in the history).') }}</p>
+            @include('livewire.orders.partials.exceptions', ['reasons' => $reasons])
+            <x-ui.button class="mt-3" type="button" wire:click="confirm(true)" wire:loading.attr="disabled" wire:target="confirm"
+                         wire:confirm="{{ __('Confirm this order and send it to 1C despite the exceptions?') }}" data-confirm-anyway>{{ __('Confirm anyway') }}</x-ui.button>
+        </x-ui.card>
+    @endif
+
     @if($canEdit)
         <p class="mb-3 text-sm text-slate-500">{{ __('This order is a draft: change the quantities, remove lines or add items. After confirming it is locked.') }}</p>
     @endif
@@ -70,6 +107,31 @@
             </table>
         </div>
     </x-ui.card>
+
+    {{-- Close the loop: the goods arrived (confirmed, not received yet) --}}
+    @if($canReceive)
+        <x-ui.card class="mt-4" data-receive-card>
+            <h3 class="mb-1 text-sm font-semibold text-slate-700">{{ __('Confirm receipt') }}</h3>
+            <p class="mb-3 text-xs text-slate-500">{{ __('Check what arrived. Change the quantity of a line that differs and choose a reason, then press Confirm receipt.') }}</p>
+            @if($overdue)<p class="mb-3 text-sm text-red-700" data-overdue>{{ __('Not received by the end of the delivery day.') }}</p>@endif
+            @if($order->close_reason === 'expired')<p class="mb-3 text-sm text-amber-700" data-expired>{{ __('This order no longer counts as in transit. Confirm the receipt if the goods did arrive.') }}</p>@endif
+            @include('livewire.orders.partials.receive-form', ['phone' => false])
+            <x-ui.button class="mt-3" type="button" wire:click="receive" wire:loading.attr="disabled" wire:target="receive"
+                         wire:confirm="{{ __('Confirm that the goods arrived with these quantities?') }}">{{ __('Confirm receipt') }}</x-ui.button>
+        </x-ui.card>
+    @elseif($order->received_at)
+        <x-ui.card class="mt-4" data-received-info>
+            <h3 class="mb-2 text-sm font-semibold text-slate-700">{{ __('Receipt') }}</h3>
+            <p class="mb-2 text-sm text-slate-600">{{ __('Received :time by :name', ['time' => $order->received_at->format('d.m.Y H:i'), 'name' => $receiver ?? __('Deleted user')]) }}</p>
+            <ul class="space-y-1 text-sm">
+                @foreach($items as $line)
+                    @if($line->qty_received !== null && abs((float) $line->qty_received - (float) $line->qty) > 1e-9)
+                        <li class="text-amber-700">{{ $line->item?->name }}: {{ $fmt($line->qty) }} → {{ $fmt($line->qty_received) }}@if($line->discrepancy_reason) ({{ \App\Services\OrderReceiving::reasonLabels()[$line->discrepancy_reason] ?? $line->discrepancy_reason }})@endif</li>
+                    @endif
+                @endforeach
+            </ul>
+        </x-ui.card>
+    @endif
 
     @if($canShare)
         <x-ui.card class="mt-4" data-share>

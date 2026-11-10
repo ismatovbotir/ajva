@@ -61,7 +61,7 @@ class LoginSmokeTest extends TestCase
         $this->actingAs($user)
             ->get('/')
             ->assertOk()
-            ->assertSee('Dashboard');
+            ->assertSee('Home');
 
         $this->actingAs($user)
             ->post('/logout')

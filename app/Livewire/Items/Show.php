@@ -20,6 +20,13 @@ class Show extends Component
 
     public function render()
     {
+        $stocks = ShopAccess::restrict($this->item->currentStocks(), 'stocks.shop_id')->with('shop')->orderBy('id')->get();
+        // Explicit zero: a shop whose latest 1C sync did not report this item shows "Not reported", not the old quantity.
+        $latest = \App\Models\Stock::latestDates($stocks->pluck('shop_id')->map(fn ($id) => (int) $id)->unique()->values()->all());
+        foreach ($stocks as $s) {
+            $s->reported = \App\Models\Stock::isReported((string) $s->stock_date, $latest[(int) $s->shop_id] ?? null);
+        }
+
         return view('livewire.items.show', [
             'barcodes' => $this->item->barcodes()->orderBy('id')->get(),
             'itemPrices' => $this->item->itemPrices()
@@ -27,7 +34,7 @@ class Show extends Component
                 ->when(! ProfitAccess::allowed(), fn ($q) => $q->where('item_prices.price_id', '<>', (int) config('inventory.cost_price_id')))
                 ->with('price')->orderBy('id')->get(),
             'orderRules' => ShopAccess::restrict($this->item->orderRules(), 'item_order_rules.shop_id')->with('shop')->orderBy('id')->get(),
-            'stocks' => ShopAccess::restrict($this->item->currentStocks(), 'stocks.shop_id')->with('shop')->orderBy('id')->get(),
+            'stocks' => $stocks,
         ]);
     }
 }

@@ -35,16 +35,52 @@ class Order extends Model
         'telegram_note',
         'telegram_recipients_ok',
         'comment',
+        'received_at',
+        'received_by',
+        'close_reason',
+        'review_status',
+        'review_note',
+        'review_exceptions',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
+        'review_exceptions' => 'array',
+        'reviewed_at' => 'datetime',
         'status' => OrderStatus::class,
         'sync_status' => OrderSyncStatus::class,
         'confirmed_at' => 'datetime',
         'queued_at' => 'datetime',
         'synced_at' => 'datetime',
         'telegram_sent_at' => 'datetime',
+        'received_at' => 'datetime',
     ];
+
+    /** close_reason values */
+    public const CLOSE_RECEIVED = 'received';
+
+    public const CLOSE_EXPIRED = 'expired';
+
+    public const CLOSE_CANCELLED = 'cancelled';
+
+    /** Confirmed and not yet received by the shop (an expired one can still be received late). */
+    public function isAwaitingReceipt(): bool
+    {
+        return $this->status === OrderStatus::Confirmed && $this->received_at === null;
+    }
+
+    public const REVIEW_PENDING = 'pending';
+
+    public const REVIEW_APPROVED = 'approved';
+
+    public const REVIEW_REJECTED = 'rejected';
+
+    /** Sent by the shop with exceptions and waiting for an admin (status pending_approval). */
+    public function isAwaitingApproval(): bool
+    {
+        return $this->status === OrderStatus::PendingApproval && $this->review_status === self::REVIEW_PENDING;
+    }
 
     public function isAuto(): bool
     {

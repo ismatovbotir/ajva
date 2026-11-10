@@ -230,6 +230,7 @@ class Index extends Component
             'active' => $active,
             'drafts' => Order::query()->where('status', OrderStatus::Draft->value)->pluck('id', 'shop_id')->all(),
             'pick' => $plan['pick'],
+            'noData' => $plan['no_data'] ?? ['count' => 0, 'by_shop' => [], 'items' => []],
             'notice' => $this->notice,
         ]);
     }

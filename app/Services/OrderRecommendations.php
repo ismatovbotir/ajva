@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Enums\OrderStatus;
 use App\Models\OrderRule;
 use App\Models\Stock;
+use App\Support\InTransit;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * urgency           the forecast level: out > critical (cover < 1 day) > soon (< 3 days) > low
  * tier              allocation priority of a line: 0 out of stock, 1 stock-out within 1 day, 2 stock-out/cover
  *                   within H days, 3 the rest (at/below min only)
- * warehouse stock   Stock::applyCurrent of the main warehouse shop MINUS the quantities on open orders
+ * warehouse stock   Stock::applyCurrent of the main warehouse shop (explicit zero: only items reported by the warehouse's
+ *                   latest sync; an unreported item is UNKNOWN: `wh_unknown`, no cap, the need passes through; a real 0
+ *                   is 0; legacy: absent = 0) MINUS the quantities on open orders
  *                   (pending_approval / approved, any shop; not fulfilled), never below 0. The warehouse is
  *                   never replenished itself.
  * allocation        per item, when the warehouse has less than the total need: the quantity (floored to a
@@ -110,6 +112,7 @@ class OrderRecommendations
                 'count' => count($rows),
                 'counts' => $counts,
                 'short' => $short,
+                'no_data' => (int) ($forecast['no_data']['by_shop'][$shop['id']] ?? 0),
                 'rows' => $rows,
             ];
         }
@@ -127,6 +130,8 @@ class OrderRecommendations
             'kpi' => $kpi,
             'shops' => $result,
             'pick' => $pick,
+            // Pairs not reported by 1C (explicit zero): not planned, surfaced here (see ForecastService, `no_data`).
+            'no_data' => $forecast['no_data'] ?? ['count' => 0, 'by_shop' => [], 'items' => []],
         ];
     }
 
@@ -228,6 +233,7 @@ class OrderRecommendations
             'rules_only' => $r['rules_only'],
             'clipped' => $r['clipped'],
             'stale' => $r['stale'],
+            'no_data' => $r['no_data'] ?? false,
             'censored_days' => $r['censored_days'],
             'level' => $r['level'],
             'reason' => $belowMin && $coverLow ? 'both' : ($belowMin ? 'min' : 'cover'),
@@ -275,7 +281,10 @@ class OrderRecommendations
                 $demands[] = ['key' => $n, 'rank' => $r['tier'], 'cover' => $r['cover'], 'need' => $r['need']];
             }
             $needTotal = array_sum(array_column($demands, 'need'));
-            $have = $configured ? (float) ($available[$itemId] ?? 0.0) : null;
+            // Explicit zero: a warehouse item that 1C did not report is UNKNOWN (not zero, not available): no cap is
+            // applied, the need passes through and the entry is flagged `wh_unknown`. Legacy: absent = 0 available.
+            $whUnknown = $configured && Stock::explicitZero() && ! array_key_exists($itemId, $available);
+            $have = $configured && ! $whUnknown ? (float) ($available[$itemId] ?? 0.0) : null;
 
             $send = $have === null || $needTotal <= $have + 1e-9
                 ? array_column($demands, 'need', 'key')
@@ -317,6 +326,7 @@ class OrderRecommendations
                 'need' => round($needTotal, 6),
                 'send' => round($sendTotal, 6),
                 'available' => $have,
+                'wh_unknown' => $whUnknown,
                 'short' => $short,
                 'short_pct' => $needTotal > 0 ? round($short / $needTotal * 100, 1) : 0.0,
                 'urgency' => array_search($worst, self::RANK, true),
@@ -333,21 +343,24 @@ class OrderRecommendations
     }
 
     /**
-     * Current quantity of the main warehouse per item id, minus what open orders already claim.
+     * Current quantity of the main warehouse per item id, minus what recent open orders already claim (InTransit rules).
      *
      * @return array<int, float>
      */
     private function warehouseStock(int $warehouseId): array
     {
-        $stock = Stock::applyCurrent(DB::table('stocks'))
+        // Explicit zero: only items the warehouse's latest sync REPORTED have a known quantity (a real 0 stays 0);
+        // the others are absent from the map = unknown (see allocate()).
+        $stock = Stock::applyReported(Stock::applyCurrent(DB::table('stocks')))
             ->where('stocks.shop_id', $warehouseId)
             ->pluck('stocks.qty', 'stocks.item_id')
             ->map(fn ($q) => (float) $q)
             ->all();
 
-        $claimed = DB::table('order_items as ol')
-            ->join('orders as o', 'o.id', '=', 'ol.order_id')
-            ->whereIn('o.status', OrderStatus::open())
+        // Open orders inside the in-transit window AND confirmed on/after the start of the warehouse's latest stock day:
+        // earlier shipments are assumed to be in the 1C snapshot already (App\Support\InTransit).
+        $claimed = InTransit::apply(DB::table('order_items as ol')
+            ->join('orders as o', 'o.id', '=', 'ol.order_id'), 'o', InTransit::warehouseSince($warehouseId))
             ->groupBy('ol.item_id')
             ->selectRaw('ol.item_id as item_id, SUM(ol.qty) as qty')
             ->pluck('qty', 'item_id');

@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Livewire\Telegram\Messages;
 use App\Livewire\Telegram\Users as TelegramUsersPage;
-use App\Models\TelegramMessage;
 use App\Models\Telegram as TelegramAccount;
+use App\Models\TelegramMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;

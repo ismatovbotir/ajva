@@ -80,6 +80,8 @@ class OrderingReportTest extends TestCase
 
     public function test_the_forecast_is_weekday_aware(): void
     {
+        // Legacy shape: weekday means only from the 7-day speed window (the window-shape tests are at the end).
+        config(['inventory.weekday_shape' => 'legacy', 'inventory.clip_mode' => 'legacy', 'inventory.safety_stock' => false]);
         // 14 sold on each of the last Mondays (Sep 14, 21, 28, Oct 5), nothing otherwise; stock 0.
         $x = $this->item('Mondays', $this->a, 0, 1, 50, '2026-09-01');
         foreach (['2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05'] as $monday) {
@@ -215,7 +217,7 @@ class OrderingReportTest extends TestCase
         $this->sellDaily($this->a, $x, 1);
         $user = User::factory()->create();
 
-        $component = Livewire::actingAs($user)->test(Index::class)->call("generate");
+        $component = Livewire::actingAs($user)->test(Index::class)->call('generate');
         $this->assertSame(3, $component->viewData('horizon'));
         $this->assertSame($this->a->id, $component->viewData('active')['id']);
         $before = $component->viewData('active')['rows'][0];
@@ -239,7 +241,7 @@ class OrderingReportTest extends TestCase
         $x = $this->item('X', $this->a, 4, 5, 20, '2026-09-01');
         $this->sellDaily($this->a, $x, 1);
 
-        $component = Livewire::actingAs(User::factory()->create())->test(Index::class)->call("generate");
+        $component = Livewire::actingAs(User::factory()->create())->test(Index::class)->call('generate');
         $this->assertNull($component->viewData('detail'));
         $heat = $component->viewData('heat');
         $this->assertSame(['X'], array_column($heat['items'], 'name'));
@@ -284,7 +286,7 @@ class OrderingReportTest extends TestCase
         $admin = User::factory()->create();
         Queue::fake();
 
-        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate")->call('prepareOrder', $this->a->id);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call('generate')->call('prepareOrder', $this->a->id);
 
         $order = Order::query()->with('items')->sole();
         $this->assertSame(OrderStatus::Draft, $order->status);
@@ -310,7 +312,7 @@ class OrderingReportTest extends TestCase
     {
         $cola = $this->item('Cola', $this->a, 0, 5, 10);
         $admin = User::factory()->create();
-        $component = Livewire::actingAs($admin)->test(Index::class)->call("generate")->call('prepareOrder', $this->a->id);
+        $component = Livewire::actingAs($admin)->test(Index::class)->call('generate')->call('prepareOrder', $this->a->id);
         $draft = Order::query()->sole();
         $draft->items()->where('item_id', $cola->id)->update(['qty' => 3]);     // the shop edited it
         $manual = Item::factory()->create();
@@ -333,7 +335,7 @@ class OrderingReportTest extends TestCase
         $this->item('Cola', $this->a, 0, 5, 10);
         $this->item('Water', $this->b, 0, 5, 20);
 
-        Livewire::actingAs(User::factory()->create())->test(Index::class)->call("generate")->call('prepareAllOrders');
+        Livewire::actingAs(User::factory()->create())->test(Index::class)->call('generate')->call('prepareAllOrders');
 
         $this->assertSame(2, Order::query()->count());
         $this->assertEquals(10, Order::query()->where('shop_id', $this->a->id)->first()->items->sole()->qty);
@@ -352,5 +354,179 @@ class OrderingReportTest extends TestCase
         $draft->update(['status' => OrderStatus::Confirmed]);
 
         $this->assertNull($this->row($this->a, 'Cola'));   // 10 on the way: nothing left to order
+    }
+
+    // ---------------------------------------------------------------- forecast model v2 (shape / clipping / safety stock)
+
+    /** @param  callable(Carbon, int): float  $qty  quantity sold on the day (i = days back, 1 = yesterday) */
+    private function sellPattern(Shop $shop, Item $item, callable $qty, int $days = 28): void
+    {
+        for ($i = 1; $i <= $days; $i++) {
+            $day = Carbon::now()->subDays($i)->setTime(11, 0);
+            $q = $qty($day, $i);
+            if ($q > 0) {
+                $this->sell($shop, $item, $q, $day->toDateTimeString());
+            }
+        }
+    }
+
+    /** Weekend item: 2 on weekdays, 10 on Sat/Sun; the last 7 days sell twice as much (growth). */
+    private function weekendItem(string $name, Shop $shop, float $stock = 0, float $max = 200): Item
+    {
+        $x = $this->item($name, $shop, $stock, 5, $max, '2026-09-01');
+        $this->sellPattern($shop, $x, fn (Carbon $d, int $i) => ($d->isWeekend() ? 10 : 2) * ($i <= 7 ? 2 : 1));
+
+        return $x;
+    }
+
+    private function legacyFlags(): void
+    {
+        config(['inventory.weekday_shape' => 'legacy', 'inventory.clip_mode' => 'legacy', 'inventory.safety_stock' => false]);
+    }
+
+    public function test_window_shape_vs_legacy_on_a_strong_weekend_series(): void
+    {
+        $this->weekendItem('Weekend', $this->a);
+
+        $new = $this->row($this->a, 'Weekend');
+        config(['inventory.weekday_shape' => 'legacy']);
+        $old = $this->row($this->a, 'Weekend');
+
+        // the level (7-day speed) is the same; Saturday Oct 10 = day 3, Monday Oct 12 = day 5
+        $this->assertEqualsWithDelta($old['speed'], $new['speed'], 1e-9);
+        $this->assertGreaterThan($old['f'][3], $new['f'][3]);   // the weekend peak is better represented
+        $this->assertLessThan($old['f'][5], $new['f'][5]);      // and a weekday is not inflated
+        // legacy: Saturday appears once in the 7-day window (n = 1): sat/3 + speed x 2/3
+        $this->assertEqualsWithDelta($old['speed'] * 2 / 3 + 20 / 3, $old['f'][3], 0.05);
+    }
+
+    public function test_clipping_keeps_a_genuine_weekend_peak_but_clips_a_typo(): void
+    {
+        $x = $this->item('Peaks', $this->a, 0, 5, 500, '2026-09-01');
+        $this->sellPattern($this->a, $x, fn (Carbon $d, int $i) => $d->isWeekend() ? 10 : 2);
+        $this->sell($this->a, $x, 900, '2026-10-06 09:00:00');   // Tuesday typo, on top of the normal 2
+
+        $new = $this->row($this->a, 'Peaks');
+        $this->assertTrue($new['clipped']);
+        $this->assertTrue($new['spike']);
+        $this->assertGreaterThan(2 * $new['f'][1], $new['f'][3]);   // the Saturday peak survives
+
+        config(['inventory.clip_mode' => 'legacy']);
+        $old = $this->row($this->a, 'Peaks');
+        $this->assertLessThan($new['f'][3], $old['f'][3]);   // legacy erased the weekend peaks
+    }
+
+    public function test_safety_stock_raises_the_target_for_a_volatile_item_not_a_stable_one(): void
+    {
+        $volatile = $this->item('Volatile', $this->a, 0, 2, 100, '2026-09-01');
+        $stable = $this->item('Stable', $this->b, 0, 2, 100, '2026-09-01');
+        $pattern = [0, 8, 2, 6];
+        $this->sellPattern($this->a, $volatile, fn (Carbon $d, int $i) => $pattern[$i % 4]);
+        $this->sellPattern($this->b, $stable, fn () => 4);
+
+        $v = $this->row($this->a, 'Volatile');
+        $s = $this->row($this->b, 'Stable');
+
+        $this->assertSame('A', $v['abc']);
+        $this->assertSame('A', $s['abc']);
+        $this->assertEqualsWithDelta(0.0, $s['sigma'], 1e-6);
+        $this->assertGreaterThan(3, $v['sigma']);
+        $this->assertEqualsWithDelta(1.65 * $v['sigma'] * sqrt(3), $v['ss'][3], 0.01);
+        $this->assertEqualsWithDelta(max(2, $v['ss'][3]) + $v['F'][3], $v['target'][3], 0.01);
+        $this->assertEqualsWithDelta(2 + $s['F'][3], $s['target'][3], 0.01);   // SS 0 -> min stays the floor
+
+        config(['inventory.safety_stock' => false]);
+        $off = $this->row($this->a, 'Volatile');
+        $this->assertNull($off['ss']);
+        $this->assertGreaterThan($off['order'][3], $v['order'][3]);
+        $this->assertEqualsWithDelta(2 + $off['F'][3], $off['target'][3], 0.01);
+    }
+
+    public function test_low_confidence_keeps_the_old_rule(): void
+    {
+        $x = $this->item('Newcomer', $this->a, 0, 2, 100, '2026-10-03');   // 4 days of history
+        $this->sellPattern($this->a, $x, fn (Carbon $d, int $i) => [0, 8, 2, 6][$i % 4], 4);
+
+        $row = $this->row($this->a, 'Newcomer');
+
+        $this->assertSame('low', $row['confidence']);
+        $this->assertNull($row['ss']);
+        $this->assertEquals(ceil(2 + $row['F'][3]), $row['order'][3]);
+        $this->assertEqualsWithDelta(2 + $row['F'][3], $row['target'][3], 0.01);
+    }
+
+    public function test_max_overshoot_caps_the_safety_stock_uplift(): void
+    {
+        $x = $this->item('Capped', $this->a, 0, 2, 15, '2026-09-01');
+        $this->sellPattern($this->a, $x, fn (Carbon $d, int $i) => [0, 8, 2, 6][$i % 4]);
+
+        $row = $this->row($this->a, 'Capped');
+        $this->assertEqualsWithDelta(22.5, $row['target'][3], 0.01);   // 15 x 1.5
+        $this->assertSame(23.0, (float) $row['order'][3]);
+
+        config(['inventory.max_overshoot' => 3]);
+        $this->assertGreaterThan(22.5, $this->row($this->a, 'Capped')['target'][3]);
+
+        // the cap only limits the uplift: the plain rule target (min + F) is never reduced
+        config(['inventory.max_overshoot' => 0.1]);
+        $capped = $this->row($this->a, 'Capped');
+        $this->assertEqualsWithDelta(2 + $capped['F'][3], $capped['target'][3], 0.01);
+    }
+
+    public function test_the_legacy_flags_restore_the_old_numbers_exactly(): void
+    {
+        $x = $this->item('Mondays', $this->a, 6, 1, 50, '2026-09-01');
+        foreach (['2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05'] as $monday) {
+            $this->sell($this->a, $x, 14, $monday.' 10:00:00');
+        }
+        $this->legacyFlags();
+
+        $row = $this->row($this->a, 'Mondays');
+
+        $this->assertEqualsWithDelta(6.0, $row['f'][5], 0.001);
+        $this->assertEqualsWithDelta(1.333, $row['f'][1], 0.001);
+        $this->assertSame(3.0, $row['cover_days']);                    // position 6 / speed 2
+        $this->assertEquals(ceil(1 + $row['F'][3] - 6), $row['order'][3]);
+        $this->assertNull($row['ss']);
+    }
+
+    public function test_lead_time_zero_adds_no_horizon_and_a_lead_time_extends_it(): void
+    {
+        $x = $this->item('Lead', $this->b, 0, 2, 400, '2026-09-01');
+        $this->sellPattern($this->b, $x, fn (Carbon $d, int $i) => [0, 8, 2, 6][$i % 4]);
+
+        $zero = $this->row($this->b, 'Lead');
+        $this->assertEqualsWithDelta(max(2, $zero['ss'][3]) + $zero['F'][3], $zero['target'][3], 0.01);
+
+        config(['inventory.lead_time_days' => 2]);
+        $two = $this->row($this->b, 'Lead');
+        $this->assertEqualsWithDelta(1.65 * $zero['sigma'] * sqrt(5), $two['ss'][3], 0.01);
+        $this->assertGreaterThan($zero['target'][3], $two['target'][3]);
+        $this->assertEqualsWithDelta($zero['F'][5], $two['F'][5], 1e-9);   // the displayed F stays 1..7
+        $this->assertEqualsWithDelta(max(2, $two['ss'][3]) + $two['F'][5], $two['target'][3], 0.01);   // F(H + L)
+    }
+
+    public function test_cover_days_follow_the_weekday_forecast(): void
+    {
+        $this->weekendItem('Cover', $this->a, 30);
+        $row = $this->row($this->a, 'Cover');
+
+        // Wednesday today, nothing sold yet: the rest of today is a whole day, then f[1], f[2] ...
+        $remaining = 30 - $row['today_rem'];
+        $expected = 1.0;
+        foreach ($row['f'] as $f) {
+            if ($remaining <= $f) {
+                $expected += $remaining / $f;
+                break;
+            }
+            $remaining -= $f;
+            $expected += 1;
+        }
+        $this->assertEqualsWithDelta($expected, $row['cover_days'], 0.06);
+        $this->assertNotEqualsWithDelta($row['position'] / $row['speed'], $row['cover_days'], 0.1);
+
+        config(['inventory.weekday_shape' => 'legacy']);
+        $old = $this->row($this->a, 'Cover');
+        $this->assertEqualsWithDelta(round(30 / $old['speed'], 1), $old['cover_days'], 1e-9);
     }
 }

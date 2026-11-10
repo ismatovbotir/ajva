@@ -32,6 +32,12 @@ class WidgetCatalog
 
     private const INVENTORY_RULE = 'Rule: the Ordering forecast (items with an order rule, horizon :days days). Stock as of the last 1C sync.';
 
+    private const SECURITY_WEEK_RULE = 'Rule: the last 7 days of the shops in view (main warehouse excluded). A signal to review, never proof: a rate is judged only above the minimum sample and against the rest of the chain. Admins only.';
+
+    private const SECURITY_TODAY_RULE = 'Rule: receipts of today in the shops in view (main warehouse excluded), against the own last 28 days of each shop. A signal to review, never proof. Admins only.';
+
+    private const DATA_HEALTH_RULE = 'Rule: the last 24 hours of the shops in view (main warehouse excluded) against the usual day of each shop (median of its last 28 days). A shop is judged only with a usual day of at least 20 receipts.';
+
     /** @var array<string, Widget>|null */
     private static ?array $all = null;
 
@@ -123,6 +129,28 @@ class WidgetCatalog
                 ttl: 120, cost: 'medium'),
             self::make('customer_share', 'Receipts with a customer', 'Receipts', 'Share of today\'s sale receipts that carry a customer / loyalty card. Live, no baseline.', 'single', ['kpi', 'gauge'], 'customers',
                 ttl: 60),
+            self::make('security_warnings_count', 'Security warnings', 'Security', 'Warnings raised from the receipts of the last 7 days, by severity. Red when a high one exists, amber for medium.', 'single', ['kpi'], 'security_week',
+                ttl: 300, cost: 'expensive', publicSafe: false, adminOnly: true, rule: self::SECURITY_WEEK_RULE),
+            self::make('security_refund_by_cashier', 'Refunds by cashier', 'Security', 'Cashiers whose refund share is far above the rest of the chain (last 7 days), with the sample behind it.', 'by_item', ['table', 'bar'], 'security_week',
+                ttl: 300, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], publicSafe: false, adminOnly: true, rule: self::SECURITY_WEEK_RULE),
+            self::make('security_cancelled_rate', 'Cancelled receipts (security)', 'Security', 'Cancelled share of all receipts and the share of cancelled receipts without lines, against the previous 7 days.', 'single', ['kpi', 'gauge'], 'security_week',
+                ttl: 300, cost: 'medium', publicSafe: false, adminOnly: true, rule: self::SECURITY_WEEK_RULE),
+            self::make('security_discount_by_cashier', 'Deep discounts by cashier', 'Security', 'Cashiers whose share of deep-discount sale receipts is far above the rest of the chain (last 7 days).', 'by_item', ['table', 'bar'], 'security_week',
+                ttl: 300, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], publicSafe: false, adminOnly: true, rule: self::SECURITY_WEEK_RULE),
+            self::make('security_silent_shops', 'Silent shops', 'Security', 'Shops with a stretch of usual opening hours today without a single sale receipt. Live.', 'by_shop', ['table', 'bar'], 'security_today',
+                ttl: 120, cost: 'medium', size: [6, 3], min: [3, 2], max: [12, 8], publicSafe: false, adminOnly: true, rule: self::SECURITY_TODAY_RULE),
+            self::make('security_off_hours_today', 'Sales outside normal hours', 'Security', 'Sale receipts today in hours that carry under 1 % of the volume of the shop.', 'single', ['kpi'], 'security_today',
+                ttl: 120, cost: 'medium', publicSafe: false, adminOnly: true, rule: self::SECURITY_TODAY_RULE),
+            self::make('security_integrity_flags', 'Data integrity', 'Security', 'Impossible values in the receipts of today: zero totals, zero quantities, negative discounts, future dates, wrong shop.', 'single', ['kpi'], 'security_today',
+                ttl: 120, cost: 'medium', publicSafe: false, adminOnly: true, rule: self::SECURITY_TODAY_RULE),
+            self::make('security_number_gaps_duplicates', 'Receipt numbers', 'Security', 'Missing receipt numbers inside a shift and duplicate looking receipts today.', 'single', ['kpi'], 'security_today',
+                ttl: 120, cost: 'medium', publicSafe: false, adminOnly: true, rule: self::SECURITY_TODAY_RULE),
+            self::make('security_unusual_baskets', 'Unusual baskets', 'Security', 'Single-item receipts today with a large quantity and a total far above the big-receipt cut of the shop.', 'by_item', ['table', 'bar'], 'security_today',
+                ttl: 120, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], publicSafe: false, adminOnly: true, rule: self::SECURITY_TODAY_RULE),
+            self::make('data_health_silent_shops', 'Silent receipt feeds', 'System', 'Shops whose receipt feed looks silent or low: far fewer sale receipts in the last 24 hours than the usual day. Wrong or missing receipts mean wrong order quantities.', 'by_shop', ['table', 'bar'], 'data_health',
+                ttl: 60, cost: 'medium', size: [6, 3], min: [3, 2], max: [12, 8], rule: self::DATA_HEALTH_RULE),
+            self::make('data_health_rejections_24h', 'Rejected receipts (24 h)', 'System', 'Receipts the system refused in the last 24 hours (item not in the catalog, impossible quantity or date). Amber above 0, red on a spike.', 'single', ['kpi'], 'data_health',
+                ttl: 60, cost: 'medium', rule: self::DATA_HEALTH_RULE),
             self::make('sync_freshness', 'Stock sync', 'System', 'Age of the last 1C stock sync. Amber after 24 h, red after 48 h.', 'single', ['kpi'], 'sync',
                 ttl: 300, size: [4, 3]),
         ];
@@ -146,7 +174,7 @@ class WidgetCatalog
     private static function make(
         string $key, string $label, string $group, string $description, string $shape, array $diagrams, string $dataset,
         bool $comparison = false, int $ttl = 60, ?array $size = null, ?array $min = null, ?array $max = null,
-        string $cost = 'cheap', bool $profit = false, bool $publicSafe = true, array $spark = [], array $options = [], ?string $rule = null,
+        string $cost = 'cheap', bool $profit = false, bool $publicSafe = true, array $spark = [], array $options = [], ?string $rule = null, bool $adminOnly = false,
     ): Widget {
         $single = $shape === 'single';
         $size ??= $single ? [3, 2] : [6, 4];
@@ -172,6 +200,7 @@ class WidgetCatalog
             options: $options,
             sparkDatasets: $spark,
             rule: $rule,
+            adminOnly: $adminOnly,
         );
     }
 }

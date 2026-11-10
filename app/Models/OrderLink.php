@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * The personal secret link of one user to one draft order (/o/{token}). Whatever is done through it is recorded for
- * that user. It works only while the order is a draft AND the user is still active and assigned to the order's shop.
+ * The personal secret link of one user to one order (/o/{token}). Whatever is done through it is recorded for that
+ * user. It works only while the order is a draft (edit + confirm), waiting for an admin's approval (read-only status
+ * page) or confirmed and not yet received (confirm receipt only), AND the user is still active and assigned to the order's shop. Fulfilled / cancelled / deleted orders are 404.
  */
 class OrderLink extends Model
 {
@@ -61,7 +62,7 @@ class OrderLink extends Model
     }
 
     /**
-     * Token -> link whose order is a draft and whose user may still act, else null. The indexed lookup is followed by
+     * Token -> link whose order is a draft or awaiting receipt and whose user may still act, else null. The indexed lookup is followed by
      * a constant-time comparison.
      */
     public static function resolve(string $token, bool $touch = false): ?self
@@ -73,7 +74,7 @@ class OrderLink extends Model
 
         $order = Order::query()->find($link->order_id);
         $user = User::query()->find($link->user_id);
-        if ($order === null || $user === null || $order->status !== OrderStatus::Draft || ! self::mayAct($user, $order->shop_id)) {
+        if ($order === null || $user === null || ($order->status !== OrderStatus::Draft && ! $order->isAwaitingReceipt() && ! $order->isAwaitingApproval()) || ! self::mayAct($user, $order->shop_id)) {
             return null;
         }
 

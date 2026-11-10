@@ -56,6 +56,38 @@ class OrderTelegram
     }
 
     /**
+     * Active admins with a Telegram chat id (escalations and alerts).
+     *
+     * @return Collection<int, User>
+     */
+    public static function admins(): Collection
+    {
+        return User::query()
+            ->where('role', UserRole::Admin->value)
+            ->where('is_active', true)
+            ->whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')
+            ->orderBy('name')
+            ->get(['id', 'name', 'telegram_chat_id']);
+    }
+
+    /**
+     * One notice (optionally with a URL button) to one user, logged like every order message. Used by the reminders.
+     *
+     * @return array{ok: bool, error: ?string}
+     */
+    public function notify(?Order $order, User $user, string $message, ?string $buttonText = null, ?string $buttonUrl = null): array
+    {
+        try {
+            $res = $this->telegram->send(trim((string) $user->telegram_chat_id), $message, $buttonText, $buttonUrl);
+        } catch (Throwable $e) {
+            $res = ['ok' => false, 'error' => class_basename($e)];
+        }
+        $this->log($order, $user, $res, $message);
+
+        return $res;
+    }
+
+    /**
      * Responsible users of several shops at once.
      *
      * @param  array<int, int>  $shopIds
@@ -144,7 +176,7 @@ class OrderTelegram
     }
 
     /** One delivery row per attempt (the Bot API only says accepted or not; it has no delivered / read status). */
-    private function log(Order $order, User $user, array $res, string $message): void
+    private function log(?Order $order, User $user, array $res, string $message): void
     {
         $chatId = trim((string) $user->telegram_chat_id);
 
@@ -159,7 +191,7 @@ class OrderTelegram
                 'status' => $res['ok'] ? 'sent' : 'failed',
                 'error' => $res['ok'] ? null : mb_substr((string) $res['error'], 0, 250),
                 'text' => mb_substr($message, 0, 4000),
-                'order_id' => $order->id,
+                'order_id' => $order?->id,
                 'user_id' => $user->id,
                 'sent_at' => now(),
             ]);

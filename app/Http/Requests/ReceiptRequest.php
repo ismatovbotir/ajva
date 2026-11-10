@@ -2,6 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Receipt;
+use App\Support\ReceiptChecks;
+use App\Support\ReceiptRejections;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ReceiptRequest extends FormRequest
@@ -23,6 +27,20 @@ class ReceiptRequest extends FormRequest
     public function expectsJson(): bool
     {
         return true;
+    }
+
+    /** Clearly impossible values (qty 0 / absurd qty / date far in the future) are refused; see config/receipts.php. */
+    public function withValidator(Validator $validator): void
+    {
+        ReceiptChecks::attach($validator, $this->all());
+    }
+
+    /** A refused receipt is counted (receipt_rejections) before the 422 goes out. */
+    protected function failedValidation(Validator $validator): void
+    {
+        ReceiptRejections::record(Receipt::SOURCE_POS, $this->all(), ReceiptRejections::reasons($validator, $this->all()));
+
+        parent::failedValidation($validator);
     }
 
     /**

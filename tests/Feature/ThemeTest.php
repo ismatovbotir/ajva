@@ -12,7 +12,7 @@ class ThemeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_layout_is_light_only_olive_without_theme_script_or_toggle(): void
+    public function test_admin_layout_is_light_only_without_theme_script_or_toggle(): void
     {
         $html = $this->actingAs(User::factory()->create())->get('/')->assertOk()->getContent();
 
@@ -20,7 +20,7 @@ class ThemeTest extends TestCase
         $this->assertStringNotContainsString("localStorage.getItem('theme')", $html);
         $this->assertStringNotContainsString('monitorTheme', $html);
         $this->assertStringNotContainsString('aria-pressed', $html);
-        $this->assertStringContainsString('md:bg-brand-700', $html);   // green sidebar
+        $this->assertStringContainsString('border-r border-slate-200 bg-white', $html);   // light sidebar
         $this->assertStringContainsString('bg-brand-700', $html);      // green mobile bar
     }
 
@@ -62,7 +62,7 @@ class ThemeTest extends TestCase
         $css = file_get_contents(resource_path('css/app.css'));
 
         $this->assertStringContainsString('--color-brand-700: #2a5039', $css);
-        $this->assertStringContainsString('--color-sand-50: #faf3e3', $css);
+        $this->assertStringContainsString('--color-sand-50: #f8f9fb', $css);
         $this->assertStringNotContainsString('html[data-theme', $css);
         $this->assertStringContainsString('html.monitor-root[data-monitor-theme="light"]', $css);
 

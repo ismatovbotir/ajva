@@ -16,20 +16,39 @@
     --color-brand-800: #1f3d2c;
     --color-brand-900: #16301f;
 
-    /* Sand — warm, muted tan/gold used for the main content canvas. Kept
-       very light/low-saturation at the 50–100 end (where body text and
-       cards live) so long reading sessions over dense tables stay
-       comfortable; deeper steps are available for borders/accents. */
-    --color-sand-50: #faf3e3;
-    --color-sand-100: #f3e7cb;
-    --color-sand-200: #e7d4a3;
-    --color-sand-300: #d8bc79;
-    --color-sand-400: #c6a356;
-    --color-sand-500: #ad8740;
-    --color-sand-600: #8d6c32;
-    --color-sand-700: #705428;
-    --color-sand-800: #57411f;
-    --color-sand-900: #423218;
+    /* Canvas ("sand" name kept so existing pages keep working): now a cool neutral
+       off-white. sand-50 = page canvas and subtle hover/zebra fill, 100-200 = hairlines. */
+    --color-sand-50: #f8f9fb;
+    --color-sand-100: #f1f3f6;
+    --color-sand-200: #e4e7ec;
+    --color-sand-300: #d0d5dd;
+    --color-sand-400: #98a2b3;
+    --color-sand-500: #667085;
+    --color-sand-600: #475467;
+    --color-sand-700: #344054;
+    --color-sand-800: #1d2939;
+    --color-sand-900: #101828;
+
+    /* Primary — the single interactive colour of the admin shell (primary buttons,
+       focus rings, active nav, links). Brand olive stays for the logo mark and
+       small "success" signals only. */
+    --color-primary-50: #eef0ff;
+    --color-primary-100: #e0e4ff;
+    --color-primary-200: #c3caff;
+    --color-primary-300: #9ca6fb;
+    --color-primary-400: #7a82f3;
+    --color-primary-500: #5f61e8;
+    --color-primary-600: #4d49d6;
+    --color-primary-700: #3f3bb5;
+    --color-primary-800: #34318f;
+    --color-primary-900: #2b2a70;
+
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+    body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+    :focus-visible { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
 }
 
 [x-cloak] {
@@ -107,21 +126,8 @@ html.monitor-root[data-monitor-theme="light"] .bg-brand-600,
 .indeterminate-bar { animation: indeterminate-slide 1.3s ease-in-out infinite; }
 .spinner { animation: spinner-turn 0.9s linear infinite; }
 
-/* AjvaAI page: soft entrance and a slowly drifting gradient. */
-@keyframes ajva-rise {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: none; }
-}
-@keyframes ajva-aurora {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-}
-.ajva-rise { animation: ajva-rise 0.4s ease-out both; }
-.ajva-aurora { background-size: 220% 220%; animation: ajva-aurora 14s ease-in-out infinite; }
-
 @media (prefers-reduced-motion: reduce) {
     .modal-backdrop, .modal-panel { animation: none; }
-    .ajva-rise, .ajva-aurora { animation: none; }
     .indeterminate-bar { animation: none; width: 100%; opacity: 0.6; }
     .spinner { animation-duration: 3s; }
 }

@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -27,11 +28,15 @@ class Index extends Component
     /** Seconds the day's aggregates are reused, so paging the list doesn't recompute them. */
     private const ANALYTICS_TTL = 30;
 
+    /** In the URL (?date=Y-m-d) so other pages, such as Security warnings, can link to a day. */
+    #[Url(as: 'date')]
     public string $date = '';
 
     public function mount(): void
     {
-        $this->date = now()->toDateString();
+        if (! $this->parsedDate()) {
+            $this->date = now()->toDateString();
+        }
     }
 
     public function updatedDate(): void

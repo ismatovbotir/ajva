@@ -5,10 +5,12 @@ namespace App\Monitor;
 use App\Models\Shop;
 use App\Models\Stock;
 use App\Services\AssortmentAnalysis;
+use App\Services\DataHealth;
 use App\Services\ForecastService;
 use App\Services\OrderRecommendations;
 use App\Services\ReceiptsMetrics;
 use App\Services\SalesMetrics;
+use App\Services\SecurityWarnings;
 use App\Services\UnsoldStock;
 use App\Services\WarehouseOutOfStock;
 use App\Support\MonitorScope;
@@ -89,6 +91,9 @@ class Datasets
             'unsold' => $this->unsold(),
             'wh_oos' => $this->warehouseOutOfStock(),
             'customers' => $this->customers(),
+            'security_week' => $this->securityWeek(),
+            'security_today' => $this->securityToday(),
+            'data_health' => $this->dataHealth(),
             default => [],
         };
     }
@@ -214,7 +219,8 @@ class Datasets
         $plan = app(OrderRecommendations::class)->plan($forecast, null, $warehouseId);
         $shopIds = array_column($forecast['shops'], 'id');
 
-        $ruled = $shopIds === [] ? 0 : (int) Stock::applyCurrent(DB::table('stocks'))
+        // Explicit zero: only pairs the latest sync reported count as tracked (not-reported pairs are unknown).
+        $ruled = $shopIds === [] ? 0 : (int) Stock::applyReported(Stock::applyCurrent(DB::table('stocks')))
             ->join('item_order_rules as r', function ($join) {
                 $join->on('r.item_id', '=', 'stocks.item_id')->on('r.shop_id', '=', 'stocks.shop_id');
             })
@@ -225,6 +231,7 @@ class Datasets
         return [
             'plan' => $plan,
             'ruled' => $ruled,
+            'no_data' => (int) ($forecast['no_data']['count'] ?? 0),
             'warehouse_name' => $warehouseId === null ? null : Warehouse::shop()?->name,
             'stock_as_of' => $this->lastStockDate($shopIds),
         ];
@@ -285,6 +292,114 @@ class Datasets
             ->first();
 
         return ['all' => (int) ($row->n ?? 0), 'with' => (int) ($row->c ?? 0)];
+    }
+
+    private const SEVERITY_RANK = ['high' => 0, 'medium' => 1, 'low' => 2];
+
+    /**
+     * Security, rolling 7 days (SecurityWarnings, admin viewers only; empty for anyone else so nothing is ever queried):
+     * severity counts, chain counts now and for the previous 7 days cut at the same time, and the flagged CASHIER rows of
+     * the refund and deep-discount checks. Cashier names live only in this dataset, which only an admin screen builds.
+     */
+    private function securityWeek(): array
+    {
+        if (! $this->scope->viewerIsAdmin()) {
+            return [];
+        }
+
+        $now = $this->scope->now->copy();
+        $from = $now->copy()->subDays(6)->startOfDay();
+        $ids = $this->shopList();
+        $service = app(SecurityWarnings::class);
+
+        $report = $service->build($from, $now, $ids, $now);
+        $current = $service->figures($from, $now, $ids);
+        $previous = $service->figures($from->copy()->subDays(7), $now->copy()->subDays(7), $ids);
+
+        $minReceipts = (int) config('security.min_receipts');
+        $minBase = (int) config('security.min_baseline_receipts');
+        $judgeable = count(array_filter($current['cashiers'], fn (array $c) => $c['all_count'] >= $minReceipts && $current['chain']['all_count'] - $c['all_count'] >= $minBase));
+
+        $pick = fn (string $type) => array_values(array_map(
+            fn (array $w) => ['shop' => (string) $w['shop'], 'cashier' => (string) ($w['cashier'] ?? ''), 'severity' => $w['severity'], 'value' => (float) $w['value'], 'baseline' => (float) ($w['baseline'] ?? 0), 'sample' => (int) $w['sample']],
+            array_filter($report['warnings'], fn (array $w) => $w['type'] === $type && $w['subject'] === 'cashier')
+        ));
+        $chain = fn (array $c) => ['all' => (int) $c['all_count'], 'cancelled' => (int) $c['cancelled_count'], 'empty' => (int) $c['empty_count']];
+
+        return [
+            'as_of' => $now->format('H:i'),
+            'receipts' => (int) $report['stamp']['receipts'],
+            'kpi' => $report['kpi'],
+            'chain' => $chain($current['chain']),
+            'prev_chain' => $chain($previous['chain']),
+            'judgeable' => $judgeable,
+            'refund' => $pick('refund_abuse'),
+            'discount' => $pick('discount_deep'),
+        ];
+    }
+
+    /**
+     * Security, today so far (admin viewers only): the per-day checks of SecurityWarnings over today's receipts, reduced to
+     * counts and a few shop rows. No cashier name leaves this method.
+     */
+    private function securityToday(): array
+    {
+        if (! $this->scope->viewerIsAdmin()) {
+            return [];
+        }
+
+        $now = $this->scope->now->copy();
+        $start = $now->copy()->startOfDay();
+        $ids = $this->shopList();
+        $service = app(SecurityWarnings::class);
+
+        $perShop = $ids === [] ? collect() : DB::table('receipts')->whereIn('shop_id', $ids)
+            ->where('active', true)->where('sell', true)->whereBetween('created_at', [$start, $now])
+            ->groupBy('shop_id')->selectRaw('shop_id, COUNT(*) as n')->pluck('n', 'shop_id');
+
+        $worst = function (array $rows): string {
+            $rank = array_map(fn (array $r) => self::SEVERITY_RANK[$r['severity']], $rows);
+
+            return $rank === [] ? 'none' : array_search(min($rank), self::SEVERITY_RANK, true);
+        };
+        $sum = fn (array $rows) => (int) array_sum(array_column($rows, 'value'));
+
+        $off = $ids === [] ? [] : $service->offHours($start, $now, $ids);
+        $silent = $ids === [] ? [] : $service->silentShops($start, $now, $ids, $now);
+        $gaps = $ids === [] ? [] : $service->numberGaps($start, $now, $ids);
+        $dups = $ids === [] ? [] : $service->duplicates($start, $now, $ids);
+        $data = $ids === [] ? [] : $service->dataIntegrity($start, $now, $ids, $now);
+        $baskets = $ids === [] ? [] : $service->unusualBaskets($start, $now, $ids);
+        usort($baskets, fn (array $a, array $b) => [self::SEVERITY_RANK[$a['severity']], -$a['value']] <=> [self::SEVERITY_RANK[$b['severity']], -$b['value']]);
+
+        return [
+            'as_of' => $now->format('H:i'),
+            'sale_receipts' => (int) $perShop->sum(),
+            'basket_shops' => $perShop->filter(fn ($n) => $n >= (int) config('security.basket_min_receipts'))->count(),
+            'normal_shops' => $ids === [] ? 0 : $service->normalHoursShops($now, $ids),
+            'off' => ['count' => $sum($off), 'severity' => $worst($off)],
+            'silent' => array_map(fn (array $w) => ['shop' => (string) $w['shop'], 'hours' => (int) $w['value'], 'expected' => (int) $w['baseline'], 'severity' => $w['severity']], $silent),
+            'gaps' => ['missing' => $sum($gaps), 'tills' => count($gaps), 'severity' => $worst($gaps)],
+            'dups' => ['count' => count($dups), 'severity' => $worst($dups)],
+            'integrity' => ['count' => $sum($data), 'shops' => count(array_unique(array_column($data, 'shop_id'))), 'severity' => $worst($data)],
+            'baskets' => array_map(fn (array $w) => ['shop' => (string) $w['shop'], 'total' => (float) $w['value'], 'cut' => (float) $w['baseline'], 'severity' => $w['severity']], array_slice($baskets, 0, WidgetCatalog::TOP_N_MAX)),
+        ];
+    }
+
+    /** Receipt feed health (DataHealth): silent shops and the rejected receipts of the last 24 hours. No cashier or cost data. */
+    private function dataHealth(): array
+    {
+        $now = $this->scope->now->copy();
+        $r = app(DataHealth::class)->build($this->salesShopIds(), $now);
+        $bad = array_filter($r['shops'], fn (array $s) => in_array($s['status'], ['bad', 'warn'], true));
+
+        return [
+            'as_of' => $now->format('H:i'),
+            'shops' => count($r['shops']),
+            'judged' => count(array_filter($r['shops'], fn (array $s) => $s['status'] !== 'na')),
+            'problems' => array_values(array_map(fn (array $s) => ['shop' => $s['name'], 'last24' => $s['last24'], 'usual' => $s['usual'], 'status' => $s['status']], $bad)),
+            'rejected' => ['total' => $r['rejections']['total24'], 'spike' => $r['rejections']['spike'], 'by_reason' => $r['rejections']['by_reason']],
+        ];
     }
 
     private function sync(): array

@@ -65,6 +65,9 @@ class SampleDatasets extends Datasets
             'unsold' => $this->unsold(),
             'wh_oos' => $this->warehouseOutOfStock(),
             'customers' => $this->customers(),
+            'security_week' => $this->securityWeek(),
+            'security_today' => $this->securityToday(),
+            'data_health' => $this->dataHealth(),
             default => [],
         };
     }
@@ -358,13 +361,81 @@ class SampleDatasets extends Datasets
             'chain' => $this->sampleScope->now->copy()->subDay()->toDateString(),
             'partial' => false,
             'warehouse' => __('Warehouse'),
-            'kpi' => ['out' => 14, 'a' => 3, 'share' => 4.2, 'need' => 960.0, 'need_items' => 9, 'negative' => 0],
+            'kpi' => ['out' => 14, 'a' => 3, 'share' => 4.2, 'need' => 960.0, 'need_items' => 9, 'negative' => 0, 'not_reported' => 0],
         ];
     }
 
     private function customers(): array
     {
         return ['all' => 355, 'with' => 118];
+    }
+
+    /** Invented cashiers ("Cashier A"...) and shops: the canvas never shows a real name. */
+    private function securityWeek(): array
+    {
+        $shops = $this->shopNames();
+        $cashier = fn (string $letter) => __('Cashier').' '.$letter;
+
+        return [
+            'as_of' => self::CLOCK,
+            'receipts' => 2480,
+            'kpi' => ['total' => 9, 'high' => 2, 'medium' => 3, 'low' => 4, 'shops' => 5, 'cashiers' => 4, 'tills' => 2],
+            'chain' => ['all' => 2480, 'cancelled' => 82, 'empty' => 24],
+            'prev_chain' => ['all' => 2390, 'cancelled' => 52, 'empty' => 11],
+            'judgeable' => 12,
+            'refund' => [
+                ['shop' => $shops[2], 'cashier' => $cashier('A'), 'severity' => 'high', 'value' => 9.4, 'baseline' => 1.8, 'sample' => 212],
+                ['shop' => $shops[5], 'cashier' => $cashier('B'), 'severity' => 'medium', 'value' => 5.1, 'baseline' => 2.0, 'sample' => 148],
+                ['shop' => $shops[1], 'cashier' => $cashier('C'), 'severity' => 'medium', 'value' => 4.2, 'baseline' => 1.9, 'sample' => 96],
+                ['shop' => $shops[4], 'cashier' => $cashier('D'), 'severity' => 'low', 'value' => 6.0, 'baseline' => 2.1, 'sample' => 24],
+            ],
+            'discount' => [
+                ['shop' => $shops[3], 'cashier' => $cashier('E'), 'severity' => 'high', 'value' => 18.5, 'baseline' => 3.1, 'sample' => 187],
+                ['shop' => $shops[6], 'cashier' => $cashier('F'), 'severity' => 'medium', 'value' => 9.8, 'baseline' => 3.4, 'sample' => 133],
+                ['shop' => $shops[1], 'cashier' => $cashier('C'), 'severity' => 'low', 'value' => 8.0, 'baseline' => 3.3, 'sample' => 25],
+            ],
+        ];
+    }
+
+    private function securityToday(): array
+    {
+        $shops = $this->shopNames();
+
+        return [
+            'as_of' => self::CLOCK,
+            'sale_receipts' => 355,
+            'basket_shops' => 7,
+            'normal_shops' => 7,
+            'off' => ['count' => 4, 'severity' => 'medium'],
+            'silent' => [
+                ['shop' => $shops[6], 'hours' => 4, 'expected' => 31, 'severity' => 'medium'],
+                ['shop' => $shops[7], 'hours' => 6, 'expected' => 22, 'severity' => 'high'],
+            ],
+            'gaps' => ['missing' => 5, 'tills' => 2, 'severity' => 'medium'],
+            'dups' => ['count' => 1, 'severity' => 'medium'],
+            'integrity' => ['count' => 3, 'shops' => 2, 'severity' => 'high'],
+            'baskets' => [
+                ['shop' => $shops[2], 'total' => 4_850_000.0, 'cut' => 610_000.0, 'severity' => 'high'],
+                ['shop' => $shops[4], 'total' => 1_720_000.0, 'cut' => 540_000.0, 'severity' => 'medium'],
+                ['shop' => $shops[1], 'total' => 1_380_000.0, 'cut' => 590_000.0, 'severity' => 'medium'],
+            ],
+        ];
+    }
+
+    private function dataHealth(): array
+    {
+        $shops = $this->shopNames();
+
+        return [
+            'as_of' => self::CLOCK,
+            'shops' => 7,
+            'judged' => 7,
+            'problems' => [
+                ['shop' => $shops[7], 'last24' => 3, 'usual' => 140.0, 'status' => 'bad'],
+                ['shop' => $shops[4], 'last24' => 48, 'usual' => 120.0, 'status' => 'warn'],
+            ],
+            'rejected' => ['total' => 14, 'spike' => false, 'by_reason' => ['unknown_item' => 11, 'qty_zero' => 3]],
+        ];
     }
 
     private function sync(): array

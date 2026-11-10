@@ -9,6 +9,8 @@ namespace App\Monitor;
  * shape    single | series | by_shop | by_item | parts | events (see Diagram::forShape())
  * dataset  the shared dataset the widget reads (MonitorData computes each needed dataset once per refresh)
  * cost     cheap | medium | expensive: the extra work the widget costs on top of its shared dataset
+ * adminOnly  present only for a signed-in administrator (Security widgets): absent, like profit widgets without permission,
+ *            on public links and for operators / the monitor role
  */
 final class Widget
 {
@@ -40,6 +42,7 @@ final class Widget
         public readonly array $options = [],
         public readonly array $sparkDatasets = [],
         public readonly ?string $rule = null,
+        public readonly bool $adminOnly = false,
     ) {}
 
     public function title(): string
@@ -97,6 +100,7 @@ final class Widget
             'cost' => $this->cost,
             'profit' => $this->profit,
             'publicSafe' => $this->publicSafe,
+            'adminOnly' => $this->adminOnly,
             'comparison' => $this->comparison,
             'options' => $this->options,
         ];

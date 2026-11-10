@@ -56,10 +56,10 @@
                     @endif
                     <p class="font-medium text-slate-900">{{ $row['item'] }}</p>
                     <dl class="mt-2 grid grid-cols-3 gap-2 text-sm">
-                        <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ $fmt($row['stock']) }}</dd></div>
+                        <div><dt class="text-xs text-slate-500">{{ __('Stock') }}</dt><dd class="tabular-nums">{{ ($row['reported'] ?? true) ? $fmt($row['stock']) : __('Not reported') }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Stock date') }}</dt><dd class="tabular-nums">{{ $row['stock_date'] ? \Illuminate\Support\Carbon::parse($row['stock_date'])->format('d.m.Y') : '—' }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Net sold') }}</dt><dd><button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium tabular-nums text-brand-700 underline decoration-dotted underline-offset-2">{{ $fmt($row['sold']) }}</button></dd></div>
-                        <div><dt class="text-xs text-slate-500">{{ __('Remaining') }}</dt><dd class="font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : '' }}">{{ $fmt($row['remaining']) }}</dd></div>
+                        <div><dt class="text-xs text-slate-500">{{ __('Remaining') }}</dt><dd class="font-semibold tabular-nums {{ ($row['reported'] ?? true) && $row['remaining'] < 0 ? 'text-red-700' : '' }}">{{ ($row['reported'] ?? true) ? $fmt($row['remaining']) : '—' }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Min') }}</dt><dd class="tabular-nums">{{ $fmt($row['min']) }}</dd></div>
                         <div><dt class="text-xs text-slate-500">{{ __('Max') }}</dt><dd class="tabular-nums">{{ $fmt($row['max']) }}</dd></div>
                     </dl>
@@ -91,11 +91,11 @@
                         <tr>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ $row['group'] ?? '—' }}</td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $row['item'] }}</td>
-                            <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['stock']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ ($row['reported'] ?? true) ? $fmt($row['stock']) : __('Not reported') }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums">
                                 <button type="button" wire:click="showReceipts({{ $row['item_id'] }})" class="font-medium text-brand-700 underline decoration-dotted underline-offset-2 hover:text-brand-700">{{ $fmt($row['sold']) }}</button>
                             </td>
-                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ $row['remaining'] < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ $fmt($row['remaining']) }}</td>
+                            <td class="px-4 py-3 text-right text-sm font-semibold tabular-nums {{ ($row['reported'] ?? true) && $row['remaining'] < 0 ? 'text-red-700' : 'text-slate-700' }}">{{ ($row['reported'] ?? true) ? $fmt($row['remaining']) : '—' }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $row['stock_date'] ? \Illuminate\Support\Carbon::parse($row['stock_date'])->format('d.m.Y') : '—' }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['min']) }}</td>
                             <td class="px-4 py-3 text-right text-sm tabular-nums text-slate-500">{{ $fmt($row['max']) }}</td>

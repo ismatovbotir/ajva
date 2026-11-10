@@ -2,8 +2,8 @@
 
 namespace App\Livewire\Telegram;
 
-use App\Models\TelegramMessage;
 use App\Models\Telegram as TelegramAccount;
+use App\Models\TelegramMessage;
 use App\Models\User;
 use App\Services\Telegram;
 use Livewire\Attributes\Layout;

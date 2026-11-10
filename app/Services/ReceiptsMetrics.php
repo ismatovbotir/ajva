@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Support\ProfitAccess;
 use App\Support\ShopAccess;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -49,6 +51,22 @@ class ReceiptsMetrics
     public const WARN_PERCENT = 2.0;
 
     public const HIGH_PERCENT = 5.0;
+
+    /**
+     * board() shared by the Home page and the attention panel: cached ~50 s per day, scope, profit variant and sales
+     * version (receipt ingestion bumps it), so both read ONE computation.
+     *
+     * @param  array<int, int>|null  $shopIds  null = every shop, [] = none
+     * @return array<string, mixed>
+     */
+    public function cachedBoard(Carbon $now, ?array $shopIds, bool $withProfit = false): array
+    {
+        return Cache::remember(
+            ShopAccess::salesKey('home.board', $now->toDateString().'.'.ProfitAccess::profitKey($withProfit), $shopIds),
+            50,
+            fn () => $this->board($now->copy(), $shopIds, $withProfit),
+        );
+    }
 
     /**
      * @param  array<int, int>|null  $shopIds  null = every shop, [] = none

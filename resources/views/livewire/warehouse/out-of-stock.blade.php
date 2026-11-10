@@ -4,6 +4,7 @@
     $abcBar = ['A' => 'bg-red-600', 'B' => 'bg-amber-400', 'C' => 'bg-slate-300'];
     $ok = $data['state'] === 'ok';
     $showKpi = $ok && ! $data['partial'] && $data['kpi'] !== null;
+    $reasonLabel = fn ($reason) => $reason === 'zero' ? __('Zero') : ($reason === 'no_data' ? __('Not reported') : __('Missing'));
     $th = 'px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500';
 @endphp
 <div>
@@ -104,7 +105,11 @@
             </x-ui.select>
             <x-ui.select name="reason" :label="__('Reason')" wire:model.live="reason">
                 <option value="">{{ __('All') }}</option>
-                <option value="missing">{{ __('Missing from the sync') }}</option>
+                @if($data['explicit'] ?? true)
+                    <option value="no_data">{{ __('Not reported by 1C') }}</option>
+                @else
+                    <option value="missing">{{ __('Missing from the sync') }}</option>
+                @endif
                 <option value="zero">{{ __('Zero quantity') }}</option>
             </x-ui.select>
             <x-ui.input name="minDays" type="number" min="0" :label="__('Days out, from')" wire:model.live.debounce.400ms="minDays" />
@@ -116,6 +121,12 @@
 
         @if($data['excluded'] > 0)
             <p class="mb-2 text-xs text-slate-500" data-excluded>{{ __(':count items with shop rules were not in stock at the warehouse in the last :days days and are not listed.', ['count' => $data['excluded'], 'days' => $data['history_days']]) }}</p>
+        @endif
+        @if($data['kpi'] && ($data['kpi']['not_reported'] ?? 0) > 0)
+            <p class="mb-2 text-xs text-slate-500" data-not-reported>
+                {{ __(':count items were not reported by 1C in the latest warehouse sync. They are not counted as out of stock.', ['count' => $data['kpi']['not_reported']]) }}
+                <button type="button" wire:click="$set('reason', 'no_data')" class="font-medium text-brand-700 underline">{{ __('Show them') }}</button>
+            </p>
         @endif
         @if($data['kpi'] && $data['kpi']['negative'] > 0)
             <p class="mb-2 text-xs font-medium text-amber-700" data-negative>{{ __(':count items have a negative quantity at the warehouse. Check the data in 1C.', ['count' => $data['kpi']['negative']]) }}</p>
@@ -135,7 +146,7 @@
                             </div>
                             <div class="flex shrink-0 gap-1">
                                 <x-ui.badge :variant="$abcBadge[$r['abc']]">{{ $r['abc'] }}</x-ui.badge>
-                                <x-ui.badge :variant="$r['reason'] === 'missing' ? 'warning' : 'danger'">{{ $r['reason'] === 'missing' ? __('Missing') : __('Zero') }}</x-ui.badge>
+                                <x-ui.badge :variant="$r['reason'] === 'zero' ? 'danger' : ($r['reason'] === 'no_data' ? 'default' : 'warning')">{{ $reasonLabel($r['reason']) }}</x-ui.badge>
                             </div>
                         </div>
                         <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
@@ -176,7 +187,7 @@
                                 </td>
                                 <td class="px-3 py-2 text-slate-600">{{ $r['group'] ?? '—' }}</td>
                                 <td class="px-3 py-2"><x-ui.badge :variant="$abcBadge[$r['abc']]">{{ $r['abc'] }}</x-ui.badge></td>
-                                <td class="px-3 py-2"><x-ui.badge :variant="$r['reason'] === 'missing' ? 'warning' : 'danger'">{{ $r['reason'] === 'missing' ? __('Missing') : __('Zero') }}</x-ui.badge></td>
+                                <td class="px-3 py-2"><x-ui.badge :variant="$r['reason'] === 'zero' ? 'danger' : ($r['reason'] === 'no_data' ? 'default' : 'warning')">{{ $reasonLabel($r['reason']) }}</x-ui.badge></td>
                                 <td class="px-3 py-2 tabular-nums {{ $r['negative'] ? 'font-semibold text-red-700' : 'text-slate-600' }}" @if($r['negative']) title="{{ __('Negative quantity: check the data in 1C.') }}" @endif>{{ $fmt($r['last_qty']) }}</td>
                                 <td class="px-3 py-2 tabular-nums text-slate-600">{{ $r['in_stock_date'] }}</td>
                                 <td class="px-3 py-2 font-medium tabular-nums text-slate-900">{{ $r['days_out'] }}</td>

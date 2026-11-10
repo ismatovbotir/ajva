@@ -14,7 +14,7 @@ class WarehouseOutOfStock extends BaseTool
 
     public function description(): string
     {
-        return 'Items that are out of stock at the MAIN WAREHOUSE, found from the daily 1C stock data: reason "missing" (the latest warehouse sync no longer reports the item) or "zero" (quantity 0 or below), days out, last known quantity, last in-stock date, chain sales per day (last 7 days, shops only), how many shops need the item and their total order quantity (from the Ordering forecast), quantity on open orders, ABC class and the shops\' min/max total. Returns a state: ok, not_synced (the warehouse was not synced with the other shops, nothing is judged), empty or unconfigured; partial_sync = true means the latest sync looks incomplete and the list is only a warning. Most important first, top 100. No cost or profit fields. Read-only.';
+        return 'Items that are out of stock at the MAIN WAREHOUSE, found from the daily 1C stock data. 1C reports zero explicitly (explicit_zero_stock = true): only reason "zero" (quantity 0 or below in the latest warehouse sync) is out of stock; an item the latest sync did not report is "no_data" (not reported by 1C: unknown, NOT out of stock, only listed when reason = no_data, counted in not_reported_total). With explicit_zero_stock = false (legacy) reason "missing" means the latest sync no longer reports the item and partial_sync = true means the sync looks incomplete. Also days out, last known quantity, last in-stock date, chain sales per day (last 7 days, shops only), how many shops need the item and their total order quantity (from the Ordering forecast), quantity on open orders, ABC class and the shops\' min/max total. Returns a state: ok, not_synced (the warehouse was not synced with the other shops, nothing is judged), empty or unconfigured. Most important first, top 100. No cost or profit fields. Read-only.';
     }
 
     public function schema(): array
@@ -24,7 +24,7 @@ class WarehouseOutOfStock extends BaseTool
             'properties' => [
                 'only_needed' => ['type' => 'boolean', 'description' => 'Only items the shops need (default true).'],
                 'abc' => ['type' => 'string', 'enum' => ['A', 'B', 'C'], 'description' => 'Only this ABC class.'],
-                'reason' => ['type' => 'string', 'enum' => ['missing', 'zero'], 'description' => 'Only this reason.'],
+                'reason' => ['type' => 'string', 'enum' => ['missing', 'zero', 'no_data'], 'description' => 'Only this reason (no_data = not reported by 1C, not out of stock; missing = legacy mode only).'],
                 'min_days_out' => ['type' => 'integer', 'minimum' => 0, 'description' => 'Only items out at least this many days.'],
             ],
         ];
@@ -33,7 +33,7 @@ class WarehouseOutOfStock extends BaseTool
     public function handle(array $arguments): array
     {
         $abc = $this->optionalEnum($arguments, 'abc', ['A', 'B', 'C']);
-        $reason = $this->optionalEnum($arguments, 'reason', ['missing', 'zero']);
+        $reason = $this->optionalEnum($arguments, 'reason', ['missing', 'zero', 'no_data']);
         $minDays = $this->optionalInt($arguments, 'min_days_out', 0, 3650) ?? 0;
 
         $service = app(OutOfStockReport::class);
@@ -50,6 +50,8 @@ class WarehouseOutOfStock extends BaseTool
             'warehouse' => $data['warehouse'],
             'stock_date' => $data['ref'],
             'latest_chain_stock_date' => $data['chain'],
+            'explicit_zero_stock' => $data['explicit'],
+            'not_reported_total' => $data['kpi']['not_reported'] ?? 0,
             'partial_sync' => $data['partial'],
             'sync_coverage' => $data['coverage'],
             'out_of_stock_total' => $data['kpi']['out'] ?? 0,

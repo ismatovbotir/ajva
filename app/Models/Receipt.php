@@ -52,7 +52,14 @@ class Receipt extends Model
         'sell' => 'boolean',
         'gross_total' => 'decimal:2',
         'aos' => 'array',
+        'ingested_at' => 'datetime',
     ];
+
+    /** @return array<int, string> the data-quality flag codes written at ingestion (empty = none) */
+    public function dqFlags(): array
+    {
+        return array_values(array_filter(explode(',', (string) $this->dq_flags)));
+    }
 
     public function pos(): BelongsTo
     {

@@ -96,7 +96,12 @@ class PublicOrderLinkTest extends TestCase
         $this->get('/o/'.strtoupper($this->token()))->assertNotFound();
 
         $token = $this->token();
+        // A confirmed, not yet received order still opens (receipt form only); received / cancelled ones do not.
         $this->draft->update(['status' => OrderStatus::Confirmed]);
+        $this->get('/o/'.$token)->assertOk();
+        $this->draft->update(['status' => OrderStatus::Fulfilled]);
+        $this->get('/o/'.$token)->assertNotFound();
+        $this->draft->update(['status' => OrderStatus::Cancelled]);
         $this->get('/o/'.$token)->assertNotFound();
 
         $this->draft->update(['status' => OrderStatus::Draft]);
@@ -178,15 +183,17 @@ class PublicOrderLinkTest extends TestCase
         $this->assertNotNull($order->confirmed_at);
         $this->assertSame(OrderSyncStatus::Queued, $order->sync_status);
         Queue::assertPushed(SyncOrderTo1C::class, fn ($job) => $job->orderId === $order->id);
-        $component->assertSee('no longer works');
+        $component->assertSee('open this link again and confirm the receipt');
         $event = $order->events()->where('action', 'confirmed')->firstOrFail();
         $this->assertSame([$this->aziz->id, 'link'], [$event->user_id, $event->channel]);
 
-        // From now on the link and every action on an open page are a 404; nothing can be edited.
-        $this->get('/o/'.$this->token())->assertNotFound();
+        // From now on every edit on an open page is a 404 and nothing can be changed; the link only shows the receipt form.
+        $this->get('/o/'.$this->token())->assertOk()->assertSee('Confirm receipt');
         $component->call('saveQty', $this->cola->id, '99')->assertNotFound();
         $this->assertEquals(10, $order->items()->first()->qty);
-        Livewire::test(PublicDraft::class, ['token' => $this->token()])->assertNotFound();
+        Livewire::test(PublicDraft::class, ['token' => $this->token()])->assertOk()->call('removeItem', $this->cola->id)->assertNotFound();
+        Livewire::test(PublicDraft::class, ['token' => $this->token()])->call('confirm')->assertNotFound();
+        $this->assertSame(1, $order->items()->count());
     }
 
     public function test_actions_on_an_open_page_fail_once_the_order_is_confirmed_elsewhere(): void
@@ -197,6 +204,8 @@ class PublicOrderLinkTest extends TestCase
 
         $component->call('saveQty', $this->cola->id, '99')->assertNotFound();
         $this->assertEquals(10, $this->draft->items()->first()->qty);
+
+        $this->draft->update(['status' => OrderStatus::Fulfilled]);
         Livewire::test(PublicDraft::class, ['token' => $this->token()])->assertNotFound();
     }
 
@@ -369,8 +378,8 @@ class PublicOrderLinkTest extends TestCase
         $this->assertEquals(9, $this->draft->items()->where('item_id', $juice->id)->value('qty'));
         $method = new \ReflectionMethod(\App\Jobs\SyncOrderTo1C::class, 'payload');
         $method->setAccessible(true);
-        $lines = collect($method->invoke(new \App\Jobs\SyncOrderTo1C($this->draft->id), $this->draft->fresh('items'))['lines'])->keyBy('item_id');
-        $this->assertSame('manager', $lines[$juice->id]['source']);
-        $this->assertSame('system', $lines[$this->cola->id]['source']);
+        $goods = collect($method->invoke(new \App\Jobs\SyncOrderTo1C($this->draft->id), $this->draft->fresh('items'))['goods'])->keyBy('itemCode');
+        $this->assertSame(9, $goods[$juice->id]['itemQty']);
+        $this->assertTrue(isset($goods[$this->cola->id]));
     }
 }

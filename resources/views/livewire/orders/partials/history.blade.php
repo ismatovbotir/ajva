@@ -20,6 +20,14 @@
                         'line_removed' => __('Removed :item (was :qty)', ['item' => $item, 'qty' => $fmtQty($event->old_qty)]),
                         'line_added' => __('Added :item (:qty)', ['item' => $item, 'qty' => $fmtQty($event->new_qty)]),
                         'confirmed' => __('Confirmed the order'),
+                        'sent_for_approval' => __('Sent for approval: :text', ['text' => $event->note]),
+                        'exception_approved' => __('Confirmed despite the exceptions: :text', ['text' => $event->note]),
+                        'approved' => __('Approved the order'),
+                        'rejected' => __('Sent the order back: :text', ['text' => $event->note]),
+                        'received' => $event->item_id === null
+                            ? __('Confirmed the receipt (:count lines differ)', ['count' => $event->note])
+                            : __('Received :item: :old → :new', ['item' => $item, 'old' => $fmtQty($event->old_qty), 'new' => $fmtQty($event->new_qty)]).($event->note ? ' ('.(\App\Services\OrderReceiving::reasonLabels()[$event->note] ?? $event->note).')' : ''),
+                        'expired' => __('No receipt was confirmed: the order no longer counts as in transit'),
                         'comment' => __('Comment: :text', ['text' => $event->note]),
                         default => $event->action,
                     };

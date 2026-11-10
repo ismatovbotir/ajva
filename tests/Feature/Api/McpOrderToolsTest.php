@@ -5,7 +5,6 @@ namespace Tests\Feature\Api;
 use App\Enums\MonitorType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderSyncStatus;
-use App\Mcp\Tool;
 use App\Models\Monitor;
 use App\Models\Order;
 use App\Models\OrderEvent;
@@ -58,29 +57,12 @@ class McpOrderToolsTest extends TestCase
         ], $attributes));
     }
 
-    public function test_tools_are_listed_with_schemas_gemini_accepts(): void
+    public function test_the_order_tools_are_listed(): void
     {
         $names = collect($this->withToken('test-mcp-token')->postJson('/api/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])->json('result.tools'))->pluck('name')->all();
         foreach (['list_orders', 'get_order', 'replenishment_forecast', 'order_rules', 'list_monitors'] as $name) {
             $this->assertContains($name, $names);
         }
-
-        // Every tool schema goes through AjvaAssistant::declaration (cleanSchema + shop name swap).
-        $assistant = app(\App\Services\AjvaAssistant::class);
-        $declaration = new \ReflectionMethod($assistant, 'declaration');
-        foreach (config('mcp.tools') as $class) {
-            /** @var Tool $tool */
-            $tool = app($class);
-            $declared = $declaration->invoke($assistant, $tool);
-            $json = json_encode($declared);
-            $this->assertStringNotContainsString('"pattern"', $json, $tool->name());
-            $this->assertStringNotContainsString('"shop_id"', $json, $tool->name());
-            $this->assertStringNotContainsString('"shop_ids"', $json, $tool->name());
-            $this->assertStringNotContainsString('"maxLength"', $json, $tool->name());
-        }
-        $orders = json_encode($declaration->invoke($assistant, app(\App\Mcp\Tools\ListOrders::class)));
-        $this->assertStringContainsString('shop_names', $orders);
-        $this->assertStringContainsString('"enum"', $orders);
     }
 
     public function test_list_orders_filters_and_shows_sync_and_telegram_state(): void
@@ -330,39 +312,6 @@ class McpOrderToolsTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame(2.0, (float) $rows[0]['qty']);
         $this->assertTrue($rows[0]['below_min']);
-    }
-
-    public function test_new_tool_results_are_never_sent_to_gemini(): void
-    {
-        config(['services.gemini.key' => 'test-key', 'services.gemini.model' => 'gemini-test']);
-        $admin = User::factory()->create();
-        $cola = $this->item('Zanzibar Cola', $this->a, 0, 5, 20);
-        $this->sellDaily($this->a, $cola, 4);
-        $this->warehouseHas($cola, 3);
-        $order = $this->order(['status' => OrderStatus::Confirmed, 'sync_status' => OrderSyncStatus::Failed, 'sync_error' => 'Secret failure text']);
-        $order->items()->create(['item_id' => $this->item('Other Thing', $this->b, 1, 5, 20)->id, 'qty' => 12345]);
-        Monitor::factory()->create(['name' => 'Hidden Monitor Name']);
-
-        $plan = fn (string $tool, array $args) => ['candidates' => [['content' => ['role' => 'model', 'parts' => [['functionCall' => ['name' => $tool, 'args' => $args]]]]]]];
-        \Illuminate\Support\Facades\Http::fakeSequence()
-            ->push($plan('list_orders', ['shop_names' => ['alpha'], 'sync_status' => 'failed']))
-            ->push($plan('replenishment_forecast', ['shop_names' => ['alpha']]))
-            ->push(['candidates' => [['content' => ['role' => 'model', 'parts' => [['text' => 'Done.']]]]]]);
-
-        $component = \Livewire\Livewire::actingAs($admin)->test(\App\Livewire\AjvaAI\Index::class)
-            ->set('question', 'failed orders of alpha')->call('ask')
-            ->assertSet('error', null)
-            ->assertSee(__(':n orders failed to sync to 1C: :names. Open each one and use Retry sync once the cause is fixed.', ['n' => 1, 'names' => $order->number()]));
-
-        $component->set('question', 'what does alpha need?')->call('ask')->assertSee('Zanzibar Cola');
-        $component->set('question', 'thanks')->call('ask');
-
-        $body = json_encode(\Illuminate\Support\Facades\Http::recorded()->last()[0]->data(), JSON_UNESCAPED_UNICODE);
-        foreach (['Zanzibar Cola', 'Alpha', 'Secret failure text', '12345', $order->number(), 'Hidden Monitor Name'] as $secret) {
-            $this->assertStringNotContainsString($secret, $body, $secret);
-        }
-        $this->assertStringContainsString('executed locally', $body);
-        $this->assertStringContainsString('list_orders', $body);
     }
 
     public function test_the_advisor_notes_failed_syncs_unsent_drafts_and_a_sales_drop(): void

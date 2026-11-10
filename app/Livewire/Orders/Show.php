@@ -4,12 +4,14 @@ namespace App\Livewire\Orders;
 
 use App\Enums\OrderStatus;
 use App\Livewire\Concerns\EditsDraftOrder;
+use App\Livewire\Concerns\ReceivesOrder;
 use App\Livewire\Ordering\Index as OrderingIndex;
 use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderLink;
 use App\Models\TelegramMessage;
 use App\Models\User;
+use App\Services\OrderReceiving;
 use App\Services\OrderSync;
 use App\Services\OrderTelegram;
 use Illuminate\Support\Facades\Artisan;
@@ -21,12 +23,13 @@ use Livewire\Component;
 /**
  * One order. While it is a DRAFT the shop's responsible person (or an admin) edits quantities, removes lines
  * and adds any item (manual lines: added_manually, no suggestion); an admin may delete it. Confirm locks it
- * and queues the 1C sync. Every action re-authorizes against the policy, so a confirmed order refuses edits (403).
+ * and queues the 1C sync; a confirmed order is then received by the shop's person (or an admin). Every action re-authorizes against the policy, so a confirmed order refuses edits (403).
  */
 #[Layout('components.layouts.app', ['title' => 'Order'])]
 class Show extends Component
 {
     use EditsDraftOrder;
+    use ReceivesOrder;
 
     #[Locked]
     public int $orderId = 0;
@@ -109,7 +112,17 @@ class Show extends Component
         $this->telegramNote = (string) $order->telegram_note;
     }
 
-    public function confirm(): void
+    /** Exceptions the admin is asked to accept before "Confirm anyway" (display only; the server re-evaluates). */
+    public array $decision = [];
+
+    /** Required reason when the admin sends an order waiting for approval back. */
+    public string $rejectReason = '';
+
+    /**
+     * Confirm a draft. Without exceptions it is sent to 1C; an operator's order with exceptions waits for an admin;
+     * an admin sees the list first and presses confirm again ($anyway) to go ahead.
+     */
+    public function confirm(bool $anyway = false): void
     {
         $order = $this->order();
         Gate::authorize('confirm', $order);
@@ -121,8 +134,55 @@ class Show extends Component
             }
         }
 
-        app(OrderSync::class)->confirm($order, auth()->user());
+        if ($order->isAwaitingApproval()) {
+            $this->approve();
+
+            return;
+        }
+        if ($order->status === OrderStatus::Draft) {
+            $result = app(OrderSync::class)->submit($order, auth()->user(), OrderEvent::CHANNEL_PANEL, $anyway);
+            $this->decision = $result['outcome'] === 'needs_decision' ? $result['exceptions'] : [];
+        } else {
+            app(OrderSync::class)->confirm($order, auth()->user());   // older pending_approval order, admin
+        }
         OrderingIndex::bumpOrdersVersion();
+    }
+
+    public function approve(): void
+    {
+        $order = $this->order();
+        Gate::authorize('approve', $order);
+
+        app(OrderSync::class)->approve($order, auth()->user());
+        OrderingIndex::bumpOrdersVersion();
+    }
+
+    public function reject(): void
+    {
+        $order = $this->order();
+        Gate::authorize('reject', $order);
+
+        $this->rejectReason = trim(strip_tags($this->rejectReason));
+        if ($this->rejectReason === '' || mb_strlen($this->rejectReason) > 1000) {
+            $this->addError('rejectReason', __('Write the reason (up to 1000 characters).'));
+
+            return;
+        }
+        $this->resetErrorBag('rejectReason');
+
+        app(OrderSync::class)->reject($order, auth()->user(), $this->rejectReason);
+        $this->reset('rejectReason', 'decision');
+        OrderingIndex::bumpOrdersVersion();
+    }
+
+    /** Confirm receipt of a confirmed order (policy `receive`): the goods arrived, the order becomes fulfilled. */
+    public function receive(): void
+    {
+        $order = $this->order();
+        Gate::authorize('receive', $order);
+
+        app(OrderReceiving::class)->receive($order, auth()->user(), OrderEvent::CHANNEL_PANEL, $this->recvQty, $this->recvReason);
+        $this->reset('recvQty', 'recvReason');
     }
 
     public function retrySync(): void
@@ -178,14 +238,21 @@ class Show extends Component
             ])->filter(fn ($d) => $d['status'] !== null)->values();
         }
 
+        $this->ensureReceiveForm($order, $items);
+
         return view('livewire.orders.show', [
+            'canReceive' => Gate::allows('receive', $order),
+            'receiver' => $order->received_by ? User::query()->whereKey($order->received_by)->value('name') : null,
+            'overdue' => OrderReceiving::isOverdue($order),
             'deliveries' => $deliveries,
             'links' => $links,
             'order' => $order,
             'items' => $items,
             'results' => $results,
             'canEdit' => Gate::allows('edit', $order),
-            'canConfirm' => Gate::allows('confirm', $order),
+            'canConfirm' => Gate::allows('confirm', $order) && ($order->status === OrderStatus::Draft || ! $order->isAwaitingApproval()),
+            'canApprove' => Gate::allows('approve', $order),
+            'reasons' => $order->status === OrderStatus::Draft && $this->decision !== [] ? $this->decision : (array) $order->review_exceptions,
             'canDelete' => Gate::allows('delete', $order),
             'canShare' => $order->status === OrderStatus::Draft && Gate::allows('generate', Order::class),
             'responsible' => $order->status === OrderStatus::Draft && Gate::allows('generate', Order::class) ? OrderTelegram::responsible($order->shop_id) : collect(),

@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
                 'name' => config('admin.name'),
                 'password' => $password,
                 'role' => UserRole::Admin,
-                'can_see_profit'=>true,
+                'can_see_profit' => true,
             ]
         );
     }

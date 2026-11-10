@@ -20,6 +20,8 @@ use App\Services\WarehouseOutOfStock;
 use App\Support\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -82,8 +84,9 @@ class WarehouseOutOfStockTest extends TestCase
         return User::factory()->create();
     }
 
-    public function test_missing_from_the_latest_sync_zero_and_in_stock(): void
+    public function test_legacy_mode_missing_from_the_latest_sync_zero_and_in_stock(): void
     {
+        config(['inventory.explicit_zero_stock' => false]);
         $this->baseline();
         $this->item('Gone', ['2026-10-04' => 6, '2026-10-05' => 6]);
         $this->item('Zeroed', ['2026-10-03' => 4, '2026-10-06' => 1, '2026-10-07' => 0]);
@@ -122,7 +125,7 @@ class WarehouseOutOfStockTest extends TestCase
         $this->assertSame('not_synced', $data['state']);
         $this->assertSame([], $data['rows']);
 
-        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call("generate")
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
             ->assertSee('Warehouse not synced since 2026-10-05')
             ->assertSee('data-not-synced', false)
             ->assertDontSee('Old');
@@ -139,8 +142,9 @@ class WarehouseOutOfStockTest extends TestCase
             ->call('generate')->assertSet('generated', true)->assertSeeHtml('data-not-synced')->assertSeeHtml('data-generate');
     }
 
-    public function test_a_partial_sync_is_a_warning_without_kpi_figures(): void
+    public function test_legacy_mode_a_partial_sync_is_a_warning_without_kpi_figures(): void
     {
+        config(['inventory.explicit_zero_stock' => false]);
         for ($i = 1; $i <= 10; $i++) {
             $this->item('Bulk '.$i, ['2026-10-06' => 5] + ($i <= 2 ? ['2026-10-07' => 5] : []));
         }
@@ -150,7 +154,7 @@ class WarehouseOutOfStockTest extends TestCase
         $this->assertTrue($data['partial']);
         $this->assertCount(8, $data['rows']);
 
-        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call("generate")
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
             ->set('needed', false)
             ->assertSee('data-partial', false)
             ->assertSee('Bulk 3')
@@ -162,7 +166,7 @@ class WarehouseOutOfStockTest extends TestCase
         $this->baseline();
         $this->item('Gone A', ['2026-10-05' => 5]);
 
-        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call("generate")
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
             ->set('needed', false)
             ->assertSee('data-kpi-out', false)
             ->assertSee('data-histogram', false)
@@ -181,7 +185,11 @@ class WarehouseOutOfStockTest extends TestCase
 
         $data = app(WarehouseOutOfStock::class)->data();
 
+        // Explicit zero: 'Recent' was not reported by the latest sync = unknown, not out of stock.
         $this->assertSame(['Recent'], collect($data['rows'])->pluck('name')->all());
+        $this->assertSame('no_data', $data['rows'][0]['reason']);
+        $this->assertSame(0, $data['kpi']['out']);
+        $this->assertSame(1, $data['kpi']['not_reported']);
         $this->assertSame(36, $data['rows'][0]['days_out']);
         $this->assertSame(1, $data['excluded']); // ruled, but not stocked at the warehouse within the window
     }
@@ -189,7 +197,7 @@ class WarehouseOutOfStockTest extends TestCase
     public function test_shop_need_speed_abc_open_orders_and_rules(): void
     {
         $this->baseline();
-        $x = $this->item('Needed', ['2026-10-05' => 8]);
+        $x = $this->item('Needed', ['2026-10-05' => 8, '2026-10-07' => 0]);
         $this->stock($this->a, $x, 0);
         ItemOrderRule::query()->create(['shop_id' => $this->a->id, 'item_id' => $x->id, 'min' => 2, 'max' => 20]);
 
@@ -231,8 +239,9 @@ class WarehouseOutOfStockTest extends TestCase
         $this->actingAs($this->admin())->get('/warehouse/out-of-stock')->assertOk()->assertSee('Out of stock');
     }
 
-    public function test_filters(): void
+    public function test_legacy_mode_filters(): void
     {
+        config(['inventory.explicit_zero_stock' => false]);
         $this->baseline();
         $drinks = Group::factory()->create(['name' => 'Drinks']);
         $snacks = Group::factory()->create(['name' => 'Snacks']);
@@ -272,8 +281,9 @@ class WarehouseOutOfStockTest extends TestCase
         $this->assertSame(['b', 'd', 'c', 'a'], array_column($sorted, 'name'));
     }
 
-    public function test_csv_has_a_bom_the_columns_and_the_filters(): void
+    public function test_legacy_mode_csv_has_a_bom_the_columns_and_the_filters(): void
     {
+        config(['inventory.explicit_zero_stock' => false]);
         $this->baseline();
         $this->item('=Evil, "quoted"', ['2026-10-05' => 5]);
         $this->item('Plain', ['2026-10-06' => 5, '2026-10-07' => 0]);
@@ -291,7 +301,7 @@ class WarehouseOutOfStockTest extends TestCase
     public function test_print_view_groups_by_item_group_and_shows_the_sync_date(): void
     {
         $this->baseline();
-        $this->item('Cola', ['2026-10-05' => 5], Group::factory()->create(['name' => 'Drinks']));
+        $this->item('Cola', ['2026-10-05' => 5, '2026-10-07' => 0], Group::factory()->create(['name' => 'Drinks']));
 
         $this->actingAs($this->admin())->get('/warehouse/out-of-stock/print?needed=0')
             ->assertOk()
@@ -305,7 +315,7 @@ class WarehouseOutOfStockTest extends TestCase
         Warehouse::setShopId(null);
 
         $this->assertSame('unconfigured', app(WarehouseOutOfStock::class)->data()['state']);
-        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call("generate")
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
             ->assertSee('data-no-warehouse', false)
             ->assertSee(route('settings.warehouse'), false);
     }
@@ -313,9 +323,9 @@ class WarehouseOutOfStockTest extends TestCase
     public function test_the_page_lists_rows_and_the_menu_entry_is_admin_only(): void
     {
         $this->baseline();
-        $this->item('Gone', ['2026-10-05' => 5]);
+        $this->item('Gone', ['2026-10-05' => 5, '2026-10-07' => 0]);
 
-        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call("generate")
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
             ->set('needed', false)
             ->assertSee('Gone')
             ->set('search', 'zzz')
@@ -328,13 +338,112 @@ class WarehouseOutOfStockTest extends TestCase
     public function test_mcp_tool_is_compact_and_has_no_cost_fields(): void
     {
         $this->baseline();
-        $this->item('Gone', ['2026-10-05' => 5]);
+        $this->item('Gone', ['2026-10-05' => 5, '2026-10-07' => 0]);
+        $this->item('Unreported', ['2026-10-05' => 5]);
 
         $result = (new OutOfStockTool)->handle(['only_needed' => false]);
 
         $this->assertSame('ok', $result['state']);
+        $this->assertTrue($result['explicit_zero_stock']);
+        $this->assertSame(1, $result['out_of_stock_total']);
+        $this->assertSame(1, $result['not_reported_total']);
+        $this->assertCount(1, $result['items']);
         $this->assertSame('Gone', $result['items'][0]['item']);
-        $this->assertSame('missing', $result['items'][0]['reason']);
+        $this->assertSame('zero', $result['items'][0]['reason']);
         $this->assertDoesNotMatchRegularExpression('/cost|profit|price|margin/i', json_encode(array_keys($result['items'][0])));
+    }
+
+    public function test_explicit_zero_only_a_real_zero_is_out_and_a_missing_row_is_not_reported(): void
+    {
+        $this->baseline();
+        $this->item('Gone', ['2026-10-04' => 6, '2026-10-05' => 6]);
+        $this->item('Zeroed', ['2026-10-03' => 4, '2026-10-06' => 1, '2026-10-07' => 0]);
+        $this->item('Fine', ['2026-10-06' => 3, '2026-10-07' => 3]);
+
+        $data = app(WarehouseOutOfStock::class)->data();
+        $out = collect($data['rows'])->keyBy('name');
+
+        $this->assertTrue($data['explicit']);
+        $this->assertFalse($data['partial']);
+        $this->assertNull($data['coverage']);
+        $this->assertSame('zero', $out['Zeroed']['reason']);
+        $this->assertSame('no_data', $out['Gone']['reason']);
+        $this->assertFalse($out->has('Fine'));
+        // KPI, histogram and the default filter never count the unreported item.
+        $this->assertSame(1, $data['kpi']['out']);
+        $this->assertSame(1, $data['kpi']['not_reported']);
+        $this->assertSame(1, array_sum(array_map('array_sum', $data['histogram'])));
+        $service = app(WarehouseOutOfStock::class);
+        $names = fn (array $in) => collect($service->apply($data['rows'], WarehouseOutOfStock::filters($in + ['needed' => false])))->pluck('name')->all();
+        $this->assertSame(['Zeroed'], $names([]));
+        $this->assertSame(['Gone'], $names(['reason' => 'no_data']));
+        $this->assertSame(['Zeroed'], $names(['reason' => 'zero']));
+    }
+
+    public function test_explicit_zero_a_partial_sync_is_not_guessed(): void
+    {
+        for ($i = 1; $i <= 10; $i++) {
+            $this->item('Bulk '.$i, ['2026-10-06' => 5] + ($i <= 2 ? ['2026-10-07' => 5] : []));
+        }
+
+        $data = app(WarehouseOutOfStock::class)->data();
+
+        $this->assertFalse($data['partial']);
+        $this->assertSame(0, $data['kpi']['out']);
+        $this->assertSame(8, $data['kpi']['not_reported']);
+        Livewire::actingAs($this->admin())->test(OutOfStock::class)->call('generate')
+            ->assertDontSee('data-partial', false)
+            ->assertSee('data-kpi', false)
+            ->assertSee('data-not-reported', false)
+            ->assertSee('8 items were not reported by 1C');
+    }
+
+    public function test_explicit_zero_the_warehouse_not_synced_banner_stays(): void
+    {
+        $this->item('Old', ['2026-10-05' => 5]);
+        $this->stock($this->a, Item::factory()->create(), 3, '2026-10-07');
+
+        $this->assertSame('not_synced', app(WarehouseOutOfStock::class)->data()['state']);
+    }
+
+    public function test_explicit_zero_csv_and_print_and_set_based_queries(): void
+    {
+        $this->baseline();
+        $this->item('Zeroed', ['2026-10-06' => 5, '2026-10-07' => 0]);
+        $this->item('Gone', ['2026-10-05' => 5]);
+
+        $csv = $this->actingAs($this->admin())->get('/warehouse/out-of-stock/export?needed=0')->streamedContent();
+        $this->assertStringContainsString('Zeroed', $csv);
+        $this->assertStringNotContainsString('Gone', $csv);
+        $csv = $this->actingAs($this->admin())->get('/warehouse/out-of-stock/export?needed=0&reason=no_data')->streamedContent();
+        $this->assertStringContainsString('Gone', $csv);
+        $this->assertStringContainsString(',no_data,', $csv);
+        $this->actingAs($this->admin())->get('/warehouse/out-of-stock/print?needed=0&reason=no_data')->assertOk()->assertSee('Not reported');
+
+        // Adding many unreported items adds no per-row queries.
+        Cache::flush();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(WarehouseOutOfStock::class)->data();
+        $few = count(DB::getQueryLog());
+        foreach (range(1, 15) as $i) {
+            $this->item('Lost '.$i, ['2026-10-05' => 5]);
+        }
+        Cache::flush();
+        DB::flushQueryLog();
+        app(WarehouseOutOfStock::class)->data();
+        $many = count(DB::getQueryLog());
+        $this->assertLessThanOrEqual($few + 2, $many);
+    }
+
+    public function test_the_switch_changes_the_cache_key_so_a_toggle_is_not_stale(): void
+    {
+        $this->baseline();
+        $this->item('Gone', ['2026-10-05' => 5]);
+        $service = app(WarehouseOutOfStock::class);
+
+        $this->assertSame('no_data', $service->data()['rows'][0]['reason']);
+        config(['inventory.explicit_zero_stock' => false]);
+        $this->assertSame('missing', $service->data()['rows'][0]['reason']);
     }
 }

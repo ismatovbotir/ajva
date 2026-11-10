@@ -207,6 +207,9 @@ class Index extends Component
             return collect();
         }
 
+        // R of the shop as of the chosen day (same "latest snapshot on or before the day" rule as the stock join below).
+        $latest = Stock::latestDates([$shopId], $from->toDateString())[$shopId] ?? null;
+
         return DB::table('items')
             ->whereIn('items.id', $sold->keys()->all())
             ->leftJoin('groups', 'groups.id', '=', 'items.group_id')
@@ -227,11 +230,13 @@ class Index extends Component
                 'item_order_rules.min as rule_min',
                 'item_order_rules.max as rule_max',
             ])
-            ->map(function ($row) use ($sold) {
+            ->map(function ($row) use ($sold, $latest) {
                 $stock = (float) $row->stock_qty;
                 $net = (float) ($sold[$row->item_id] ?? 0);
 
                 return [
+                    // Explicit zero: no snapshot, or one older than the shop's latest sync on that day = not reported by 1C.
+                    'reported' => Stock::isReported($row->stock_date === null ? null : (string) $row->stock_date, $latest),
                     'item_id' => (int) $row->item_id,
                     'group' => $row->group_name,
                     'item' => $row->item_name,

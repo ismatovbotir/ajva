@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\WarehouseOutOfStockController;
-use App\Livewire\AjvaAI\Index as AjvaAIIndex;
 use App\Livewire\Analytics\Index as AnalyticsIndex;
 use App\Livewire\Auth\Login;
 use App\Livewire\Categories\Index as CategoriesIndex;
@@ -101,6 +100,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/unsold-stock', \App\Livewire\UnsoldStock\Index::class)->name('unsold-stock.index');
         Route::get('/orders', OrdersIndex::class)->name('orders.index');
         Route::get('/orders/{order}', OrdersShow::class)->name('orders.show');
+        Route::get('/monitoring/unconfirmed-orders', \App\Livewire\Orders\Unconfirmed::class)->name('monitoring.unconfirmed-orders');
     });
 
     Route::middleware('role:admin')->group(function () {
@@ -108,7 +108,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/warehouse/out-of-stock', WarehouseOutOfStock::class)->name('warehouse.out-of-stock');
         Route::get('/warehouse/out-of-stock/export', [WarehouseOutOfStockController::class, 'csv'])->name('warehouse.out-of-stock.csv');
         Route::get('/warehouse/out-of-stock/print', [WarehouseOutOfStockController::class, 'print'])->name('warehouse.out-of-stock.print');
-        Route::get('/ajva-ai', AjvaAIIndex::class)->name('ajva-ai.index');
         Route::get('/settings/mcp', McpSettingsPage::class)->name('settings.mcp');
         Route::get('/settings/receipts-sync', ReceiptsSyncSettings::class)->name('settings.receipts-sync');
         Route::get('/settings/monitors', MonitorsSettings::class)->name('settings.monitors');
@@ -117,6 +116,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings/order-rules', OrderRulesSettings::class)->name('settings.order-rules');
         Route::get('/settings/warehouse', WarehouseSettings::class)->name('settings.warehouse');
         Route::get('/settings/users', UsersIndex::class)->name('users.index');
+        Route::get('/monitoring/tasks', \App\Livewire\Monitoring\Tasks::class)->name('monitoring.tasks');
+        Route::get('/data-health', \App\Livewire\Monitoring\DataHealth::class)->name('data-health.index');
+        Route::get('/security/warnings', \App\Livewire\Security\Warnings::class)->name('security.warnings');
+        Route::get('/security/details', \App\Livewire\Security\Cashier::class)->name('security.cashier');
         Route::get('/telegram/status', \App\Livewire\Telegram\Status::class)->name('telegram.status');
         Route::get('/telegram/users', TelegramUsers::class)->name('telegram.users');
         Route::get('/telegram/messages', TelegramMessages::class)->name('telegram.messages');

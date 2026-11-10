@@ -17,7 +17,7 @@ class StockLevels extends BaseTool
 
     public function description(): string
     {
-        return 'Current stock per shop and item (the latest 1C snapshot of each pair; with date the snapshot on or before it) with the min/max order rule and a below_min flag. Rows of the main warehouse shop carry is_warehouse=true (the warehouse has no min/max rule).';
+        return 'Current stock per shop and item (the latest 1C snapshot of each pair; with date the snapshot on or before it) with the min/max order rule and a below_min flag. 1C reports zero explicitly: a pair the shop\'s latest sync did NOT report has reported=false, state "no_data", qty null (the old quantity is only in last_reported_qty) and is never below_min or out of stock. Rows of the main warehouse shop carry is_warehouse=true (the warehouse has no min/max rule).';
     }
 
     public function schema(): array
@@ -58,7 +58,15 @@ class StockLevels extends BaseTool
             })
             ->when($shopId, fn ($q) => $q->where('stocks.shop_id', $shopId))
             ->when($search, fn ($q) => $q->where('items.name', 'like', '%'.addcslashes($search, '%_\\').'%'))
-            ->when(! empty($arguments['only_below_min']), fn ($q) => $q->whereColumn('stocks.qty', '<', 'item_order_rules.min'))
+            // A pair not reported by the shop's sync is never "below min" (explicit zero).
+            ->when(! empty($arguments['only_below_min']), function ($q) use ($asOf) {
+                $q->whereColumn('stocks.qty', '<', 'item_order_rules.min');
+                if ($asOf === null) {
+                    Stock::applyReported($q);
+                } elseif (Stock::explicitZero()) {
+                    $q->whereRaw('stocks.stock_date = (select max(s_r.stock_date) from stocks as s_r where s_r.shop_id = stocks.shop_id and s_r.stock_date <= ?)', [$asOf]);
+                }
+            })
             ->orderBy('shops.name')
             ->orderBy('items.name')
             ->limit($limit)
@@ -68,22 +76,34 @@ class StockLevels extends BaseTool
             ]);
 
         $warehouseId = Warehouse::shopId();
+        // Explicit zero: R per shop (as of the chosen day), one grouped query for the shops in the result.
+        $latest = Stock::explicitZero() ? Stock::latestDates($rows->pluck('shop_id')->map(fn ($id) => (int) $id)->unique()->values()->all(), $asOf) : [];
 
         return [
             'as_of' => $asOf,
-            'rows' => $rows->map(fn ($r) => [
-                'shop_id' => (int) $r->shop_id,
-                'shop' => $r->shop,
-                'item_id' => (int) $r->item_id,
-                'item' => $r->item,
-                'group' => $r->group,
-                'is_warehouse' => (int) $r->shop_id === $warehouseId,
-                'qty' => round((float) $r->qty, 3),
-                'stock_date' => $r->stock_date,
-                'min' => $r->min === null ? null : round((float) $r->min, 3),
-                'max' => $r->max === null ? null : round((float) $r->max, 3),
-                'below_min' => $r->min !== null && (float) $r->qty < (float) $r->min,
-            ])->all(),
+            'explicit_zero_stock' => Stock::explicitZero(),
+            'rows' => $rows->map(function ($r) use ($warehouseId, $latest) {
+                $reported = Stock::isReported((string) $r->stock_date, $latest[(int) $r->shop_id] ?? null);
+
+                return [
+                    'reported' => $reported,
+                    'state' => $reported ? 'ok' : 'no_data',
+                    'shop_id' => (int) $r->shop_id,
+                    'shop' => $r->shop,
+                    'item_id' => (int) $r->item_id,
+                    'item' => $r->item,
+                    'group' => $r->group,
+                    'is_warehouse' => (int) $r->shop_id === $warehouseId,
+                    // Not reported by 1C: the old quantity is not stock (null), last_reported_qty keeps it for reference.
+                    'qty' => $reported ? round((float) $r->qty, 3) : null,
+                    'last_reported_qty' => $reported ? null : round((float) $r->qty, 3),
+                    'stock_date' => $r->stock_date,
+                    'min' => $r->min === null ? null : round((float) $r->min, 3),
+                    'max' => $r->max === null ? null : round((float) $r->max, 3),
+                    'below_min' => $reported && $r->min !== null && (float) $r->qty < (float) $r->min,
+                ];
+            })->all(),
         ];
     }
+
 }

@@ -40,7 +40,6 @@ class AccessAndOrderFlowTest extends TestCase
             '/analytics' => [200, 200, 'R:monitor', 'R:login'],
             '/receipt-analytics' => [200, 200, 'R:monitor', 'R:login'],
             '/settings/users' => [200, 403, 'R:monitor', 'R:login'],
-            '/ajva-ai' => [200, 403, 'R:monitor', 'R:login'],
         ];
         $users = [User::factory()->create(), User::factory()->operator()->create(), User::factory()->monitor()->create(), null];
 
@@ -132,7 +131,7 @@ class AccessAndOrderFlowTest extends TestCase
         Livewire::actingAs($opB)->test(OrdersIndex::class)->call('confirm', $draft->id)->assertNotFound();
 
         // 3. A's operator edits, then confirms; the queue worker (sync driver) pushes it to 1C.
-        Http::fake(['onec.test/*' => Http::response(['ok' => true], 200)]);
+        Http::fake(['onec.test/*' => Http::response(['status' => 'ok', 'message' => '00-00000001'], 200)]);
         Livewire::actingAs($opA)->test(Show::class, ['order' => $draft])
             ->call('saveQty', $cola->id, '7')
             ->call('confirm');
@@ -141,7 +140,7 @@ class AccessAndOrderFlowTest extends TestCase
         $this->assertSame(OrderStatus::Confirmed, $order->status);
         $this->assertSame(OrderSyncStatus::Synced, $order->sync_status);
         $this->assertEquals(7, $order->items()->first()->qty);
-        Http::assertSent(fn ($r) => $r->hasHeader('Idempotency-Key', $order->number()) && $r['lines'][0]['qty'] === 7.0);
+        Http::assertSent(fn ($r) => $r->hasHeader('Idempotency-Key', $order->number()) && $r['goods'][0]['itemQty'] === 7);
         Http::assertSentCount(1);
 
         // 4. Locked for everybody, and a synced order is never re-sent (retry is refused, a re-run job is a no-op).
@@ -203,7 +202,7 @@ class AccessAndOrderFlowTest extends TestCase
 
     public function test_a_4xx_answer_also_fails_the_attempt_and_without_a_token_no_auth_header_is_sent(): void
     {
-        config(['services.onec.orders_url' => 'https://onec.test/orders', 'services.onec.token' => '']);
+        config(['services.onec.orders_url' => 'https://onec.test/orders', 'services.onec.user' => '', 'services.onec.password' => '']);
         Http::fake(['onec.test/*' => Http::response('bad', 422)]);
         $order = $this->confirmedOrder();
 

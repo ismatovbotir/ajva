@@ -31,7 +31,7 @@ class MonitorData
         $kept = [];
         foreach ($layout as $widget) {
             $def = WidgetCatalog::find($widget['key'] ?? null);
-            if (! $sample && $def !== null && (($def->profit && ! $scope->withProfit) || (! $def->publicSafe && $scope->public))) {
+            if (! $sample && $def !== null && (($def->profit && ! $scope->withProfit) || (! $def->publicSafe && $scope->public) || ($def->adminOnly && ! $scope->viewerIsAdmin()))) {
                 $hidden[] = $widget;
             } else {
                 $kept[] = $widget;

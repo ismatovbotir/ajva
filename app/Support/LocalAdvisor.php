@@ -5,8 +5,7 @@ namespace App\Support;
 use App\Services\AssortmentAnalysis;
 
 /**
- * Rule-based observations over a tool result. Runs entirely inside the app:
- * AjvaAI never sends business data to the AI service, so the advice that
+ * Rule-based observations over a tool result. Runs entirely inside the app: the advice that
  * depends on numbers is produced here, from fixed thresholds.
  *
  * @phpstan-type Note array{level: 'warn'|'info', text: string}

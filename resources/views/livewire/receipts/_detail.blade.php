@@ -37,6 +37,14 @@
             </dd>
         </div>
     </dl>
+    @if($receipt->dqFlags() !== [])
+        <div class="mt-4 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-3" data-dq-flags>
+            <span class="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Data check') }}</span>
+            @foreach($receipt->dqFlags() as $code)
+                <x-ui.badge variant="warning">{{ __(\App\Support\ReceiptChecks::flagLabels()[$code] ?? $code) }}</x-ui.badge>
+            @endforeach
+        </div>
+    @endif
 </x-ui.card>
 
 <h2 class="mb-3 text-lg font-semibold text-slate-900">{{ __('Items') }}</h2>

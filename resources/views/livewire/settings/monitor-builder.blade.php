@@ -176,6 +176,7 @@
                                                 <x-ui.badge :variant="$costVariant[$def->cost]">{{ $costLabel[$def->cost] }}</x-ui.badge>
                                                 @if($def->profit)<x-ui.badge variant="danger">{{ __('Profit only') }}</x-ui.badge>@endif
                                                 @unless($def->publicSafe)<x-ui.badge>{{ __('Not on public links') }}</x-ui.badge>@endunless
+                                                @if($def->adminOnly)<x-ui.badge variant="danger">{{ __('Admins only') }}</x-ui.badge>@endif
                                                 @foreach($def->diagrams as $diagram)
                                                     <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[0.65rem] text-slate-600">{{ $diagram->label() }}</span>
                                                 @endforeach

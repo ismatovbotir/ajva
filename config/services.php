@@ -21,16 +21,15 @@ return [
         'scheme' => 'https',
     ],
 
-    // AjvaAI assistant (Google Gemini). Get a free key at https://aistudio.google.com/apikey
-    'gemini' => [
-        'key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
-    ],
-
     // Replenishment orders are pushed to 1C after confirmation (App\Jobs\SyncOrderTo1C).
     'onec' => [
-        'orders_url' => env('ONEC_ORDERS_URL'),
-        'token' => env('ONEC_ORDERS_TOKEN'),
+        // ADINES_URL is the base of the 1C HTTP service (e.g. http://host:8585/ajwastore/hs/api/).
+        // The routes under it: /auth (login check + shop list) and /order (confirmed orders).
+        'base_url' => env('ADINES_URL'),
+        'auth_url' => env('ADINES_URL') ? rtrim((string) env('ADINES_URL'), '/').'/auth' : null,
+        'orders_url' => env('ADINES_URL') ? rtrim((string) env('ADINES_URL'), '/').'/order' : null,
+        'user' => env('ADINES_LOGIN'),
+        'password' => env('ADINES_PASSWORD'),
         'timeout' => (int) env('ONEC_ORDERS_TIMEOUT', 30),
     ],
 

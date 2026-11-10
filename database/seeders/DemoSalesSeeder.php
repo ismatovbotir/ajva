@@ -99,7 +99,7 @@ class DemoSalesSeeder extends Seeder
 
         $now = now();
         $today = $now->copy()->startOfDay();
-                $seq = 0;
+        $seq = 0;
 
         // Weighted slots (shop x day x hour): busier shops and peak hours get more receipts.
         $slots = [];

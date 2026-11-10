@@ -92,7 +92,7 @@ class OutOfStock extends Component
         $service = app(WarehouseOutOfStock::class);
         $data = $this->generated
             ? $service->data()
-            : ['state' => 'pending', 'partial' => false, 'kpi' => null, 'rows' => [], 'ref' => null, 'chain' => null, 'coverage' => null, 'histogram' => []];
+            : ['state' => 'pending', 'partial' => false, 'kpi' => null, 'rows' => [], 'explicit' => \App\Models\Stock::explicitZero(), 'ref' => null, 'chain' => null, 'coverage' => null, 'histogram' => []];
         $filters = WarehouseOutOfStock::filters($this->query());
         $rows = $service->apply($data['rows'], $filters);
 

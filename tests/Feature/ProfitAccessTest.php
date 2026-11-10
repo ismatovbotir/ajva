@@ -99,7 +99,8 @@ class ProfitAccessTest extends TestCase
 
         $this->assertNull($component->viewData('margins'));
         $this->assertNull($component->viewData('belowCost'));
-        $this->assertSame(['out_of_stock'], array_keys($component->viewData('health')));
+        // not_reported (pairs 1C did not report) is a cost-free count, shown to everyone.
+        $this->assertSame(['out_of_stock', 'not_reported'], array_keys($component->viewData('health')));
 
         $html = $component->html();
         foreach (['Stock value at cost', 'Stock value by shop', 'Margin by item', 'Below cost', 'Pricing health', 'Profit by shop'] as $text) {

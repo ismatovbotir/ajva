@@ -339,10 +339,47 @@ class AutoOrdersTest extends TestCase
         $this->assertEquals(30, $qty[$big->id]);                      // 3 x 10, not the ~300 the forecast asks for
         $this->assertFalse($qty->has($fresh->id));
         $this->assertFalse($qty->has($old->id));
-        $this->assertStringContainsString('stale=1', (string) $order->warnings);
+        // Explicit zero (default): the pair missing from today's sync is "not reported by 1C" (was "stale").
+        $this->assertStringContainsString('no_data=1', (string) $order->warnings);
+        $this->assertStringNotContainsString('stale=', (string) $order->warnings);
         $this->assertStringContainsString('none=1', (string) $order->warnings);
         $this->assertStringContainsString('capped=1', (string) $order->warnings);
         $this->assertStringContainsString('left out', (string) $report[0]['note']);
+        $this->assertStringContainsString('not reported by 1C', (string) $report[0]['note']);
+    }
+
+    public function test_legacy_mode_still_marks_the_old_snapshot_as_stale(): void
+    {
+        config(['inventory.explicit_zero_stock' => false]);
+        $big = $this->item('Big seller', $this->a, 1, 2, 10);
+        $this->sellDaily($this->a, $big, 100);
+        $this->warehouseHas($big, 100000);
+        $old = $this->item('Old stock', $this->a, 0, 2, 10);
+        $this->sellDaily($this->a, $old, 3);
+        Stock::query()->where('item_id', $old->id)->where('stock_date', '2026-10-07')->delete();
+        $this->warehouseHas($old, 100000);
+
+        $this->run_();
+
+        $order = Order::query()->firstOrFail();
+        $this->assertStringContainsString('stale=1', (string) $order->warnings);
+        $this->assertStringNotContainsString('no_data', (string) $order->warnings);
+    }
+
+    public function test_pairs_not_reported_by_1c_are_not_ordered_and_are_counted(): void
+    {
+        $gone = $this->item('Gone', $this->a, 0, 2, 10);
+        $this->sellDaily($this->a, $gone, 3);
+        // Yesterday's row stays, today's sync no longer reports it: unknown, not an out-of-stock item to order.
+        Stock::query()->where('item_id', $gone->id)->where('stock_date', '2026-10-07')->delete();
+        $this->warehouseHas($gone, 100000);
+
+        $this->run_();
+
+        $order = Order::query()->firstOrFail();
+        $this->assertFalse($order->items()->where('item_id', $gone->id)->exists());
+        $this->assertTrue($order->items()->where('item_id', $this->cola->id)->exists());
+        $this->assertStringContainsString('no_data=1', (string) $order->warnings);
     }
 
     public function test_the_warehouse_stock_is_split_over_the_due_shops_most_urgent_first(): void

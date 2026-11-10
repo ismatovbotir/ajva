@@ -5,6 +5,7 @@ namespace App\Monitor;
 use App\Services\AssortmentAnalysis;
 use App\Services\SalesMetrics;
 use App\Support\MonitorScope;
+use App\Support\ReceiptRejections;
 use Illuminate\Support\Str;
 
 /**
@@ -512,7 +513,8 @@ class WidgetPayloads
         return [
             'value' => (string) $out,
             'status' => $status,
-            'note' => __('of :count items with an order rule', ['count' => $inv['ruled']]),
+            'note' => __('of :count items with an order rule', ['count' => $inv['ruled']])
+                .(($inv['no_data'] ?? 0) > 0 ? ' · '.__(':count not reported by 1C', ['count' => $inv['no_data']]) : ''),
             'footer' => $this->inventoryFooter(),
         ];
     }
@@ -770,7 +772,8 @@ class WidgetPayloads
         return [
             'value' => (string) $k['out'],
             'status' => $k['a'] > 0 ? 'bad' : ($k['out'] > 0 ? 'warn' : 'ok'),
-            'note' => __('A-class: :a', ['a' => $k['a']]),
+            'note' => __('A-class: :a', ['a' => $k['a']])
+                .(($k['not_reported'] ?? 0) > 0 ? ' · '.__(':count not reported by 1C', ['count' => $k['not_reported']]) : ''),
             'footer' => __('Warehouse stock as of :date.', ['date' => $d['ref']]),
         ];
     }
@@ -786,6 +789,294 @@ class WidgetPayloads
         $p = ['value' => $this->dec($pct, 1).'%', 'status' => 'none', 'note' => __(':n of :m sale receipts today', ['n' => $set['with'], 'm' => $set['all']])];
 
         return $diagram === 'gauge' ? $p + ['gauge' => ['value' => $pct, 'min' => 0, 'max' => 100, 'marks' => []]] : $p;
+    }
+
+    // ---------------------------------------------------------------- security (admin viewers only; see Datasets::securityWeek / securityToday)
+
+    private const SEVERITY_STATUS = ['high' => 'bad', 'medium' => 'warn', 'low' => 'none', 'none' => 'ok'];
+
+    private const SEVERITY_RANK = ['high' => 0, 'medium' => 1, 'low' => 2];
+
+    private function severityLabel(string $severity): string
+    {
+        return ['high' => __('High'), 'medium' => __('Medium'), 'low' => __('Low')][$severity] ?? '—';
+    }
+
+    private function notEnough(string $why, array $extra = []): array
+    {
+        return ['value' => '—', 'status' => 'none', 'note' => __('Not enough data: :why', ['why' => $why])] + $extra;
+    }
+
+    private function weekFooter(array $set): string
+    {
+        return __('Last 7 days until :time. A signal to review, not proof.', ['time' => $set['as_of']]);
+    }
+
+    private function todayFooter(array $set): string
+    {
+        return __('Today until :time. A signal to review, not proof.', ['time' => $set['as_of']]);
+    }
+
+    private function securityWarningsCount(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_week');
+        $min = (int) config('security.min_receipts');
+        if ($set['receipts'] < $min) {
+            return $this->notEnough(__('fewer than :n receipts in the last 7 days.', ['n' => $min]), ['footer' => $this->weekFooter($set)]);
+        }
+
+        $k = $set['kpi'];
+
+        return [
+            'value' => (string) $k['total'],
+            'status' => $k['high'] > 0 ? 'bad' : ($k['medium'] > 0 ? 'warn' : ($k['low'] > 0 ? 'none' : 'ok')),
+            'note' => __('High :h · Medium :m · Low :l', ['h' => $k['high'], 'm' => $k['medium'], 'l' => $k['low']]),
+            'footer' => $this->weekFooter($set),
+        ];
+    }
+
+    /**
+     * Flagged cashiers of one rate check as a ranking: share, the rest of the chain, how many times higher, the sample, the level.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function cashierRanking(array $set, array $rows, array $o, string $allClear, string $what): array
+    {
+        if ($set['judgeable'] === 0) {
+            return $this->empty(['footer' => __('Not enough data: a cashier needs :n receipts and the rest of the chain :m.', ['n' => (int) config('security.min_receipts'), 'm' => (int) config('security.min_baseline_receipts')])]);
+        }
+
+        $columns = [__('Share'), __('Rest of the chain'), __('Times higher'), __('Receipts'), __('Level')];
+        usort($rows, fn (array $a, array $b) => [self::SEVERITY_RANK[$a['severity']], -$a['value']] <=> [self::SEVERITY_RANK[$b['severity']], -$b['value']]);
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+
+        $items = [];
+        foreach (array_slice($rows, 0, $n) as $r) {
+            $status = self::SEVERITY_STATUS[$r['severity']];
+            $items[] = [
+                'label' => ($r['cashier'] !== '' ? $r['cashier'] : __('Unknown cashier')).' · '.$r['shop'],
+                'value' => $r['value'],
+                'text' => $this->dec($r['value'], 1).'%',
+                'cells' => [
+                    $this->dec($r['value'], 1).'%',
+                    $this->dec($r['baseline'], 1).'%',
+                    $r['baseline'] > 0 ? '×'.$this->dec($r['value'] / $r['baseline'], 1) : '—',
+                    (string) $r['sample'],
+                    $this->severityLabel($r['severity']),
+                ],
+                'tones' => [null, null, null, null, $status === 'none' ? null : $status],
+                'status' => $status,
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => $allClear, 'value' => 0.0, 'text' => '0%', 'cells' => array_fill(0, count($columns), '—'), 'status' => 'ok'];
+        }
+
+        return ['columns' => $columns, 'items' => $items, 'footer' => $this->weekFooter($set).' '.$what];
+    }
+
+    private function securityRefundByCashier(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_week');
+
+        return $this->cashierRanking($set, $set['refund'], $o, __('No cashier is above the rest of the chain.'), __('Refund share by amount or by count, whichever is further above the chain.'));
+    }
+
+    private function securityDiscountByCashier(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_week');
+
+        return $this->cashierRanking($set, $set['discount'], $o, __('No cashier is above the rest of the chain.'), __('Share of sale receipts with a discount of :p % or more.', ['p' => $this->dec((float) config('security.deep_discount_pct'), 0)]));
+    }
+
+    private function securityCancelledRate(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_week');
+        $c = $set['chain'];
+        $min = (int) config('security.min_receipts');
+        if ($c['all'] < $min) {
+            return $this->notEnough(__('fewer than :n receipts in the last 7 days.', ['n' => $min]), ['footer' => $this->weekFooter($set)]);
+        }
+
+        $pct = $c['cancelled'] / $c['all'] * 100;
+        $emptyPct = $c['empty'] / $c['all'] * 100;
+        $prev = $set['prev_chain'];
+        $prevText = $prev['all'] >= (int) config('security.min_baseline_receipts')
+            ? $this->dec($prev['cancelled'] / $prev['all'] * 100, 1).'%'
+            : __('n/a');
+
+        $order = ['ok', 'none', 'warn', 'bad'];
+        $a = Comparison::rateStatus($pct, $c['all']);
+        $b = Comparison::rateStatus($emptyPct, $c['all']);
+        $p = [
+            'value' => $this->dec($pct, 1).'%',
+            'status' => array_search($a, $order, true) >= array_search($b, $order, true) ? $a : $b,
+            'note' => __(':n of :m receipts cancelled · :e% of all receipts without lines · previous 7 days: :p', [
+                'n' => $c['cancelled'], 'm' => $c['all'], 'e' => $this->dec($emptyPct, 1), 'p' => $prevText,
+            ]),
+            'footer' => $this->weekFooter($set),
+        ];
+
+        return $diagram === 'gauge' ? $p + ['gauge' => ['value' => $pct, 'min' => 0, 'max' => 10, 'marks' => [2, 5]]] : $p;
+    }
+
+    private function securitySilentShops(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_today');
+        if ($set['normal_shops'] === 0) {
+            return $this->empty(['footer' => __('Not enough data: a shop needs :n sale receipts in the last 28 days to know its normal hours.', ['n' => (int) config('security.off_hours_min_baseline_receipts')])]);
+        }
+
+        $items = [];
+        foreach ($set['silent'] as $s) {
+            $status = self::SEVERITY_STATUS[$s['severity']];
+            $items[] = [
+                'label' => $s['shop'],
+                'value' => (float) $s['hours'],
+                'text' => $s['hours'].' '.__('h'),
+                'cells' => [$s['hours'].' '.__('h'), (string) $s['expected'], $this->severityLabel($s['severity'])],
+                'tones' => [null, null, $status === 'none' ? null : $status],
+                'status' => $status,
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('Every shop is trading as usual.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+
+        return ['columns' => [__('Hours without a sale'), __('Receipts expected'), __('Level')], 'items' => $items, 'footer' => $this->todayFooter($set)];
+    }
+
+    /** Status of a today count: green at 0, the level colour above. */
+    private function todayStatus(int $count, string $severity): string
+    {
+        return $count === 0 ? 'ok' : self::SEVERITY_STATUS[$severity];
+    }
+
+    private function securityOffHoursToday(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_today');
+        if ($set['normal_shops'] === 0) {
+            return $this->notEnough(__('a shop needs :n sale receipts in the last 28 days to know its normal hours.', ['n' => (int) config('security.off_hours_min_baseline_receipts')]), ['footer' => $this->todayFooter($set)]);
+        }
+
+        return [
+            'value' => (string) $set['off']['count'],
+            'status' => $this->todayStatus($set['off']['count'], $set['off']['severity']),
+            'note' => __('sale receipts in hours with under :p % of the shop volume', ['p' => $this->dec((float) config('security.off_hours_share_pct'), 0)]),
+            'footer' => $this->todayFooter($set),
+        ];
+    }
+
+    private function securityIntegrityFlags(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_today');
+        if ($set['sale_receipts'] === 0) {
+            return $this->empty(['footer' => __('No sale receipts yet today.')]);
+        }
+
+        $d = $set['integrity'];
+
+        return [
+            'value' => (string) $d['count'],
+            'status' => $this->todayStatus($d['count'], $d['severity']),
+            'note' => $d['count'] === 0 ? __('no impossible values found') : __('receipts or lines in :n shops', ['n' => $d['shops']]),
+            'footer' => $this->todayFooter($set),
+        ];
+    }
+
+    private function securityNumberGapsDuplicates(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_today');
+        if ($set['sale_receipts'] === 0) {
+            return $this->empty(['footer' => __('No sale receipts yet today.')]);
+        }
+
+        $g = $set['gaps'];
+        $d = $set['dups'];
+        $ranks = array_map(fn (string $s) => self::SEVERITY_RANK[$s], array_filter([$g['severity'], $d['severity']], fn (string $s) => $s !== 'none'));
+        $worst = $ranks === [] ? 'none' : array_search(min($ranks), self::SEVERITY_RANK, true);
+
+        return [
+            'value' => (string) $g['missing'],
+            'status' => $this->todayStatus($g['missing'] + $d['count'], $worst),
+            'note' => __('missing numbers in :t tills · :d duplicate looking receipts', ['t' => $g['tills'], 'd' => $d['count']]),
+            'footer' => $this->todayFooter($set),
+        ];
+    }
+
+    private function securityUnusualBaskets(array $o, string $diagram): array
+    {
+        $set = $this->data->get('security_today');
+        if ($set['basket_shops'] === 0) {
+            return $this->empty(['footer' => __('Not enough data: a shop needs :n sale receipts today.', ['n' => (int) config('security.basket_min_receipts')])]);
+        }
+
+        $columns = [__('Receipt total'), __('Big-receipt cut'), __('Times higher'), __('Level')];
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+        $items = [];
+        foreach (array_slice($set['baskets'], 0, $n) as $b) {
+            $status = self::SEVERITY_STATUS[$b['severity']];
+            $items[] = [
+                'label' => $b['shop'],
+                'value' => $b['total'],
+                'text' => $this->money($b['total']),
+                'cells' => [$this->money($b['total']), $this->money($b['cut']), $b['cut'] > 0 ? '×'.$this->dec($b['total'] / $b['cut'], 1) : '—', $this->severityLabel($b['severity'])],
+                'tones' => [null, null, null, $status === 'none' ? null : $status],
+                'status' => $status,
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('No unusual single-item receipt today.'), 'value' => 0.0, 'text' => '0', 'cells' => array_fill(0, count($columns), '—'), 'status' => 'ok'];
+        }
+
+        return ['columns' => $columns, 'items' => $items, 'footer' => $this->todayFooter($set)];
+    }
+
+    private function dataHealthSilentShops(array $o, string $diagram): array
+    {
+        $set = $this->data->get('data_health');
+        if ($set['judged'] === 0) {
+            return $this->empty(['footer' => __('Not enough data: a shop needs a usual day of at least :n receipts to be judged.', ['n' => (int) config('receipts.health.min_usual', 20)])]);
+        }
+
+        $items = [];
+        foreach ($set['problems'] as $s) {
+            $items[] = [
+                'label' => $s['shop'],
+                'value' => (float) $s['last24'],
+                'text' => (string) $s['last24'],
+                'cells' => [(string) $s['last24'], $this->dec((float) $s['usual'], 0), $s['status'] === 'bad' ? __('Silent') : __('Low')],
+                'tones' => [null, null, $s['status']],
+                'status' => $s['status'],
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('Every feed looks normal.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+        // Silent shops first, then by the fewest receipts.
+        usort($items, fn (array $a, array $b) => [$a['status'] === 'bad' ? 0 : 1, $a['value']] <=> [$b['status'] === 'bad' ? 0 : 1, $b['value']]);
+
+        return [
+            'columns' => [__('Receipts, last 24 h'), __('Usual day'), __('Status')],
+            'items' => $items,
+            'footer' => __('Until :time. :n shops judged.', ['time' => $set['as_of'], 'n' => $set['judged']]),
+        ];
+    }
+
+    private function dataHealthRejections24h(array $o, string $diagram): array
+    {
+        $set = $this->data->get('data_health');
+        $r = $set['rejected'];
+        $labels = ReceiptRejections::labels();
+        arsort($r['by_reason']);
+        $top = array_key_first($r['by_reason']);
+
+        return [
+            'value' => (string) $r['total'],
+            'status' => $r['spike'] ? 'bad' : ($r['total'] > 0 ? 'warn' : 'ok'),
+            'note' => $top === null ? __('no receipt was refused') : __('mostly: :reason', ['reason' => __($labels[$top] ?? $top)]),
+            'footer' => __('Last 24 hours until :time.', ['time' => $set['as_of']]),
+        ];
     }
 
     private function syncFreshness(array $o, string $diagram): array

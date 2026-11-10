@@ -31,6 +31,18 @@ class OrderEvent extends Model
 
     public const COMMENT = 'comment';
 
+    public const RECEIVED = 'received';
+
+    public const EXPIRED = 'expired';
+
+    public const SENT_FOR_APPROVAL = 'sent_for_approval';
+
+    public const EXCEPTION_APPROVED = 'exception_approved';
+
+    public const APPROVED = 'approved';
+
+    public const REJECTED = 'rejected';
+
     public $timestamps = false;
 
     protected $fillable = ['order_id', 'user_id', 'channel', 'action', 'item_id', 'old_qty', 'new_qty', 'note', 'created_at'];

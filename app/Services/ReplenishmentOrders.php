@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
  *
  * prepareAuto() is the same for the daily automatic run (orders:auto-generate, origin auto_schedule, created_by
  * null, App\Services\AutoOrders): it never touches an existing draft, leaves out lines without a usable demand
- * history (confidence none) and pairs with stale stock, caps a line at 3 x the item's max rule and the draft at
+ * history (confidence none), pairs not reported by 1C (`no_data`, counted in orders.warnings) and pairs with stale stock, caps a line at 3 x the item's max rule and the draft at
  * 150 lines, and never creates an empty draft.
  */
 class ReplenishmentOrders
@@ -88,23 +88,31 @@ class ReplenishmentOrders
      * The automatic daily draft of one shop (system user: no policy check).
      *
      * @param  array<string, mixed>  $plan  OrderRecommendations::plan() result (warehouse-limited send quantities)
-     * @return array{status: string, order: ?Order, lines: int, pieces: float, stale: int, none: int, capped: int, truncated: int}
+     * @return array{status: string, order: ?Order, lines: int, pieces: float, stale: int, no_data: int, none: int, capped: int, truncated: int}
      *                                                                                                                             status: created | empty | draft_exists
      */
     public function prepareAuto(array $plan, int $shopId): array
     {
-        $out = ['status' => 'empty', 'order' => null, 'lines' => 0, 'pieces' => 0.0, 'stale' => 0, 'none' => 0, 'capped' => 0, 'truncated' => 0];
+        $out = ['status' => 'empty', 'order' => null, 'lines' => 0, 'pieces' => 0.0, 'stale' => 0, 'no_data' => 0, 'none' => 0, 'capped' => 0, 'truncated' => 0];
         $shop = collect($plan['shops'])->firstWhere('id', $shopId);
         if ($shop === null) {
             return $out;
         }
+        // Explicit zero: pairs 1C did not report are never planned (the forecast already left them out); only counted here.
+        $out['no_data'] = (int) ($shop['no_data'] ?? 0);
 
         $horizon = (int) ($shop['horizon'] ?? $plan['horizon']);
         $lines = [];
         foreach ($shop['rows'] as $row) {
-            // No usable demand history (rules only) or a stock figure that is too old: never ordered automatically.
+            // No usable demand history (rules only), a pair not reported by 1C (never in the rows in explicit mode, kept
+            // as a guard) or a stock figure that is too old (whole sync older than the lookback): never ordered automatically.
             if ($row['confidence'] === 'none') {
                 $out['none']++;
+
+                continue;
+            }
+            if ($row['no_data'] ?? false) {
+                $out['no_data']++;
 
                 continue;
             }
@@ -134,7 +142,7 @@ class ReplenishmentOrders
             return $out;
         }
 
-        $warnings = array_filter(['stale' => $out['stale'], 'none' => $out['none'], 'capped' => $out['capped'], 'truncated' => $out['truncated']]);
+        $warnings = array_filter(['no_data' => $out['no_data'], 'stale' => $out['stale'], 'none' => $out['none'], 'capped' => $out['capped'], 'truncated' => $out['truncated']]);
         $warnings = implode(',', array_map(fn ($k, $v) => $k.'='.$v, array_keys($warnings), $warnings));
 
         $order = DB::transaction(function () use ($shopId, $horizon, $lines, $warnings) {

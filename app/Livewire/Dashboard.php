@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-#[Layout('components.layouts.app', ['title' => 'Dashboard'])]
+#[Layout('components.layouts.app', ['title' => 'Home'])]
 class Dashboard extends Component
 {
     /**
@@ -101,8 +101,15 @@ class Dashboard extends Component
     /** Limits a query on `stocks` to the shops the current user may see. */
     private function shopScoped($query)
     {
-        // Always current stock only (history rows would double count).
-        return Stock::applyCurrent(ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope));
+        // Always current stock only (history rows would double count). Explicit zero: only pairs the shop's latest
+        // 1C sync reported (a not-reported pair is neither in stock nor out of stock, never a zero).
+        return Stock::applyReported(Stock::applyCurrent(ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope)));
+    }
+
+    /** Current rows older than their shop's latest sync (explicit zero): "not reported by 1C". */
+    private function notReportedPairs($query)
+    {
+        return Stock::applyNotReported(Stock::applyCurrent(ShopAccess::restrictTo($query, 'stocks.shop_id', $this->scope)));
     }
 
     /** Heavy catalogue-wide aggregates change only on 1C sync, so a short shared cache is enough. */
@@ -134,9 +141,16 @@ class Dashboard extends Component
             ->where('item_order_rules.min', '>', 0)
             ->count();
 
+        $notReported = Stock::explicitZero() ? (int) $this->notReportedPairs(DB::table('stocks'))
+            ->join('item_order_rules', function ($join) {
+                $join->on('item_order_rules.item_id', '=', 'stocks.item_id')
+                    ->on('item_order_rules.shop_id', '=', 'stocks.shop_id');
+            })
+            ->count() : 0;
+
         // Without the profit permission only the cost-free figure is computed.
         if (! $this->canProfit) {
-            return ['out_of_stock' => $outOfStock];
+            return ['out_of_stock' => $outOfStock, 'not_reported' => $notReported];
         }
 
         $costId = (int) config('inventory.cost_price_id');
@@ -180,6 +194,7 @@ class Dashboard extends Component
             'uncovered_percent' => $units > 0 ? round($uncovered / $units * 100, 1) : 0.0,
             'missing_items' => $missingItems,
             'out_of_stock' => $outOfStock,
+            'not_reported' => $notReported,
             'shops' => $perShop->map(fn ($r) => [
                 'name' => (string) $r->name,
                 'label' => number_format((float) $r->value, 0, '.', ' '),

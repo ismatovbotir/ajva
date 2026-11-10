@@ -271,7 +271,8 @@ class AssortmentAnalysis
             return [];
         }
 
-        $rows = Stock::applyCurrent(DB::table('stocks'))
+        // Explicit zero: only pairs reported by the shop's latest 1C sync count (a missing row is neither stock nor out of stock).
+        $rows = Stock::applyReported(Stock::applyCurrent(DB::table('stocks')))
             ->whereIn('stocks.shop_id', $shopIds)
             ->groupBy('stocks.item_id')
             ->selectRaw(

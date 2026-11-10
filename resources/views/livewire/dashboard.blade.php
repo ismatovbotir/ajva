@@ -1,12 +1,27 @@
 <div>
-    <x-ui.page-header :title="__('Dashboard')" :subtitle="$canProfit ? __('Sales, profit and stock health across all shops.') : __('Sales and stock health across all shops.')" />
+    <x-ui.page-header :title="__('Home')" :subtitle="__('How the day is going, what needs attention, and the details below.')" />
 
     @if($noShops)
         <div class="mb-6"><x-ui.no-shops /></div>
     @endif
 
     <div class="space-y-6">
-        <livewire:sales-board />
+        {{-- Home: the day, what needs attention, supply. Each block is its own component (own polling, own cache). --}}
+        <livewire:home.summary />
+        <livewire:home.attention />
+        <livewire:home.supply />
+
+        {{-- Details: the full sales board and the stock charts, folded away so the top of the page stays short. --}}
+        <details class="rounded-lg border border-slate-200 bg-white" data-details="sales">
+            <summary class="cursor-pointer select-none rounded-lg px-4 py-3 text-base font-semibold text-slate-900 hover:bg-slate-50">{{ __('Sales details') }}</summary>
+            <div class="border-t border-slate-100 p-4">
+                <livewire:sales-board />
+            </div>
+        </details>
+
+        <details class="rounded-lg border border-slate-200 bg-white" data-details="stock">
+            <summary class="cursor-pointer select-none rounded-lg px-4 py-3 text-base font-semibold text-slate-900 hover:bg-slate-50">{{ __('Stock details') }}</summary>
+            <div class="space-y-6 border-t border-slate-100 p-4">
 
         {{-- Section: Stock health --}}
         <section class="space-y-4" aria-labelledby="sec-stock-health">
@@ -40,6 +55,9 @@
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Out of stock') }}</p>
                     <p class="mt-2 text-3xl font-semibold tabular-nums {{ $health['out_of_stock'] > 0 ? 'text-red-700' : 'text-slate-900' }}">{{ $health['out_of_stock'] }}</p>
                     <p class="mt-1 text-sm text-slate-500">{{ __('Item and shop pairs with a minimum rule and zero stock.') }}</p>
+                    @if(($health['not_reported'] ?? 0) > 0)
+                        <p class="mt-2 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600" data-not-reported>{{ __(':count pairs not reported by 1C (not counted).', ['count' => $health['not_reported']]) }}</p>
+                    @endif
                 </x-ui.card>
                 <x-ui.card>
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Reorder-rule coverage') }}</p>
@@ -690,5 +708,7 @@
             </div>
         </x-ui.card>
         </section>
+            </div>
+        </details>
     </div>
 </div>
