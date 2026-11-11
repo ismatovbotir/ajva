@@ -65,7 +65,7 @@
                                 <span class="text-xs text-slate-500">{{ __('Orders') }}: {{ $c['run']['orders'] ?? 0 }} · {{ __('Sent') }}: {{ $c['run']['sent'] ?? 0 }}</span>
                             @endif
                         @elseif(! empty($c['auto']))
-                            <span class="text-xs text-slate-500">{{ $c['auto']->last_run_date->format('d.m.Y') }} · {{ $c['auto']->last_run_status }}</span>
+                            <span class="text-xs text-slate-500">{{ $c['auto']->last_run_date ? \Illuminate\Support\Carbon::parse($c['auto']->last_run_date)->format('d.m.Y') : '—' }} · {{ $c['auto']->last_run_status }}</span>
                         @endif
                     </div>
                 </div>
