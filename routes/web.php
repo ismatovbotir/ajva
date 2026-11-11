@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/assortment', \App\Livewire\Assortment\Index::class)->name('assortment.index');
         Route::get('/unsold-stock', \App\Livewire\UnsoldStock\Index::class)->name('unsold-stock.index');
         Route::get('/sales-gaps', \App\Livewire\SalesGaps\Index::class)->name('sales-gaps.index');
+        Route::get('/markdowns', \App\Livewire\Markdowns\Index::class)->name('markdowns.index');
         Route::get('/orders', OrdersIndex::class)->name('orders.index');
         Route::get('/orders/{order}', OrdersShow::class)->name('orders.show');
         Route::get('/monitoring/unconfirmed-orders', \App\Livewire\Orders\Unconfirmed::class)->name('monitoring.unconfirmed-orders');
@@ -118,6 +119,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings/warehouse', WarehouseSettings::class)->name('settings.warehouse');
         Route::get('/settings/users', UsersIndex::class)->name('users.index');
         Route::get('/monitoring/tasks', \App\Livewire\Monitoring\Tasks::class)->name('monitoring.tasks');
+        Route::get('/monitoring/items-sync', \App\Livewire\Monitoring\ItemsSync::class)->name('monitoring.items-sync');
         Route::get('/data-health', \App\Livewire\Monitoring\DataHealth::class)->name('data-health.index');
         Route::get('/security/warnings', \App\Livewire\Security\Warnings::class)->name('security.warnings');
         Route::get('/security/details', \App\Livewire\Security\Cashier::class)->name('security.cashier');

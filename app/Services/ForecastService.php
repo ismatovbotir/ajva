@@ -101,6 +101,23 @@ class ForecastService
         return max(1, min(self::MAX_HORIZON, $horizon ?? OrderRule::defaultHorizon()));
     }
 
+    /** Set only by buildAll(): rows that need no order are returned too. */
+    private bool $includeUnlisted = false;
+
+    /**
+     * Same as build() but also returns the rows that need no order (not listed for any horizon), e.g. for slow-stock
+     * reports (Markdown and promo). Pairs not reported by 1C (no_data) stay out, as in build().
+     */
+    public function buildAll(?array $shopIds = null, array $excludeShopIds = [], ?Carbon $now = null): array
+    {
+        $this->includeUnlisted = true;
+        try {
+            return $this->build($shopIds, $excludeShopIds, $now);
+        } finally {
+            $this->includeUnlisted = false;
+        }
+    }
+
     /**
      * @param  array<int, int>|null  $shopIds  null = every shop
      * @param  array<int, int>  $excludeShopIds  shops that are never replenished (the main warehouse)
@@ -153,7 +170,7 @@ class ForecastService
 
                 continue;
             }
-            if ($row['listed'][self::MAX_HORIZON]) {
+            if ($this->includeUnlisted || $row['listed'][self::MAX_HORIZON]) {
                 $result['rows'][] = $row;
             }
         }

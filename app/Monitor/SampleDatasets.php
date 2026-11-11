@@ -69,8 +69,54 @@ class SampleDatasets extends Datasets
             'security_today' => $this->securityToday(),
             'data_health' => $this->dataHealth(),
             'sales_gaps' => $this->salesGaps(),
+            'markdown' => $this->markdown(),
+            'markdown_discounts' => $this->markdownDiscounts(),
             default => [],
         };
+    }
+
+    /** Markdown candidates: invented slow stock at the sell price. */
+    private function markdown(): array
+    {
+        $s = $this->shopNames();
+        $item = fn (string $name, string $shop, ?float $value, float $qty, ?int $depth, bool $fresh = false) => ['item' => $name, 'shop' => $shop, 'value' => $value, 'on_hand' => $qty, 'depth' => $depth, 'fresh' => $fresh];
+
+        return [
+            'as_of' => self::CLOCK,
+            'days' => 60,
+            'stock_as_of' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+            'candidates' => 42, 'units' => 610.0, 'value' => 18_400_000.0, 'no_price' => 2, 'not_reported' => 5, 'truncated' => false,
+            'shops' => [
+                ['name' => $s[3], 'pairs' => 14, 'units' => 240.0, 'value' => 7_200_000.0, 'no_price' => 1],
+                ['name' => $s[1], 'pairs' => 11, 'units' => 150.0, 'value' => 5_100_000.0, 'no_price' => 0],
+                ['name' => $s[5], 'pairs' => 9, 'units' => 120.0, 'value' => 3_900_000.0, 'no_price' => 1],
+                ['name' => $s[2], 'pairs' => 8, 'units' => 100.0, 'value' => 2_200_000.0, 'no_price' => 0],
+            ],
+            'items' => [
+                $item('Green tea 100 bags', $s[3], 1_450_000.0, 48.0, 30),
+                $item('Laundry powder 3 kg', $s[1], 1_120_000.0, 20.0, 20),
+                $item('Yogurt 1 kg', $s[5], 640_000.0, 32.0, null, true),
+                $item('Instant coffee 200 g', $s[3], 590_000.0, 9.0, 10),
+                $item('Notebook A5', $s[2], null, 40.0, 20),
+            ],
+        ];
+    }
+
+    /** Discount give-away: one pair judged, one cannibalised, one not enough data. */
+    private function markdownDiscounts(): array
+    {
+        $s = $this->shopNames();
+
+        return [
+            'as_of' => self::CLOCK,
+            'days' => 60,
+            'pairs' => 3, 'judged' => 2, 'give_away' => 1_480_000.0,
+            'items' => [
+                ['item' => 'Sunflower oil 1 l', 'shop' => $s[3], 'give_away' => 820_000.0, 'lift' => 1.6, 'cannibalised' => false],
+                ['item' => 'Sugar 1 kg', 'shop' => $s[1], 'give_away' => 460_000.0, 'lift' => 1.05, 'cannibalised' => true],
+                ['item' => 'Pasta 500 g', 'shop' => $s[5], 'give_away' => 200_000.0, 'lift' => null, 'cannibalised' => false],
+            ],
+        ];
     }
 
     // ------------------------------------------------------------------ helpers

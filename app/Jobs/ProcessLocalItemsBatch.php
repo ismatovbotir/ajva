@@ -10,11 +10,13 @@ use App\Models\ItemPrice;
 use App\Models\Price;
 use App\Models\Shop;
 use App\Models\Stock;
+use App\Support\ItemsSyncLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class ProcessLocalItemsBatch implements ShouldQueue
 {
@@ -38,6 +40,24 @@ class ProcessLocalItemsBatch implements ShouldQueue
         $this->upsertItemPrices();
         $this->upsertStocks();
         $this->upsertItemOrderRules();
+
+        ItemsSyncLog::success(count($this->items));
+    }
+
+    /** Called once when the job finally fails (after its retries): one row in the items sync error log. */
+    public function failed(Throwable $e): void
+    {
+        $first = $this->items[0] ?? null;
+        $id = is_array($first) && isset($first['id']) && is_numeric($first['id']) ? (int) $first['id'] : null;
+
+        ItemsSyncLog::error(
+            ItemsSyncLog::STAGE_JOB,
+            class_basename($e).': '.$e->getMessage(),
+            null,
+            null,
+            count($this->items),
+            $id === null ? null : 'first item '.$id,
+        );
     }
 
     protected function upsertGroups($now): void

@@ -260,7 +260,7 @@
                 @include('livewire.receipts._detail', ['receipt' => $receipt])
             </div>
             <div class="mt-4 text-right">
-                <a href="{{ route('receipts.show', $receipt) }}" class="text-xs text-slate-500 hover:underline">{{ __('Open on its own page') }}</a>
+                <a href="{{ route('receipts.show', $receipt) }}" target="_blank" rel="noopener" class="text-xs text-slate-500 hover:underline">{{ __('Open on its own page') }}</a>
             </div>
         @endif
     </x-ui.modal>

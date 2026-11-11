@@ -194,4 +194,7 @@ return [
 
     'order_exception_max_qty' => (float) env('ORDER_EXCEPTION_MAX_QTY', 100000),
 
+    // How many error rows of the 1C items sync log (item_sync_errors) are kept, newest first.
+    'item_sync_keep_errors' => (int) env('ITEM_SYNC_KEEP_ERRORS', 1000),
+
 ];

@@ -9,6 +9,7 @@ use App\Services\DataHealth;
 use App\Services\ForecastService;
 use App\Services\OrderRecommendations;
 use App\Services\ReceiptsMetrics;
+use App\Services\Markdowns;
 use App\Services\SalesGaps;
 use App\Services\SalesMetrics;
 use App\Services\SecurityWarnings;
@@ -96,8 +97,87 @@ class Datasets
             'security_today' => $this->securityToday(),
             'data_health' => $this->dataHealth(),
             'sales_gaps' => $this->salesGaps(),
+            'markdown' => $this->markdown(),
+            'markdown_discounts' => $this->markdownDiscounts(),
             default => [],
         };
+    }
+
+    /** Markdown period: the page's default whole days ending yesterday. @return array{0: \Illuminate\Support\Carbon, 1: \Illuminate\Support\Carbon} */
+    private function markdownWindow(): array
+    {
+        $to = $this->scope->now->copy()->subDay();
+
+        return [$to->copy()->subDays(max(7, (int) config('markdown.default_days', 60)) - 1), $to];
+    }
+
+    /**
+     * Markdown candidates (Markdowns::candidates, the SAME service as the page; it runs the forecast pass). Only sell-price
+     * figures: no cost (withProfit is always false), no cashier. Per-shop sums are taken from the service rows.
+     */
+    private function markdown(): array
+    {
+        [$from, $to] = $this->markdownWindow();
+        $r = app(Markdowns::class)->candidates($from, $to, $this->shopList(), false, $this->scope->now->copy());
+        if ($r === []) {
+            return ['empty' => true];
+        }
+
+        $k = $r['kpi'];
+        $shops = [];
+        foreach ($r['rows'] as $row) {
+            $s = &$shops[$row['shop']];
+            $s ??= ['name' => $row['shop'], 'pairs' => 0, 'units' => 0.0, 'value' => 0.0, 'no_price' => 0];
+            $s['pairs']++;
+            $s['units'] += $row['on_hand'];
+            $row['value'] === null ? $s['no_price']++ : $s['value'] += $row['value'];
+            unset($s);
+        }
+        usort($shops, fn (array $a, array $b) => [$b['value'], $b['pairs']] <=> [$a['value'], $a['pairs']]);
+
+        $items = [];
+        foreach (array_slice($r['rows'], 0, WidgetCatalog::TOP_N_MAX) as $row) {
+            $items[] = [
+                'item' => $row['name'], 'shop' => $row['shop'], 'value' => $row['value'], 'on_hand' => $row['on_hand'],
+                'depth' => $row['depth'], 'fresh' => in_array('fresh', $row['flags'], true),
+            ];
+        }
+
+        return [
+            'as_of' => $this->scope->now->format('H:i'),
+            'days' => $r['window']['days'],
+            'stock_as_of' => $k['stock_as_of'],
+            'candidates' => $k['candidates'], 'units' => $k['units'], 'value' => $k['value'], 'no_price' => $k['no_price'],
+            'not_reported' => $k['not_reported'], 'truncated' => $k['truncated'],
+            'shops' => $shops, 'items' => $items,
+        ];
+    }
+
+    /** Discount effectiveness (Markdowns::discounts): the pairs with the largest give-away; receipts only, no forecast. */
+    private function markdownDiscounts(): array
+    {
+        [$from, $to] = $this->markdownWindow();
+        $r = app(Markdowns::class)->discounts($from, $to, $this->shopList(), $this->scope->now->copy());
+        if ($r === []) {
+            return ['empty' => true];
+        }
+
+        $items = [];
+        foreach (array_slice($r['rows'], 0, WidgetCatalog::TOP_N_MAX) as $row) {
+            $items[] = [
+                'item' => $row['name'], 'shop' => $row['shop'], 'give_away' => $row['give_away'],
+                'lift' => $row['status'] === 'ok' ? $row['lift'] : null,
+                'cannibalised' => $row['cannibalised'],
+            ];
+        }
+
+        return [
+            'as_of' => $this->scope->now->format('H:i'),
+            'days' => $r['window']['days'],
+            'pairs' => $r['kpi']['pairs'], 'judged' => $r['kpi']['judged'],
+            'give_away' => $r['kpi']['give_away'],
+            'items' => $items,
+        ];
     }
 
     /**

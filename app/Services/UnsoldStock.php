@@ -227,7 +227,7 @@ class UnsoldStock
      * @param  array<int, int>  $shopIds
      * @return array<string, true> "item:shop" => true
      */
-    private function soldPairs(Carbon $from, Carbon $to, array $shopIds): array
+    public function soldPairs(Carbon $from, Carbon $to, array $shopIds): array
     {
         if ($shopIds === []) {
             return [];
@@ -258,7 +258,7 @@ class UnsoldStock
      * @param  array<int, int>  $ids
      * @return array<int, array{name: string, group_id: ?int, group: ?string}>
      */
-    private function itemMeta(array $ids): array
+    public function itemMeta(array $ids): array
     {
         $out = [];
         foreach (array_chunk($ids, 500) as $chunk) {

@@ -1237,6 +1237,120 @@ class WidgetPayloads
         ];
     }
 
+    // ---------------------------------------------------------------- markdown and promo (Markdowns; slow stock at the SELL price, never cost)
+
+    private function markdownFooter(array $set): string
+    {
+        return __('No shelf-life data: slow stock, not expiry risk. Last :d days until yesterday, stock as of :date, as of :time. A signal to review.', [
+            'd' => $set['days'], 'date' => $set['stock_as_of'] ?? '—', 'time' => $set['as_of'],
+        ]).($set['truncated'] ? ' '.__('Long list cut: figures cover the largest pairs.') : '');
+    }
+
+    private function markdownCandidatesCount(array $o, string $diagram): array
+    {
+        $set = $this->data->get('markdown');
+        if (($set['empty'] ?? false) || ($set['stock_as_of'] ?? null) === null) {
+            return $this->empty();
+        }
+
+        $notReported = $set['not_reported'] > 0 ? ' · '.__(':count not reported by 1C', ['count' => $set['not_reported']]) : '';
+        if ($set['candidates'] === 0) {
+            return ['value' => '0', 'status' => 'ok', 'note' => __('no slow stock to review').$notReported, 'footer' => $this->markdownFooter($set)];
+        }
+
+        return [
+            'value' => (string) $set['candidates'],
+            'status' => 'warn',
+            'note' => __(':units units · ≈ :value at sell price', ['units' => $this->qty((float) $set['units']), 'value' => $this->money($set['value'])])
+                .($set['no_price'] > 0 ? ' · '.__(':n without price', ['n' => $set['no_price']]) : '').$notReported,
+            'footer' => $this->markdownFooter($set),
+        ];
+    }
+
+    private function markdownCandidatesByShop(array $o, string $diagram): array
+    {
+        $set = $this->data->get('markdown');
+        if (($set['empty'] ?? false) || ($set['stock_as_of'] ?? null) === null) {
+            return $this->empty();
+        }
+
+        $items = [];
+        foreach (array_slice($set['shops'], 0, WidgetCatalog::TOP_N_MAX) as $s) {
+            $items[] = [
+                'label' => $s['name'],
+                'value' => (float) $s['value'],
+                'text' => $this->money($s['value']),
+                'cells' => [$this->money($s['value']), (string) $s['pairs'], $this->qty((float) $s['units'])],
+                'status' => 'warn',
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('No slow stock to review.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+
+        return [
+            'columns' => [__('Value at sell price'), __('Pairs'), __('Units')],
+            'items' => $items,
+            'footer' => $this->markdownFooter($set),
+        ];
+    }
+
+    private function markdownTopItems(array $o, string $diagram): array
+    {
+        $set = $this->data->get('markdown');
+        if (($set['empty'] ?? false) || ($set['stock_as_of'] ?? null) === null) {
+            return $this->empty();
+        }
+
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+        $items = [];
+        foreach (array_slice($set['items'], 0, $n) as $i) {
+            $value = $i['value'] === null ? __('No price') : $this->money($i['value']);
+            $items[] = [
+                'label' => $i['item'],
+                'value' => (float) ($i['value'] ?? 0),
+                'text' => $i['value'] === null ? '—' : $this->money($i['value']),
+                'cells' => [$i['shop'], $value, $i['fresh'] ? __('Check expiry by hand') : ($i['depth'] === null ? '—' : $i['depth'].'%')],
+                'status' => 'warn',
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('No slow stock to review.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+
+        return [
+            'columns' => [__('Shop'), __('Value at sell price'), __('Suggested start')],
+            'items' => $items,
+            'footer' => $this->markdownFooter($set).' '.__('Depth is a suggested start to test and adjust.'),
+        ];
+    }
+
+    private function discountGiveawayByItem(array $o, string $diagram): array
+    {
+        $set = $this->data->get('markdown_discounts');
+        if (($set['empty'] ?? false) || ($set['pairs'] ?? 0) === 0) {
+            return $this->empty(['footer' => __('No discounted days found in the period.')]);
+        }
+
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+        $items = [];
+        foreach (array_slice($set['items'], 0, $n) as $i) {
+            $items[] = [
+                'label' => $i['item'],
+                'value' => (float) $i['give_away'],
+                'text' => $this->money($i['give_away']),
+                'cells' => [$i['shop'], $this->money($i['give_away']), $i['lift'] === null ? __('n/a') : '×'.$this->dec($i['lift'], 2)],
+                'status' => $i['cannibalised'] ? 'bad' : ($i['lift'] === null ? 'none' : 'ok'),
+            ];
+        }
+
+        return [
+            'columns' => [__('Shop'), __('Given away'), __('Lift')],
+            'items' => $items,
+            'footer' => __('n/a: not enough discounted or full-price days to judge the lift. Last :d days until yesterday, as of :time. Inferred from receipts, the cause is not visible.', ['d' => $set['days'], 'time' => $set['as_of']]),
+        ];
+    }
+
     private function syncFreshness(array $o, string $diagram): array
     {
         $set = $this->data->get('sync');

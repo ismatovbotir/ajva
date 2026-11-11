@@ -38,6 +38,8 @@ class WidgetCatalog
 
     private const DATA_HEALTH_RULE = 'Rule: the last 24 hours of the shops in view (main warehouse excluded) against the usual day of each shop (median of its last 28 days). A shop is judged only with a usual day of at least 20 receipts.';
 
+    private const MARKDOWN_RULE = 'Rule: the last 60 whole days ending yesterday, the shops in view (main warehouse excluded). Candidates are slow stock from the latest stock sync, not expiry risk (the system has no shelf-life data); value is at the sell price, never at cost. The suggested depth is a start to test and adjust. Discount lift is inferred from receipts and cannot see the cause (pay days, chain promos, price changes).';
+
     private const SALES_GAPS_RULE = 'Rule: the last 28 whole days ending yesterday, the shops in view (main warehouse excluded) against the benchmark of the chain\'s own good shops (not a target). An estimate, the levers overlap and are never added up. A shop is judged only above the minimum number of sale receipts.';
 
     /** @var array<string, Widget>|null */
@@ -97,6 +99,14 @@ class WidgetCatalog
                 ttl: 600, cost: 'medium', rule: self::SALES_GAPS_RULE),
             self::make('gap_availability_a_items', 'Class A items out, lost sales', 'Sales', 'Class A items that are out of stock now, per shop, with the estimated sales lost per day and the days out in the period.', 'by_item', ['table', 'bar'], 'sales_gaps',
                 ttl: 600, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::SALES_GAPS_RULE),
+            self::make('markdown_candidates_count', 'Markdown candidates', 'Sales', 'Slow stock to review for a markdown: shop and item pairs with no sale in the period, more than 90 days of cover or far above the max rule, with the value at the sell price.', 'single', ['kpi'], 'markdown',
+                ttl: 600, cost: 'medium', rule: self::MARKDOWN_RULE),
+            self::make('markdown_candidates_by_shop', 'Markdown candidates by shop', 'Sales', 'Value at the sell price of the slow stock to review, per shop in view.', 'by_shop', ['bar', 'table'], 'markdown',
+                ttl: 600, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], rule: self::MARKDOWN_RULE),
+            self::make('markdown_top_items', 'Markdown: items to review', 'Sales', 'The slow-stock pairs with the largest value at the sell price, with the suggested start depth to test and adjust.', 'by_item', ['table', 'bar'], 'markdown',
+                ttl: 600, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::MARKDOWN_RULE),
+            self::make('discount_giveaway_by_item', 'Discount give-away', 'Sales', 'Items sold on discounted days with the discount given away and the inferred sales lift. A lift needs enough discounted and full-price days, else n/a.', 'by_item', ['table', 'bar'], 'markdown_discounts',
+                ttl: 600, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::MARKDOWN_RULE),
             self::make('refund_rate', 'Refund rate', 'Receipts', 'Refunds as a share of sales (amount). Amber from 2 %, red from 5 % (at least 10 receipts).', 'single', ['kpi', 'gauge'], 'receipts',
                 comparison: true, ttl: 25),
             self::make('cancelled_rate', 'Cancelled receipts', 'Receipts', 'Cancelled receipts as a share of all receipts. Amber from 2 %, red from 5 % (at least 10 receipts).', 'single', ['kpi', 'gauge'], 'receipts',

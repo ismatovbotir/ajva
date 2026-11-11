@@ -2,7 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ItemsSyncLog;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class LocalItemsRequest extends FormRequest
 {
@@ -48,6 +52,33 @@ class LocalItemsRequest extends FormRequest
         }, $items);
 
         return ['items' => $items];
+    }
+
+    /** Writes one row to the items sync error log, then fails as usual (422). Logging never breaks the response. */
+    protected function failedValidation(Validator $validator): void
+    {
+        try {
+            $errors = $validator->errors();
+            $key = (string) ($errors->keys()[0] ?? '');
+            $items = $this->validationData()['items'] ?? [];
+            $item = preg_match('/^items\.(\d+)\./', $key, $m) && is_array($items[(int) $m[1]] ?? null) ? $items[(int) $m[1]] : null;
+            $id = is_array($item) && isset($item['id']) && is_numeric($item['id']) ? (int) $item['id'] : null;
+            $mark = is_array($item) && isset($item['mark']) && is_scalar($item['mark']) ? (string) $item['mark'] : null;
+
+            ItemsSyncLog::error(
+                ItemsSyncLog::STAGE_VALIDATION,
+                $key.': '.$errors->first().' ('.$errors->count().')',
+                $id,
+                null,
+                is_array($items) ? count($items) : null,
+                $item === null ? null : 'item '.($id ?? '?').($mark !== null ? ' / '.$mark : ''),
+                $this->ip(),
+            );
+        } catch (Throwable $e) {
+            Log::warning('Items sync validation log failed: '.$e->getMessage());
+        }
+
+        parent::failedValidation($validator);
     }
 
     /**

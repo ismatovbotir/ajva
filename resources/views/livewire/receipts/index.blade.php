@@ -141,7 +141,7 @@
         {{-- Mobile card list --}}
         <div class="max-h-[70vh] space-y-3 overflow-y-auto md:hidden">
             @foreach($receipts as $receipt)
-                <a href="{{ route('receipts.show', $receipt) }}" class="block">
+                <a href="{{ route('receipts.show', $receipt) }}" target="_blank" rel="noopener" class="block">
                     <x-ui.card>
                         <div class="flex items-center justify-between">
                             <div>
@@ -189,7 +189,7 @@
                                 <x-ui.badge :variant="$receipt->sell ? 'info' : 'warning'">{{ $receipt->sell ? __('Sell') : __('Refund') }}</x-ui.badge>
                             </td>
                             <td class="px-4 py-3 text-right text-sm">
-                                <x-ui.button variant="secondary" :href="route('receipts.show', $receipt)">{{ __('View') }}</x-ui.button>
+                                <x-ui.button variant="secondary" :href="route('receipts.show', $receipt)" target="_blank" rel="noopener">{{ __('View') }}</x-ui.button>
                             </td>
                         </tr>
                     @endforeach

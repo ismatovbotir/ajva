@@ -90,6 +90,10 @@
             @if($oneC['stock_date'])
                 <p class="text-xs text-slate-500">{{ __('Newest stock date') }}: {{ \Illuminate\Support\Carbon::parse($oneC['stock_date'])->format('d.m.Y') }}</p>
             @endif
+            @if($oneC['errors_today'] > 0)
+                <p class="mt-1 text-sm font-medium text-red-700" data-onec-errors>{{ __('Item load errors today') }}: {{ $oneC['errors_today'] }}</p>
+            @endif
+            <p class="text-xs"><a href="{{ route('monitoring.items-sync') }}" class="font-medium text-primary-700 hover:underline">{{ __('Items sync log') }}</a></p>
             <p class="mt-2 text-sm"><a href="{{ route('orders.index') }}" class="font-medium text-primary-700 hover:underline">{{ __('Go to orders') }}</a></p>
         </x-ui.card>
     </div>

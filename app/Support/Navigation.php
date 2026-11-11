@@ -29,6 +29,7 @@ class Navigation
             ]],
             ['label' => 'Sales growth', 'items' => [
                 ['label' => 'Sales gaps', 'route' => 'sales-gaps.index', 'icon' => 'trending-up'],
+                ['label' => 'Markdown and promo', 'route' => 'markdowns.index', 'icon' => 'receipt-percent'],
             ]],
             ['label' => 'Stock and supply', 'items' => [
                 ['label' => 'Out of stock', 'route' => 'warehouse.out-of-stock', 'icon' => 'archive', 'roles' => ['admin']],
@@ -48,6 +49,7 @@ class Navigation
             ['label' => 'Monitoring', 'roles' => ['admin'], 'items' => [
                 ['label' => 'Tasks', 'route' => 'monitoring.tasks', 'icon' => 'clock'],
                 ['label' => 'Data health', 'route' => 'data-health.index', 'icon' => 'pulse'],
+                ['label' => 'Items sync log', 'route' => 'monitoring.items-sync', 'icon' => 'sync'],
                 // Built by the order-receiving feature; the entry appears only once its route exists.
                 ['label' => 'Unconfirmed orders', 'route' => 'monitoring.unconfirmed-orders', 'icon' => 'exclamation'],
             ]],

@@ -53,7 +53,7 @@
                             <ul>
                                 @foreach ($group['rows'] as $row)
                                     <li>
-                                        <a href="{{ $row['url'] }}" data-search-result class="flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-primary-50 focus:bg-primary-50 focus:outline-none">
+                                        <a href="{{ $row['url'] }}" @if(str_contains((string) $row['url'], '/receipts/')) target="_blank" rel="noopener" @endif data-search-result class="flex items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-primary-50 focus:bg-primary-50 focus:outline-none">
                                             <span class="min-w-0 truncate font-medium text-slate-900">{{ $row['title'] }}</span>
                                             @if ($row['sub'] !== '')
                                                 <span class="shrink-0 truncate text-xs text-slate-500">{{ $row['sub'] }}</span>

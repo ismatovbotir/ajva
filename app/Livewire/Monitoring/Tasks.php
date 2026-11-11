@@ -218,15 +218,19 @@ class Tasks extends Component
     /**
      * Last data push from 1C: items are upserted (updated_at) on every items sync, stocks only carry the sync DAY.
      *
-     * @return array{at: ?Carbon, ago: ?string, stock_date: ?string, stale: bool}
+     * @return array{errors_today: int, at: ?Carbon, ago: ?string, stock_date: ?string, stale: bool}
      */
     private function oneC(): array
     {
-        $at = DB::table('items')->max('updated_at');
+        // The items sync log (one row per day) holds the real update time; items.updated_at is the fallback until a
+        // first batch has been logged.
+        $at = DB::table('item_sync_days')->max('last_success_at') ?: DB::table('items')->max('updated_at');
         $at = $at ? Carbon::parse($at) : null;
         $date = DB::table('stocks')->max('stock_date');
+        $errors = (int) DB::table('item_sync_days')->where('date', now()->toDateString())->value('error_count');
 
         return [
+            'errors_today' => $errors,
             'at' => $at,
             'ago' => $at?->diffForHumans(),
             'stock_date' => $date ? (string) $date : null,

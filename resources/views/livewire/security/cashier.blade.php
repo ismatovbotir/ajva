@@ -109,7 +109,7 @@
         <div class="space-y-2 md:hidden">
             @foreach($receipts as $r)
                 <x-ui.card wire:key="fc-{{ $r->id }}">
-                    <a href="{{ route('receipts.show', ['receipt' => $r->id]) }}" class="text-sm font-medium text-brand-700 hover:underline">#{{ $r->number }}</a>
+                    <a href="{{ route('receipts.show', ['receipt' => $r->id]) }}" target="_blank" rel="noopener" class="text-sm font-medium text-brand-700 hover:underline">#{{ $r->number }}</a>
                     <p class="text-xs text-slate-500">{{ substr((string) $r->created_at, 0, 16) }} · {{ $money($r->total) }}</p>
                     <p class="mt-1 text-xs">{{ implode(', ', $reasons($r)) }}</p>
                 </x-ui.card>
@@ -127,7 +127,7 @@
                 <tbody class="divide-y divide-slate-100 text-sm">
                 @foreach($receipts as $r)
                     <tr wire:key="fr-{{ $r->id }}">
-                        <td class="px-3 py-2"><a href="{{ route('receipts.show', ['receipt' => $r->id]) }}" class="font-medium text-brand-700 hover:underline">#{{ $r->number }}</a></td>
+                        <td class="px-3 py-2"><a href="{{ route('receipts.show', ['receipt' => $r->id]) }}" target="_blank" rel="noopener" class="font-medium text-brand-700 hover:underline">#{{ $r->number }}</a></td>
                         <td class="px-3 py-2 tabular-nums">{{ substr((string) $r->created_at, 0, 16) }}</td>
                         <td class="px-3 py-2 text-right tabular-nums">{{ $money($r->total) }}</td>
                         <td class="px-3 py-2 text-right tabular-nums">{{ $money($r->discount) }}</td>

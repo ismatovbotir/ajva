@@ -131,9 +131,9 @@
                             · {{ __('Sample') }}: {{ $w['sample'] }}
                         </p>
                         <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                            <a href="{{ $w['evidence_url'] }}" class="font-medium text-brand-700 hover:underline">{{ __('Review') }}</a>
+                            <a href="{{ $w['evidence_url'] }}" target="_blank" rel="noopener" class="font-medium text-brand-700 hover:underline">{{ __('Review') }}</a>
                             @foreach($w['receipt_ids'] as $rid)
-                                <a href="{{ route('receipts.show', ['receipt' => $rid]) }}" class="text-slate-600 underline">#{{ $rid }}</a>
+                                <a href="{{ route('receipts.show', ['receipt' => $rid]) }}" target="_blank" rel="noopener" class="text-slate-600 underline">#{{ $rid }}</a>
                             @endforeach
                         </div>
                     </x-ui.card>
@@ -175,10 +175,10 @@
                                     </td>
                                     <td class="px-3 py-2 text-right tabular-nums">{{ $w['sample'] }}</td>
                                     <td class="px-3 py-2">
-                                        <a href="{{ $w['evidence_url'] }}" class="font-medium text-brand-700 hover:underline">{{ __('Review') }}</a>
+                                        <a href="{{ $w['evidence_url'] }}" target="_blank" rel="noopener" class="font-medium text-brand-700 hover:underline">{{ __('Review') }}</a>
                                         <div class="mt-1 flex flex-wrap gap-x-2 text-xs">
                                             @foreach($w['receipt_ids'] as $rid)
-                                                <a href="{{ route('receipts.show', ['receipt' => $rid]) }}" class="text-slate-600 underline">#{{ $rid }}</a>
+                                                <a href="{{ route('receipts.show', ['receipt' => $rid]) }}" target="_blank" rel="noopener" class="text-slate-600 underline">#{{ $rid }}</a>
                                             @endforeach
                                         </div>
                                     </td>

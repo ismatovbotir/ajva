@@ -163,7 +163,7 @@ class SalesGaps
      *
      * @return array<int, array<string, array<string, float|int>>> shop id => date => figures
      */
-    private function receiptsPerDay(Carbon $from, Carbon $to, array $shopIds, ?float $cut): array
+    public function receiptsPerDay(Carbon $from, Carbon $to, array $shopIds, ?float $cut): array
     {
         $customer = ReceiptAnalytics::CUSTOMER;
         $limit = $cut ?? 1e15;
@@ -201,7 +201,7 @@ class SalesGaps
      *
      * @return array<int, array<string, true>> shop id => date => true
      */
-    private function silentDays(array $perDay, Carbon $refFrom, Carbon $from, Carbon $to): array
+    public function silentDays(array $perDay, Carbon $refFrom, Carbon $from, Carbon $to): array
     {
         if (! config('inventory.feed_aware_censoring', true)) {
             return [];

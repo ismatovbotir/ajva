@@ -119,6 +119,11 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 2.25l8.25 3v6.1c0 4.7-3.2 8.9-8.25 10.4-5.05-1.5-8.25-5.7-8.25-10.4v-6.1L12 2.25zM12 8.25v4.5m0 3h.008v.008H12v-.008z" />
         </svg>
         @break
+    @case('sync')
+        <svg xmlns="http://www.w3.org/2000/svg" class="{{ $classes }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+        </svg>
+        @break
     @case('pulse')
         <svg xmlns="http://www.w3.org/2000/svg" class="{{ $classes }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h3.75l2.25-6 4.5 12 2.25-6H21" />
@@ -194,6 +199,11 @@
     @case('refresh')
         <svg xmlns="http://www.w3.org/2000/svg" class="{{ $classes }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+        @break
+    @case('receipt-percent')
+        <svg xmlns="http://www.w3.org/2000/svg" class="{{ $classes }}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
         </svg>
         @break
     @case('trending-up')

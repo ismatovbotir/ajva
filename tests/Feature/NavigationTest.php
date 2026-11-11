@@ -30,10 +30,10 @@ class NavigationTest extends TestCase
 
         $this->assertSame(['dashboard'], $byGroup['Home']);
         $this->assertSame(['receipts.index', 'receipt-analytics.index', 'analytics.index'], $byGroup['Sales']);
-        $this->assertSame(['sales-gaps.index'], $byGroup['Sales growth']);
+        $this->assertSame(['sales-gaps.index', 'markdowns.index'], $byGroup['Sales growth']);
         $this->assertSame(['warehouse.out-of-stock', 'ordering.index', 'orders.index', 'unsold-stock.index', 'assortment.index'], $byGroup['Stock and supply']);
         $this->assertSame(['shops.index', 'items.index', 'groups.index', 'categories.index', 'prices.index', 'pos.index'], $byGroup['Catalog']);
-        $this->assertSame(['monitoring.tasks', 'data-health.index', 'monitoring.unconfirmed-orders'], $byGroup['Monitoring']);
+        $this->assertSame(['monitoring.tasks', 'data-health.index', 'monitoring.items-sync', 'monitoring.unconfirmed-orders'], $byGroup['Monitoring']);
         $this->assertSame(['security.warnings'], $byGroup['Security']);
         $this->assertSame(['telegram.status', 'telegram.users', 'telegram.messages'], $byGroup['Telegram']);
         $this->assertSame(['settings.mcp', 'settings.monitors', 'settings.warehouse', 'settings.order-rules', 'settings.receipts-sync', 'users.index'], $byGroup['Settings']);
@@ -44,7 +44,7 @@ class NavigationTest extends TestCase
     {
         $this->assertEqualsCanonicalizing([
             'dashboard', 'receipts.index', 'receipt-analytics.index', 'analytics.index',
-            'orders.index', 'unsold-stock.index', 'assortment.index', 'sales-gaps.index',
+            'orders.index', 'unsold-stock.index', 'assortment.index', 'sales-gaps.index', 'markdowns.index',
             'shops.index', 'items.index', 'groups.index', 'categories.index', 'prices.index', 'pos.index',
         ], $this->routes('operator'));
 
