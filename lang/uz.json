@@ -1897,7 +1897,7 @@
     "rule min and max are both 0": "qoidada min va max ikkalasi 0",
     "counted, not judged": "sanaldi, baholanmadi",
     "Left out: :y pairs in shops with too little history, :n pairs of new items, :o pairs with an open order.": "Chiqarib tashlandi: tarixi juda qisqa do'konlarda :y juftlik, yangi tovarlarning :n juftligi, ochiq buyurtmali :o juftlik.",
-    "Markdown candidates": "Chegirma nomzodlari",
+    "Markdown candidates": "Narxni tushirish nomzodlari",
     "Depth is a suggested start, test and adjust; the deeper of the cover-based and the last-sale-based rung wins. Consider a transfer to a shop that sells the item before a markdown.": "Chuqurlik taklif qilingan boshlanish, sinab ko'ring va sozlang; zaxira va oxirgi sotuvga asoslangan pog'onalarning chuqurrog'i tanlanadi. Chegirmadan oldin tovarni sotayotgan do'konga ko'chirishni ko'rib chiqing.",
     "All reasons": "Barcha sabablar",
     "Value, from": "Qiymat, dan",
@@ -1937,7 +1937,6 @@
     "Episodes (inferred, not a recorded markdown)": "Epizodlar (taxmin qilingan, qayd etilgan chegirma emas)",
     "before :b, during :d, after :a per day": "oldin :b, paytida :d, keyin :a kuniga",
     "Only the pairs with the largest give-away were analysed (:n).": "Faqat eng katta berib yuborilgan summali juftliklar tahlil qilindi (:n).",
-    "Markdown candidates": "Narxni tushirish nomzodlari",
     "Slow stock to review for a markdown: shop and item pairs with no sale in the period, more than 90 days of cover or far above the max rule, with the value at the sell price.": "Narxni tushirish uchun ko'rib chiqiladigan sekin qoldiq: davrda sotuvsiz, 90 kundan ortiq zaxirali yoki maksimal qoidadan ancha yuqori do'kon va tovar juftliklari, sotuv narxidagi qiymati bilan.",
     "Markdown candidates by shop": "Narxni tushirish nomzodlari do'konlar bo'yicha",
     "Value at the sell price of the slow stock to review, per shop in view.": "Ko'rib chiqiladigan sekin qoldiqning sotuv narxidagi qiymati, ko'rinadigan do'konlar bo'yicha.",
@@ -1969,5 +1968,8 @@
     "Errors": "Xatolar",
     "Latest errors": "Oxirgi xatolar",
     "No errors.": "Xatolar yo'q.",
-    "Batch size": "Paket hajmi"
+    "Batch size": "Paket hajmi",
+    "Error log cleared.": "Xatolar jurnali tozalandi.",
+    "Delete all items sync errors? The daily update times stay.": "Mahsulotlar sinxronizatsiyasining barcha xatolari o'chirilsinmi? Kunlik yangilanish vaqtlari saqlanadi.",
+    "Clear log": "Jurnalni tozalash"
 }

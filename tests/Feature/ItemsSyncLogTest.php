@@ -146,4 +146,23 @@ class ItemsSyncLogTest extends TestCase
             ->assertSee('11:42')
             ->assertSee('data-onec-errors', false);
     }
+
+    public function test_clear_log_deletes_errors_keeps_the_update_time_and_is_admin_only(): void
+    {
+        $this->travelTo(now()->setTime(9, 0));
+        $this->local()->postJson('/api/items', $this->batch(2))->assertStatus(202);
+        ItemsSyncLog::error(ItemsSyncLog::STAGE_VALIDATION, 'boom');
+        $this->assertSame(1, DB::table('item_sync_errors')->count());
+
+        \Livewire\Livewire::actingAs(User::factory()->create(['role' => 'operator']))
+            ->test(\App\Livewire\Monitoring\ItemsSync::class)->assertForbidden();
+
+        \Livewire\Livewire::actingAs(User::factory()->create())
+            ->test(\App\Livewire\Monitoring\ItemsSync::class)->call('clearLog');
+
+        $this->assertSame(0, DB::table('item_sync_errors')->count());
+        $day = DB::table('item_sync_days')->first();
+        $this->assertSame(0, (int) $day->error_count);
+        $this->assertNotNull($day->last_success_at);
+    }
 }

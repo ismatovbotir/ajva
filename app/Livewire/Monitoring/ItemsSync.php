@@ -17,6 +17,17 @@ class ItemsSync extends Component
         abort_unless(auth()->user()?->isAdmin(), 403);
     }
 
+    /** Deletes the error rows and zeroes the daily error counters. The day rows (update times, batches, items) stay. */
+    public function clearLog(): void
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        DB::table('item_sync_errors')->delete();
+        DB::table('item_sync_days')->where('error_count', '>', 0)->update(['error_count' => 0]);
+
+        session()->flash('status', __('Error log cleared.'));
+    }
+
     public function render()
     {
         $days = DB::table('item_sync_days')->orderByDesc('date')->limit(30)->get()->map(function ($d) {

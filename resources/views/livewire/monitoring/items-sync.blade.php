@@ -37,7 +37,15 @@
         </x-ui.card>
     @endif
 
-    <h2 class="mb-2 mt-6 text-sm font-semibold text-slate-700">{{ __('Latest errors') }}</h2>
+    @if(session('status'))
+        <p class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-cleared>{{ session('status') }}</p>
+    @endif
+    <div class="mb-2 mt-6 flex items-center justify-between gap-3">
+        <h2 class="text-sm font-semibold text-slate-700">{{ __('Latest errors') }}</h2>
+        @if(! $errors->isEmpty())
+            <x-ui.button variant="danger" wire:click="clearLog" wire:confirm="{{ __('Delete all items sync errors? The daily update times stay.') }}" data-clear-log>{{ __('Clear log') }}</x-ui.button>
+        @endif
+    </div>
     @if($errors->isEmpty())
         <x-ui.card><p class="text-sm text-slate-500" data-no-errors>{{ __('No errors.') }}</p></x-ui.card>
     @else
