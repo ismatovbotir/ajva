@@ -88,4 +88,20 @@ class ShopDetailsTest extends TestCase
         $this->assertNull($shop->fresh()->area_m2);
         $this->assertNull($shop->fresh()->map_url);
     }
+
+    public function test_disabled_shop_is_saved_and_hidden_from_report_selects(): void
+    {
+        $shop = Shop::factory()->create(['name' => 'ZZ Closed Shop']);
+        $admin = User::factory()->create();
+
+        Livewire::actingAs($admin)->test(Show::class, ['shop' => $shop])
+            ->call('edit')->set('isDisabled', true)->call('save')->assertHasNoErrors();
+        $this->assertTrue($shop->fresh()->is_disabled);
+
+        Livewire::actingAs($admin)->test(\App\Livewire\Assortment\Index::class)->assertDontSee('ZZ Closed Shop');
+
+        Livewire::actingAs($admin)->test(Show::class, ['shop' => $shop])
+            ->call('edit')->set('isDisabled', false)->call('save');
+        Livewire::actingAs($admin)->test(\App\Livewire\Assortment\Index::class)->assertSee('ZZ Closed Shop');
+    }
 }

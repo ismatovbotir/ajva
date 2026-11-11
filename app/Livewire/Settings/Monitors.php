@@ -275,7 +275,7 @@ class Monitors extends Component
 
         return view('livewire.settings.monitors', [
             'monitors' => Monitor::query()->with(['shops:id,name', 'users:id,name'])->orderBy('is_template')->orderBy('name')->orderBy('id')->get(),
-            'shops' => Shop::query()->orderBy('name')->get(['id', 'name']),
+            'shops' => Shop::query()->enabled()->orderBy('name')->get(['id', 'name']),
             'warehouse' => Warehouse::shop(),
             'roleOptions' => [UserRole::Operator, UserRole::Monitor],
             'selectedUsers' => $selected === [] ? collect() : User::query()->whereIn('id', $selected)->orderBy('name')->get(['id', 'name', 'email', 'is_active']),

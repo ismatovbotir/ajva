@@ -53,7 +53,7 @@ class Unconfirmed extends Component
 
         return view('livewire.orders.unconfirmed', [
             'rows' => $rows,
-            'shops' => ShopAccess::restrictTo(DB::table('shops'), 'shops.id', $ids)->orderBy('name')->get(['id', 'name']),
+            'shops' => ShopAccess::restrictTo(DB::table('shops')->where('is_disabled', false), 'shops.id', $ids)->orderBy('name')->get(['id', 'name']),
             'noShops' => ShopAccess::hasNone(),
             'isAdmin' => Gate::allows('generate', Order::class),
             'types' => UnconfirmedOrders::TYPES,

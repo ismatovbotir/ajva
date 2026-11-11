@@ -132,7 +132,7 @@
     "MCP server": "MCP server",
     "Let AI assistants read sales, stock and receipts through a read-only endpoint.": "AI yordamchilariga savdo, qoldiq va cheklarni faqat oʻqish uchun endpoint orqali koʻrish imkonini bering.",
     "Ready": "Tayyor",
-    "Disabled": "Oʻchirilgan",
+    "Disabled": "O'chirilgan",
     "No token yet": "Token hali yoʻq",
     "The endpoint answers only while it is enabled and a token exists.": "Endpoint faqat yoqilgan va token mavjud boʻlganda javob beradi.",
     "Enable MCP server": "MCP serverni yoqish",
@@ -1747,5 +1747,6 @@
     "The scheduler has not reported yet: check the cron job.": "Rejalashtiruvchi hali xabar bermadi: cron vazifasini tekshiring.",
     "The scheduler has not reported for more than 3 minutes: check the cron job.": "Rejalashtiruvchi 3 daqiqadan ortiq xabar bermadi: cron vazifasini tekshiring.",
     "The queue worker looks stopped: jobs have been waiting for more than 2 minutes.": "Navbat ishchisi toʻxtagan koʻrinadi: vazifalar 2 daqiqadan ortiq kutmoqda.",
-    ":count background jobs failed.": ":count ta fon vazifasi xato bilan tugadi."
+    ":count background jobs failed.": ":count ta fon vazifasi xato bilan tugadi.",
+    "Disable this shop (hide it from the shop selectors of reports)": "Bu do'konni o'chirish (hisobotlardagi do'kon tanlovidan yashirish)"
 }

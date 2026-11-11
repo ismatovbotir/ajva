@@ -171,7 +171,7 @@ class Index extends Component
      */
     private function tabs()
     {
-        return $this->cached('tabs', fn () => ShopAccess::restrict(DB::table('shops'), 'id')
+        return $this->cached('tabs', fn () => ShopAccess::restrict(DB::table('shops')->where('is_disabled', false), 'id')
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn ($s) => ['id' => (int) $s->id, 'name' => $s->name])

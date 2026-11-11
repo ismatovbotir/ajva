@@ -245,7 +245,7 @@ class OrderRules extends Component
     public function render()
     {
         $warehouseId = Warehouse::shopId();
-        $shops = Shop::query()->when($warehouseId !== null, fn ($q) => $q->whereKeyNot($warehouseId))->orderBy('name')->get(['id', 'name']);
+        $shops = Shop::query()->enabled()->when($warehouseId !== null, fn ($q) => $q->whereKeyNot($warehouseId))->orderBy('name')->get(['id', 'name']);
         $effective = OrderRule::effective($shops->pluck('id')->all());
         $own = OrderRule::query()->whereIn('shop_id', $shops->pluck('id'))->get()->keyBy('shop_id');
 

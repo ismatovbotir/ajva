@@ -78,7 +78,7 @@ class Index extends Component
     /** Shops the user may pick from. */
     private function availableShops()
     {
-        return ShopAccess::restrict(DB::table('shops'), 'id')->orderBy('name')->get(['id', 'name']);
+        return ShopAccess::restrict(DB::table('shops')->where('is_disabled', false), 'id')->orderBy('name')->get(['id', 'name']);
     }
 
     /** Selected shops intersected with the viewer's scope (never trust client ids). */

@@ -83,7 +83,7 @@ class Index extends Component
     {
         return view('livewire.pos.index', [
             'poses' => ShopAccess::restrict(Pos::query(), 'pos.shop_id')->with('shop')->orderBy('name')->paginate(10),
-            'shops' => ShopAccess::restrict(Shop::query(), 'shops.id')->orderBy('name')->get(),
+            'shops' => ShopAccess::restrict(Shop::query()->enabled(), 'shops.id')->orderBy('name')->get(),
             'noShops' => ShopAccess::hasNone(),
         ]);
     }

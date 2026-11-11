@@ -22,6 +22,8 @@ class Show extends Component
 
     public string $mapUrl = '';
 
+    public bool $isDisabled = false;
+
     public bool $editing = false;
 
     public function edit(): void
@@ -29,6 +31,7 @@ class Show extends Component
         abort_unless(auth()->user()?->isAdmin(), 403);
         $this->areaM2 = $this->shop->area_m2 !== null ? rtrim(rtrim((string) $this->shop->area_m2, '0'), '.') : '';
         $this->mapUrl = (string) $this->shop->map_url;
+        $this->isDisabled = (bool) $this->shop->is_disabled;
         $this->resetErrorBag();
         $this->editing = true;
     }
@@ -55,6 +58,7 @@ class Show extends Component
         $this->shop->forceFill([
             'area_m2' => $data['areaM2'] === '' || $data['areaM2'] === null ? null : $data['areaM2'],
             'map_url' => $data['mapUrl'] === '' ? null : $data['mapUrl'],
+            'is_disabled' => $this->isDisabled,
         ])->save();
 
         $this->editing = false;

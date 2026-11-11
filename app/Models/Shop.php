@@ -17,14 +17,22 @@ class Shop extends Model
         'name',
         'area_m2',
         'map_url',
+        'is_disabled',
     ];
 
     protected $casts = [
         'area_m2' => 'decimal:2',
+        'is_disabled' => 'boolean',
     ];
 
     /** Hosts a shop map link may point to (Yandex Maps, incl. short links). */
     public const MAP_HOST_PATTERN = '#^https://([a-z0-9-]+\.)*(yandex\.[a-z]{2,3}(\.[a-z]{2})?|ya\.ru)(/|\?|$)#i';
+
+    /** Shops that are not switched off in the shop settings (shown in report select menus). */
+    public function scopeEnabled($query)
+    {
+        return $query->where($query->getModel()->getTable().'.is_disabled', false);
+    }
 
     public function pos(): HasMany
     {

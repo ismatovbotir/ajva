@@ -31,6 +31,10 @@
                            class="block h-11 w-full rounded-lg border-slate-300 bg-white px-3.5 text-[15px] shadow-sm placeholder:text-slate-400 focus:border-primary-500 focus:ring-primary-500">
                     @error('mapUrl') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
+                <label class="flex items-center gap-2 text-sm text-slate-800 md:col-span-2">
+                    <input type="checkbox" wire:model="isDisabled" class="h-5 w-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
+                    {{ __('Disable this shop (hide it from the shop selectors of reports)') }}
+                </label>
                 <p class="text-sm text-slate-500 md:col-span-2">{{ __('These two fields are kept only here. 1C does not send them and never overwrites them.') }}</p>
                 <div class="flex justify-end gap-2 md:col-span-2">
                     <x-ui.button type="button" variant="secondary" wire:click="$set('editing', false)">{{ __('Cancel') }}</x-ui.button>
@@ -38,6 +42,9 @@
                 </div>
             </form>
         @else
+            @if($shop->is_disabled)
+                <p class="mt-3 inline-block rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">{{ __('Disabled') }}</p>
+            @endif
             <dl class="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
                     <dt class="text-xs font-medium text-slate-500">{{ __('Area, m²') }}</dt>

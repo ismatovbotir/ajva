@@ -238,7 +238,7 @@ class Index extends Component
             'users' => $users,
             'roles' => UserRole::cases(),
             'editing' => $this->userId ? User::query()->find($this->userId, ['id', 'is_active', 'telegram_chat_id']) : null,
-            'shops' => Shop::query()->orderBy('name')->get(['id', 'name']),
+            'shops' => Shop::query()->enabled()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 }
