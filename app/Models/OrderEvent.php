@@ -61,7 +61,9 @@ class OrderEvent extends Model
             'item_id' => $itemId,
             'old_qty' => $oldQty,
             'new_qty' => $newQty,
-            'note' => $note,
+            // The column is 255 wide; MariaDB (strict) rejects longer text, SQLite does not. Full lists live elsewhere
+            // (orders.review_exceptions, orders.comment).
+            'note' => $note === null ? null : mb_substr($note, 0, 255),
             'created_at' => now(),
         ]);
     }

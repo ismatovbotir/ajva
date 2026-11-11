@@ -46,6 +46,28 @@ return [
         Tools\OrderRulesReport::class,
         Tools\ListMonitors::class,
         Tools\WarehouseOutOfStock::class,
+        Tools\ListTelegramMessages::class,
+        Tools\GetTelegramMessage::class,
+        Tools\TelegramInboxAnalysis::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Telegram keyword stop words
+    |--------------------------------------------------------------------------
+    |
+    | Words (3+ letters; shorter ones are skipped anyway) that telegram_inbox_analysis leaves out of its
+    | keyword counts. Minimal Uzbek / Russian / English list; extend as needed.
+    |
+    */
+
+    'telegram_stop_words' => [
+        // English
+        'the', 'and', 'for', 'you', 'are', 'was', 'not', 'with', 'this', 'that', 'have', 'from', 'what', 'how', 'can', 'please', 'thanks', 'thank', 'hello',
+        // Uzbek
+        'bor', 'yoq', 'yo\'q', 'emas', 'men', 'sen', 'biz', 'siz', 'bu', 'va', 'bilan', 'uchun', 'qanday', 'nima', 'iltimos', 'rahmat', 'salom', 'assalomu', 'alaykum', 'kerak', 'ham', 'lekin', 'yana', 'endi', 'bir',
+        // Russian
+        'это', 'как', 'что', 'для', 'при', 'или', 'все', 'вот', 'мне', 'нет', 'так', 'уже', 'еще', 'есть', 'был', 'была', 'будет', 'спасибо', 'пожалуйста', 'привет', 'здравствуйте', 'добрый', 'день',
     ],
 
 ];
