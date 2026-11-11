@@ -25,11 +25,12 @@ class NavigationTest extends TestCase
     {
         $groups = Navigation::groups('admin');
 
-        $this->assertSame(['Home', 'Sales', 'Stock and supply', 'Catalog', 'Monitoring', 'Security', 'Telegram', 'Settings'], array_column($groups, 'label'));
+        $this->assertSame(['Home', 'Sales', 'Sales growth', 'Stock and supply', 'Catalog', 'Monitoring', 'Security', 'Telegram', 'Settings'], array_column($groups, 'label'));
         $byGroup = collect($groups)->mapWithKeys(fn ($g) => [$g['label'] => array_column($g['items'], 'route')]);
 
         $this->assertSame(['dashboard'], $byGroup['Home']);
         $this->assertSame(['receipts.index', 'receipt-analytics.index', 'analytics.index'], $byGroup['Sales']);
+        $this->assertSame(['sales-gaps.index'], $byGroup['Sales growth']);
         $this->assertSame(['warehouse.out-of-stock', 'ordering.index', 'orders.index', 'unsold-stock.index', 'assortment.index'], $byGroup['Stock and supply']);
         $this->assertSame(['shops.index', 'items.index', 'groups.index', 'categories.index', 'prices.index', 'pos.index'], $byGroup['Catalog']);
         $this->assertSame(['monitoring.tasks', 'data-health.index', 'monitoring.unconfirmed-orders'], $byGroup['Monitoring']);
@@ -43,7 +44,7 @@ class NavigationTest extends TestCase
     {
         $this->assertEqualsCanonicalizing([
             'dashboard', 'receipts.index', 'receipt-analytics.index', 'analytics.index',
-            'orders.index', 'unsold-stock.index', 'assortment.index',
+            'orders.index', 'unsold-stock.index', 'assortment.index', 'sales-gaps.index',
             'shops.index', 'items.index', 'groups.index', 'categories.index', 'prices.index', 'pos.index',
         ], $this->routes('operator'));
 
@@ -76,7 +77,7 @@ class NavigationTest extends TestCase
         app()->setLocale('en');
 
         $admin = $this->actingAs(User::factory()->create())->get('/')->assertOk();
-        foreach (['Sales', 'Stock and supply', 'Catalog', 'Monitoring', 'Security', 'Telegram', 'Settings'] as $group) {
+        foreach (['Sales', 'Sales growth', 'Stock and supply', 'Catalog', 'Monitoring', 'Security', 'Telegram', 'Settings'] as $group) {
             $admin->assertSee($group);
         }
         $admin->assertSee('data-search-button', false)->assertSee('data-global-search', false);

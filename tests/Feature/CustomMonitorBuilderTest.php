@@ -627,6 +627,7 @@ class CustomMonitorBuilderTest extends TestCase
             'fmcg_buyer' => ['top_items', 'low_cover_items', 'margin_pct', 'profit_by_shop', 'sync_freshness'],
             'receipts' => ['receipt_count', 'sales_revenue', 'avg_check', 'basket_size', 'hourly_sales', 'payment_mix', 'receipt_ticker', 'refund_rate', 'cancelled_rate', 'tills_active', 'discount_rate', 'shop_leaderboard'],
             'assortment' => ['a_items_out', 'unsold_items', 'wh_out_of_stock', 'customer_share', 'abc_mix', 'abc_xyz_matrix', 'unsold_by_group'],
+            'sales_growth' => ['gap_availability_lost', 'gap_check_by_shop', 'gap_card_share_by_shop', 'gap_availability_a_items'],
             'security' => ['security_warnings_count', 'security_cancelled_rate', 'security_off_hours_today', 'security_number_gaps_duplicates', 'security_refund_by_cashier', 'security_discount_by_cashier', 'security_silent_shops', 'security_unusual_baskets', 'security_integrity_flags'],
             'blank' => [],
         ];

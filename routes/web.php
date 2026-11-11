@@ -98,6 +98,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/receipt-analytics', ReceiptAnalyticsIndex::class)->name('receipt-analytics.index');
         Route::get('/assortment', \App\Livewire\Assortment\Index::class)->name('assortment.index');
         Route::get('/unsold-stock', \App\Livewire\UnsoldStock\Index::class)->name('unsold-stock.index');
+        Route::get('/sales-gaps', \App\Livewire\SalesGaps\Index::class)->name('sales-gaps.index');
         Route::get('/orders', OrdersIndex::class)->name('orders.index');
         Route::get('/orders/{order}', OrdersShow::class)->name('orders.show');
         Route::get('/monitoring/unconfirmed-orders', \App\Livewire\Orders\Unconfirmed::class)->name('monitoring.unconfirmed-orders');

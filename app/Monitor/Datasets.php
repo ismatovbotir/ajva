@@ -9,6 +9,7 @@ use App\Services\DataHealth;
 use App\Services\ForecastService;
 use App\Services\OrderRecommendations;
 use App\Services\ReceiptsMetrics;
+use App\Services\SalesGaps;
 use App\Services\SalesMetrics;
 use App\Services\SecurityWarnings;
 use App\Services\UnsoldStock;
@@ -94,8 +95,55 @@ class Datasets
             'security_week' => $this->securityWeek(),
             'security_today' => $this->securityToday(),
             'data_health' => $this->dataHealth(),
+            'sales_gaps' => $this->salesGaps(),
             default => [],
         };
+    }
+
+    /**
+     * Sales gaps (SalesGaps, the last 28 whole days ending yesterday): only the small figures the four gap widgets draw.
+     * Benchmarks are chain-wide values (never another shop's figures); shop rows are the shops in view; no cost, no cashier.
+     */
+    private function salesGaps(): array
+    {
+        $now = $this->scope->now->copy();
+        $to = $now->copy()->subDay();
+        $from = $to->copy()->subDays(27);
+        $r = app(SalesGaps::class)->build($from, $to, $this->shopList(), $now);
+        if ($r === []) {
+            return ['shops' => [], 'items' => []];
+        }
+
+        $shops = [];
+        $items = [];
+        foreach ($r['shops'] as $s) {
+            $a = $s['availability'];
+            $shops[] = [
+                'name' => $s['name'], 'receipts' => $s['receipts'], 'silent_days' => $s['silent_days'],
+                'check' => ['status' => $s['check']['status'], 'flag' => $s['check']['flag'], 'gap_pct' => $s['check']['gap_pct'],
+                    'trim_check' => $s['check']['trim_check'], 'recoverable' => $s['check']['recoverable_capped']],
+                'card' => ['status' => $s['card']['status'], 'flag' => $s['card']['flag'], 'share' => $s['card']['share'],
+                    'target' => $s['card']['target'], 'uplift' => $s['card']['uplift']],
+                'avail' => ['out_a' => $a['out_a'], 'valued' => $a['valued'], 'unknown' => $a['unknown'], 'no_price' => $a['no_price'],
+                    'not_reported' => $a['not_reported'], 'lost_per_day' => $a['lost_per_day']],
+            ];
+            foreach ($a['items'] as $i) {
+                $items[] = ['shop' => $s['name'], 'item' => $i['name'], 'state' => $i['state'], 'per_day' => $i['per_day'], 'days_out' => $i['days_out']];
+            }
+        }
+        usort($items, fn (array $x, array $y) => [$y['state'] === 'valued', $y['per_day'], $x['item']] <=> [$x['state'] === 'valued', $x['per_day'], $y['item']]);
+
+        return [
+            'as_of' => $now->format('H:i'),
+            'days' => $r['window']['days'],
+            'stock_as_of' => $r['stock_as_of'],
+            'min_receipts' => (int) config('sales_gaps.min_receipts'),
+            'check' => ['value' => $r['benchmarks']['check']['value'], 'basis' => $r['benchmarks']['check']['basis'], 'shops' => $r['benchmarks']['check']['shops']],
+            'card' => ['value' => $r['benchmarks']['card']['value'], 'basis' => $r['benchmarks']['card']['basis'], 'shops' => $r['benchmarks']['card']['shops'],
+                'reason' => $r['benchmarks']['card']['reason'], 'card_receipts' => $r['benchmarks']['card']['card_receipts']],
+            'shops' => $shops,
+            'items' => array_slice($items, 0, WidgetCatalog::TOP_N_MAX),
+        ];
     }
 
     private function receipts(): array

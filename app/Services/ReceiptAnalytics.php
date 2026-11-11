@@ -183,8 +183,8 @@ class ReceiptAnalytics
             })->all();
     }
 
-    /** SQL: the receipt carries customer / loyalty data in `aos` (null, [] and {} mean no customer). */
-    private const CUSTOMER = "(receipts.aos IS NOT NULL AND receipts.aos NOT IN ('[]', '{}', 'null', ''))";
+    /** SQL: the receipt carries customer / loyalty data in `aos` (null, [] and {} mean no customer). Shared with SalesGaps. */
+    public const CUSTOMER = "(receipts.aos IS NOT NULL AND receipts.aos NOT IN ('[]', '{}', 'null', ''))";
 
     /**
      * Sale receipts with vs without customer (loyalty) data: share, revenue,

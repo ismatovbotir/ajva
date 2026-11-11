@@ -83,6 +83,13 @@
             @if($sync['urlMissing'])
                 <p class="mt-2 flex items-start gap-1.5 text-xs text-amber-700" data-sync-url-missing><x-icon name="exclamation" class="h-4 w-4 shrink-0" />{{ __('The 1C orders address (ONEC_ORDERS_URL) is not set, orders wait in the queue.') }}</p>
             @endif
+            <p class="mt-3 border-t border-slate-100 pt-2 text-xs uppercase tracking-wide text-slate-500">{{ __('Last 1C data update') }}</p>
+            <p class="text-sm {{ $oneC['stale'] ? 'font-medium text-amber-700' : 'text-slate-700' }}" data-onec-update>
+                @if($oneC['at']){{ $oneC['at']->format('d.m.Y H:i') }} · {{ $oneC['ago'] }}@else{{ __('Never') }}@endif
+            </p>
+            @if($oneC['stock_date'])
+                <p class="text-xs text-slate-500">{{ __('Newest stock date') }}: {{ \Illuminate\Support\Carbon::parse($oneC['stock_date'])->format('d.m.Y') }}</p>
+            @endif
             <p class="mt-2 text-sm"><a href="{{ route('orders.index') }}" class="font-medium text-primary-700 hover:underline">{{ __('Go to orders') }}</a></p>
         </x-ui.card>
     </div>

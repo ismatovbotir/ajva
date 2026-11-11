@@ -27,6 +27,9 @@ class Navigation
                 ['label' => 'Receipt analytics', 'route' => 'receipt-analytics.index', 'icon' => 'chart-pie'],
                 ['label' => 'Analytics', 'route' => 'analytics.index', 'icon' => 'chart'],
             ]],
+            ['label' => 'Sales growth', 'items' => [
+                ['label' => 'Sales gaps', 'route' => 'sales-gaps.index', 'icon' => 'trending-up'],
+            ]],
             ['label' => 'Stock and supply', 'items' => [
                 ['label' => 'Out of stock', 'route' => 'warehouse.out-of-stock', 'icon' => 'archive', 'roles' => ['admin']],
                 ['label' => 'Ordering', 'route' => 'ordering.index', 'icon' => 'sparkles', 'roles' => ['admin']],

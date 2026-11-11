@@ -38,6 +38,8 @@ class WidgetCatalog
 
     private const DATA_HEALTH_RULE = 'Rule: the last 24 hours of the shops in view (main warehouse excluded) against the usual day of each shop (median of its last 28 days). A shop is judged only with a usual day of at least 20 receipts.';
 
+    private const SALES_GAPS_RULE = 'Rule: the last 28 whole days ending yesterday, the shops in view (main warehouse excluded) against the benchmark of the chain\'s own good shops (not a target). An estimate, the levers overlap and are never added up. A shop is judged only above the minimum number of sale receipts.';
+
     /** @var array<string, Widget>|null */
     private static ?array $all = null;
 
@@ -87,6 +89,14 @@ class WidgetCatalog
                 ttl: 25, size: [4, 3], min: [3, 2], max: [8, 6]),
             self::make('trend_8d', 'Last 8 days', 'Sales', 'Daily sales of the last 8 days; the first day is the same weekday as today.', 'series', ['line', 'bar'], 'trend',
                 ttl: 300, size: [6, 3], min: [4, 2], max: [12, 8], options: ['metric']),
+            self::make('gap_check_by_shop', 'Average check gap', 'Sales', 'Shops whose average check (trimmed of the biggest receipts) is more than 8 % below the chain benchmark, with the estimated recoverable sales per 30 days.', 'by_shop', ['bar', 'table'], 'sales_gaps',
+                ttl: 600, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], rule: self::SALES_GAPS_RULE),
+            self::make('gap_card_share_by_shop', 'Customer card share', 'Sales', 'Share of sale receipts with a customer card per shop against the chain target. Shown only when card receipts have a higher average check.', 'by_shop', ['bar', 'table'], 'sales_gaps',
+                ttl: 600, cost: 'medium', size: [6, 4], min: [3, 3], max: [12, 10], rule: self::SALES_GAPS_RULE),
+            self::make('gap_availability_lost', 'Lost to class A stock-outs', 'Sales', 'Estimated sales lost per day while class A items are out of stock in the shops in view. A day-level estimate from the daily stock.', 'single', ['kpi'], 'sales_gaps',
+                ttl: 600, cost: 'medium', rule: self::SALES_GAPS_RULE),
+            self::make('gap_availability_a_items', 'Class A items out, lost sales', 'Sales', 'Class A items that are out of stock now, per shop, with the estimated sales lost per day and the days out in the period.', 'by_item', ['table', 'bar'], 'sales_gaps',
+                ttl: 600, cost: 'expensive', size: [6, 4], min: [3, 3], max: [12, 10], options: ['top_n'], rule: self::SALES_GAPS_RULE),
             self::make('refund_rate', 'Refund rate', 'Receipts', 'Refunds as a share of sales (amount). Amber from 2 %, red from 5 % (at least 10 receipts).', 'single', ['kpi', 'gauge'], 'receipts',
                 comparison: true, ttl: 25),
             self::make('cancelled_rate', 'Cancelled receipts', 'Receipts', 'Cancelled receipts as a share of all receipts. Amber from 2 %, red from 5 % (at least 10 receipts).', 'single', ['kpi', 'gauge'], 'receipts',

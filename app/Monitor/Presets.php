@@ -161,6 +161,14 @@ class Presets
                     ['unsold_by_group', 12, 4],
                 ],
             ],
+            'sales_growth' => [
+                'name' => fn () => __('Sales growth'),
+                'description' => fn () => __('Where shops sell less than the chain\'s own good shops: average check gap, customer card share and sales lost to class A stock-outs. Estimates.'),
+                'widgets' => [
+                    ['gap_check_by_shop', 6, 5], ['gap_card_share_by_shop', 6, 5],
+                    ['gap_availability_lost', 3, 3], ['gap_availability_a_items', 9, 5],
+                ],
+            ],
             'security' => [
                 'name' => fn () => __('Security and loss prevention'),
                 'description' => fn () => __('Signals to review from the receipts: warnings by severity, refunds and discounts by cashier, cancelled receipts, silent shops, odd hours, receipt numbers and data integrity. Admins only.'),

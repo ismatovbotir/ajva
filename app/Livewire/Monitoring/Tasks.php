@@ -215,11 +215,31 @@ class Tasks extends Component
         ];
     }
 
+    /**
+     * Last data push from 1C: items are upserted (updated_at) on every items sync, stocks only carry the sync DAY.
+     *
+     * @return array{at: ?Carbon, ago: ?string, stock_date: ?string, stale: bool}
+     */
+    private function oneC(): array
+    {
+        $at = DB::table('items')->max('updated_at');
+        $at = $at ? Carbon::parse($at) : null;
+        $date = DB::table('stocks')->max('stock_date');
+
+        return [
+            'at' => $at,
+            'ago' => $at?->diffForHumans(),
+            'stock_date' => $date ? (string) $date : null,
+            'stale' => $at === null || $at->lt(now()->subHours(24)),
+        ];
+    }
+
     public function render()
     {
         $tasks = $this->tasks();
         $queue = $this->queue();
         $sync = $this->sync();
+        $oneC = $this->oneC();
 
         $beat = TaskRuns::last(TaskRuns::HEARTBEAT);
         $beatAt = $beat ? Carbon::parse($beat->finished_at) : null;
@@ -254,6 +274,6 @@ class Tasks extends Component
             $problems[] = __('The 1C orders address (ONEC_ORDERS_URL) is not set, orders wait in the queue.');
         }
 
-        return view('livewire.monitoring.tasks', compact('tasks', 'queue', 'sync', 'scheduler', 'problems'));
+        return view('livewire.monitoring.tasks', compact('tasks', 'queue', 'sync', 'oneC', 'scheduler', 'problems'));
     }
 }

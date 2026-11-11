@@ -1079,6 +1079,164 @@ class WidgetPayloads
         ];
     }
 
+    // ---------------------------------------------------------------- sales gaps (SalesGaps, last 28 whole days; estimates versus the chain's own benchmark)
+
+    private function gapBasis(array $b): string
+    {
+        return $b['basis'] === 'median'
+            ? __('median of :n shops', ['n' => $b['shops']])
+            : __('P:p of :n shops', ['p' => (int) substr($b['basis'], 1), 'n' => $b['shops']]);
+    }
+
+    private function gapFooter(array $set, string $extra): string
+    {
+        return $extra.' '.__('Last :d days until yesterday, as of :time. An estimate versus the chain, not a promise.', ['d' => $set['days'], 'time' => $set['as_of']]);
+    }
+
+    private function gapCheckByShop(array $o, string $diagram): array
+    {
+        $set = $this->data->get('sales_gaps');
+        if ($set['shops'] === []) {
+            return $this->empty();
+        }
+        $judged = array_filter($set['shops'], fn (array $s) => $s['check']['status'] === 'ok');
+        if ($judged === []) {
+            return $this->empty(['footer' => __('Not enough data: a shop needs at least :n sale receipts in the period and at least :m shops are needed to compare.', ['n' => $set['min_receipts'], 'm' => (int) config('sales_gaps.benchmark_floor_shops')])]);
+        }
+
+        $flagged = array_filter($judged, fn (array $s) => $s['check']['flag']);
+        usort($flagged, fn (array $a, array $b) => $b['check']['gap_pct'] <=> $a['check']['gap_pct']);
+        $items = [];
+        foreach (array_slice($flagged, 0, WidgetCatalog::TOP_N_MAX) as $s) {
+            $c = $s['check'];
+            $items[] = [
+                'label' => $s['name'],
+                'value' => (float) $c['gap_pct'],
+                'text' => $this->dec($c['gap_pct'], 1).'%',
+                'cells' => [$this->dec($c['gap_pct'], 1).'%', $this->money($c['trim_check']), '≈ '.$this->money($c['recoverable'])],
+                'status' => 'warn',
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('No shop is below the chain benchmark.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+
+        return [
+            'columns' => [__('Below the chain'), __('Check (trimmed)'), __('Estimate, 30 days')],
+            'items' => $items,
+            'footer' => $this->gapFooter($set, __('Benchmark :v (:basis). :j shops judged.', ['v' => $this->money($set['check']['value']), 'basis' => $this->gapBasis($set['check']), 'j' => count($judged)])),
+        ];
+    }
+
+    private function gapCardShareByShop(array $o, string $diagram): array
+    {
+        $set = $this->data->get('sales_gaps');
+        if ($set['shops'] === []) {
+            return $this->empty();
+        }
+        $card = $set['card'];
+        if ($card['reason'] === 'chain_card_receipts') {
+            return $this->empty(['footer' => __('Not enough data: the chain needs at least :n card receipts in the period.', ['n' => (int) config('sales_gaps.card.min_chain_card_receipts')])]);
+        }
+        if ($card['reason'] === 'card_check_not_higher') {
+            return $this->empty(['footer' => __('Not shown: card receipts do not have a higher average check than the others.')]);
+        }
+        $judged = array_filter($set['shops'], fn (array $s) => $s['card']['status'] === 'ok');
+        if ($card['value'] === null || $judged === []) {
+            return $this->empty(['footer' => __('Not enough data: a shop needs at least :n sale receipts in the period and at least :m shops are needed to compare.', ['n' => $set['min_receipts'], 'm' => (int) config('sales_gaps.benchmark_floor_shops')])]);
+        }
+
+        usort($judged, fn (array $a, array $b) => [$b['card']['flag'], $b['card']['target'] - $b['card']['share']] <=> [$a['card']['flag'], $a['card']['target'] - $a['card']['share']]);
+        $items = [];
+        foreach (array_slice($judged, 0, WidgetCatalog::TOP_N_MAX) as $s) {
+            $k = $s['card'];
+            $items[] = [
+                'label' => $s['name'],
+                'value' => (float) $k['share'],
+                'text' => $this->dec($k['share'], 1).'%',
+                'cells' => [$this->dec($k['share'], 1).'%', $this->dec($k['target'], 1).'%', $k['flag'] ? '≈ '.$this->money($k['uplift']) : '—'],
+                'status' => $k['flag'] ? 'warn' : 'ok',
+            ];
+        }
+
+        return [
+            'columns' => [__('Card share'), __('Chain target'), __('Upper bound, 30 days')],
+            'items' => $items,
+            'footer' => $this->gapFooter($set, __('Target :v% (:basis). Upper bound from a correlation, not proof.', ['v' => $this->dec($card['value'] * 100, 1), 'basis' => $this->gapBasis($card)])),
+        ];
+    }
+
+    /** The class A availability totals over the shops in view. */
+    private function gapAvailabilityTotals(array $set): array
+    {
+        $t = ['out_a' => 0, 'valued' => 0, 'unknown' => 0, 'no_price' => 0, 'not_reported' => 0, 'lost_per_day' => 0.0, 'shops' => 0];
+        foreach ($set['shops'] as $s) {
+            foreach (['out_a', 'valued', 'unknown', 'no_price', 'not_reported'] as $k) {
+                $t[$k] += $s['avail'][$k];
+            }
+            $t['lost_per_day'] += $s['avail']['lost_per_day'];
+            $t['shops'] += $s['avail']['out_a'] > 0 ? 1 : 0;
+        }
+
+        return $t;
+    }
+
+    private function gapAvailabilityLost(array $o, string $diagram): array
+    {
+        $set = $this->data->get('sales_gaps');
+        if ($set['shops'] === [] || ($set['stock_as_of'] ?? null) === null) {
+            return $this->empty();
+        }
+        $t = $this->gapAvailabilityTotals($set);
+        $footer = $this->gapFooter($set, __('Stock as of last sync: :date. A day-level estimate.', ['date' => $set['stock_as_of']]));
+        $notReported = $t['not_reported'] > 0 ? ' · '.__(':count not reported by 1C', ['count' => $t['not_reported']]) : '';
+
+        if ($t['out_a'] === 0) {
+            return ['value' => '0', 'status' => 'ok', 'note' => __('no class A item is out of stock').$notReported, 'footer' => $footer];
+        }
+        if ($t['valued'] === 0) {
+            return ['status' => 'bad'] + $this->notEnough(__(':n class A items are out of stock but none has enough sales history or a price.', ['n' => $t['out_a']]), ['footer' => $footer]);
+        }
+
+        return [
+            'value' => '≈ '.$this->money($t['lost_per_day']),
+            'status' => 'bad',
+            'note' => __(':n class A items out in :s shops per day', ['n' => $t['out_a'], 's' => $t['shops']])
+                .($t['unknown'] + $t['no_price'] > 0 ? ' · '.__(':n not valued', ['n' => $t['unknown'] + $t['no_price']]) : '').$notReported,
+            'footer' => $footer,
+        ];
+    }
+
+    private function gapAvailabilityAItems(array $o, string $diagram): array
+    {
+        $set = $this->data->get('sales_gaps');
+        if ($set['shops'] === [] || ($set['stock_as_of'] ?? null) === null) {
+            return $this->empty();
+        }
+
+        $n = max(1, min(WidgetCatalog::TOP_N_MAX, (int) ($o['top_n'] ?? WidgetCatalog::TOP_N_DEFAULT)));
+        $items = [];
+        foreach (array_slice($set['items'], 0, $n) as $i) {
+            $valued = $i['state'] === 'valued';
+            $items[] = [
+                'label' => $i['item'],
+                'value' => (float) $i['per_day'],
+                'text' => $valued ? '≈ '.$this->money($i['per_day']) : '—',
+                'cells' => [$i['shop'], $valued ? '≈ '.$this->money($i['per_day']) : ($i['state'] === 'no_price' ? __('No price') : __('Not enough data')), (string) $i['days_out']],
+                'status' => $valued ? 'bad' : 'warn',
+            ];
+        }
+        if ($items === []) {
+            $items[] = ['label' => __('No class A item is out of stock.'), 'value' => 0.0, 'text' => '0', 'cells' => ['—', '—', '—'], 'status' => 'ok'];
+        }
+
+        return [
+            'columns' => [__('Shop'), __('Lost per day (estimate)'), __('Days out')],
+            'items' => $items,
+            'footer' => $this->gapFooter($set, __('Stock as of last sync: :date. A day-level estimate.', ['date' => $set['stock_as_of']])),
+        ];
+    }
+
     private function syncFreshness(array $o, string $diagram): array
     {
         $set = $this->data->get('sync');

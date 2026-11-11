@@ -68,6 +68,7 @@ class SampleDatasets extends Datasets
             'security_week' => $this->securityWeek(),
             'security_today' => $this->securityToday(),
             'data_health' => $this->dataHealth(),
+            'sales_gaps' => $this->salesGaps(),
             default => [],
         };
     }
@@ -435,6 +436,43 @@ class SampleDatasets extends Datasets
                 ['shop' => $shops[4], 'last24' => 48, 'usual' => 120.0, 'status' => 'warn'],
             ],
             'rejected' => ['total' => 14, 'spike' => false, 'by_reason' => ['unknown_item' => 11, 'qty_zero' => 3]],
+        ];
+    }
+
+    /** Sales gaps: invented shops with every state (flagged, fine, not judged), card lever on, a few class A items out. */
+    private function salesGaps(): array
+    {
+        $s = $this->shopNames();
+        $na = ['status' => 'na', 'flag' => false, 'gap_pct' => null, 'trim_check' => null, 'recoverable' => null];
+        $noCard = ['status' => 'na', 'flag' => false, 'share' => null, 'target' => null, 'uplift' => null];
+        $none = ['out_a' => 0, 'valued' => 0, 'unknown' => 0, 'no_price' => 0, 'not_reported' => 0, 'lost_per_day' => 0.0];
+        $row = fn (string $name, int $receipts, array $check, array $card, array $avail) => ['name' => $name, 'receipts' => $receipts, 'silent_days' => 0,
+            'check' => $check, 'card' => $card, 'avail' => $avail];
+        $chk = fn (float $gap, float $trim, float $money) => ['status' => 'ok', 'flag' => $gap > 8, 'gap_pct' => $gap, 'trim_check' => $trim, 'recoverable' => $money];
+        $crd = fn (float $share, float $uplift) => ['status' => 'ok', 'flag' => 28.0 - $share >= 5, 'share' => $share, 'target' => 28.0, 'uplift' => $uplift];
+
+        return [
+            'as_of' => self::CLOCK,
+            'days' => 28,
+            'stock_as_of' => $this->sampleScope->now->copy()->subDay()->toDateString(),
+            'min_receipts' => 200,
+            'check' => ['value' => 52000.0, 'basis' => 'p75', 'shops' => 6],
+            'card' => ['value' => 0.28, 'basis' => 'p75', 'shops' => 6, 'reason' => null, 'card_receipts' => 1450],
+            'shops' => [
+                $row($s[3], 1900, $chk(21.5, 40800.0, 4_200_000.0), $crd(12.0, 1_900_000.0), ['out_a' => 2, 'valued' => 2, 'unknown' => 0, 'no_price' => 0, 'not_reported' => 3, 'lost_per_day' => 310_000.0]),
+                $row($s[5], 1500, $chk(12.3, 45600.0, 2_100_000.0), $crd(21.0, 700_000.0), ['out_a' => 1, 'valued' => 1, 'unknown' => 0, 'no_price' => 0, 'not_reported' => 0, 'lost_per_day' => 95_000.0]),
+                $row($s[1], 2300, $chk(9.1, 47300.0, 1_300_000.0), $crd(29.0, 0.0), $none),
+                $row($s[2], 2100, $chk(2.0, 51000.0, 300_000.0), $crd(33.0, 0.0), ['out_a' => 1, 'valued' => 0, 'unknown' => 1, 'no_price' => 0, 'not_reported' => 0, 'lost_per_day' => 0.0]),
+                $row($s[4], 1800, $chk(-3.0, 53500.0, 0.0), $crd(26.0, 0.0), $none),
+                $row($s[6], 2600, $chk(-6.0, 55100.0, 0.0), $crd(35.0, 0.0), $none),
+                $row($s[7], 120, $na, $noCard, $none),
+            ],
+            'items' => [
+                ['shop' => $s[3], 'item' => 'Milk 1 l', 'state' => 'valued', 'per_day' => 190_000.0, 'days_out' => 4],
+                ['shop' => $s[3], 'item' => 'Bread white', 'state' => 'valued', 'per_day' => 120_000.0, 'days_out' => 2],
+                ['shop' => $s[5], 'item' => 'Sunflower oil 1 l', 'state' => 'valued', 'per_day' => 95_000.0, 'days_out' => 6],
+                ['shop' => $s[2], 'item' => 'Eggs 10 pcs', 'state' => 'unknown', 'per_day' => 0.0, 'days_out' => 1],
+            ],
         ];
     }
 

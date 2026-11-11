@@ -128,7 +128,7 @@
                         @foreach($stocks as $stock)
                             <tr>
                                 <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ $stock->shop->name }}</td>
-                                <td class="px-4 py-3 text-sm text-slate-500">@if($stock->reported ?? true){{ $stock->qty }}@else<span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600" title="{{ __('Last reported') }} {{ $stock->stock_date?->format('Y-m-d') }}" data-not-reported>{{ __('Not reported') }}</span>@endif</td>
+                                <td class="px-4 py-3 text-sm text-slate-500">@if($stock->reported ?? true){{ $stock->qty }}@else<span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600" title="{{ $stock->stock_date ? __('Last reported').' '.$stock->stock_date->format('Y-m-d') : '' }}" data-not-reported>{{ __('Not reported') }}</span>@endif</td>
                             </tr>
                         @endforeach
                     </tbody>
